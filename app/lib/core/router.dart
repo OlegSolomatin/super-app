@@ -1,15 +1,24 @@
 import 'package:go_router/go_router.dart';
 import 'package:app/core/secure_storage.dart';
+import 'package:app/core/dio_client.dart';
 import 'package:app/features/auth/presentation/login_page.dart';
 import 'package:app/features/auth/presentation/register_page.dart';
 import 'package:app/features/home/presentation/home_page.dart';
+import 'package:app/features/trading/presentation/trading_page.dart';
 import 'package:app/features/trading/presentation/wizard_page.dart';
+import 'package:app/features/trading/presentation/run_detail_page.dart';
+import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/admin/presentation/agents_page.dart';
 
 class AppRouter {
   final SecureStorage _storage;
+  late final DioClient _dioClient;
+  late final TradingRepository _tradingRepository;
 
-  AppRouter(this._storage);
+  AppRouter(this._storage) {
+    _dioClient = DioClient(_storage);
+    _tradingRepository = TradingRepository(_dioClient);
+  }
 
   late final GoRouter router = GoRouter(
     initialLocation: '/login',
@@ -44,8 +53,26 @@ class AppRouter {
         builder: (context, state) => const AdminAgentsPage(),
       ),
       GoRoute(
+        path: '/trading',
+        builder: (context, state) => TradingPage(
+          repository: _tradingRepository,
+        ),
+      ),
+      GoRoute(
         path: '/trading/wizard',
-        builder: (context, state) => const TradingWizardPage(),
+        builder: (context, state) => TradingWizardPage(
+          repository: _tradingRepository,
+        ),
+      ),
+      GoRoute(
+        path: '/trading/runs/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return TradingRunDetailPage(
+            runId: id,
+            repository: _tradingRepository,
+          );
+        },
       ),
     ],
   );

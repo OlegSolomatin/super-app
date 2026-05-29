@@ -390,7 +390,7 @@ class _HomePageState extends State<HomePage> {
         title: 'Трейдинг',
         subtitle: 'Зарабатывайте на трейдинге',
         color: const Color(0xFFFFD700),
-        onTap: () => context.go('/trading/wizard'),
+        onTap: () => context.go('/trading'),
       ),
     ]);
 

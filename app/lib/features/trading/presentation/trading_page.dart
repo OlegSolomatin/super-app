@@ -1,0 +1,647 @@
+import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:go_router/go_router.dart';
+import 'package:app/core/theme.dart';
+import 'package:app/features/trading/data/models/trading_run.dart';
+import 'package:app/features/trading/data/trading_repository.dart';
+
+class TradingPage extends StatefulWidget {
+  final TradingRepository repository;
+
+  const TradingPage({super.key, required this.repository});
+
+  @override
+  State<TradingPage> createState() => _TradingPageState();
+}
+
+class _TradingPageState extends State<TradingPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  List<TradingRun> _activeRuns = [];
+  List<TradingRun> _historyRuns = [];
+  bool _loadingActive = true;
+  bool _loadingHistory = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadActiveRuns();
+    _loadHistoryRuns();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadActiveRuns() async {
+    setState(() => _loadingActive = true);
+    try {
+      final result = await widget.repository.getRuns(status: 'running');
+      if (mounted) {
+        setState(() {
+          _activeRuns = result.items;
+          _loadingActive = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingActive = false);
+    }
+  }
+
+  Future<void> _loadHistoryRuns() async {
+    setState(() => _loadingHistory = true);
+    try {
+      final done = await widget.repository.getRuns(status: 'done');
+      final stopped = await widget.repository.getRuns(status: 'stopped');
+      final error = await widget.repository.getRuns(status: 'error');
+      final all = [...done.items, ...stopped.items, ...error.items];
+      all.sort((a, b) {
+        final aDate = a.createdAt ?? DateTime(2000);
+        final bDate = b.createdAt ?? DateTime(2000);
+        return bDate.compareTo(aDate);
+      });
+      if (mounted) {
+        setState(() {
+          _historyRuns = all;
+          _loadingHistory = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingHistory = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const PhosphorIcon(PhosphorIconsFill.caretLeft),
+          onPressed: () => context.go('/'),
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhosphorIcon(
+              PhosphorIconsFill.chartLine,
+              color: theme.appBarTheme.foregroundColor,
+              size: 22,
+            ),
+            const SizedBox(width: 8),
+            const Text('Торговля'),
+          ],
+        ),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        foregroundColor: theme.appBarTheme.foregroundColor,
+        elevation: 0,
+        actions: [
+          Builder(
+            builder: (context) => IconButton(
+              icon: PhosphorIcon(
+                PhosphorIconsFill.list,
+                color: theme.appBarTheme.foregroundColor,
+              ),
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
+            ),
+          ),
+        ],
+      ),
+      endDrawer: _buildDrawer(context),
+      body: Column(
+        children: [
+          const SizedBox(height: 16),
+          // Strategy button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: () => context.go('/trading/wizard'),
+                icon: const PhosphorIcon(
+                  PhosphorIconsFill.rocket,
+                  size: 22,
+                ),
+                label: const Text(
+                  'Стратегия',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Tab bar
+          Container(
+            color: isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: AppTheme.accentColor,
+              unselectedLabelColor:
+                  isDark ? Colors.white54 : AppTheme.lightTextSecondary,
+              indicatorColor: AppTheme.accentColor,
+              tabs: const [
+                Tab(text: 'Запущенные'),
+                Tab(text: 'История'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildActiveTab(),
+                _buildHistoryTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Drawer(
+      backgroundColor:
+          isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(
+              color: AppTheme.accentColor,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const PhosphorIcon(
+                  PhosphorIconsFill.chartLine,
+                  size: 40,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Торговля',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const PhosphorIcon(PhosphorIconsFill.rocket),
+            title: const Text('Новая стратегия'),
+            onTap: () {
+              Navigator.pop(context);
+              context.go('/trading/wizard');
+            },
+          ),
+          ListTile(
+            leading: const PhosphorIcon(PhosphorIconsFill.clock),
+            title: const Text('Активные'),
+            onTap: () {
+              Navigator.pop(context);
+              _tabController.animateTo(0);
+            },
+          ),
+          ListTile(
+            leading: const PhosphorIcon(PhosphorIconsFill.clockCounterClockwise),
+            title: const Text('История'),
+            onTap: () {
+              Navigator.pop(context);
+              _tabController.animateTo(1);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveTab() {
+    if (_loadingActive) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_activeRuns.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadActiveRuns,
+        child: ListView(
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.3,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PhosphorIcon(
+                      PhosphorIconsFill.rocket,
+                      size: 56,
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Нет активных стратегий',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withValues(alpha: 0.5),
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Запустите новую стратегию, нажав\nкнопку "Стратегия"',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withValues(alpha: 0.3),
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadActiveRuns,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _activeRuns.length,
+        itemBuilder: (context, index) {
+          final run = _activeRuns[index];
+          return _buildActiveRunCard(run);
+        },
+      ),
+    );
+  }
+
+  Widget _buildActiveRunCard(TradingRun run) {
+    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Card(
+      color: isDark ? AppTheme.cardColor : AppTheme.lightCardColor,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                PhosphorIcon(
+                  PhosphorIconsFill.rocket,
+                  size: 18,
+                  color: AppTheme.accentColor,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    run.strategyName ?? 'Стратегия',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _modeColor(run.mode).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PhosphorIcon(
+                        _modeIcon(run.mode),
+                        size: 14,
+                        color: _modeColor(run.mode),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _modeLabel(run.mode),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _modeColor(run.mode),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _infoChip(
+                  icon: PhosphorIconsFill.wallet,
+                  label: '\$${run.startingBalance?.toStringAsFixed(0) ?? '—'}',
+                  theme: theme,
+                ),
+                const SizedBox(width: 12),
+                _infoChip(
+                  icon: PhosphorIconsFill.arrowsLeftRight,
+                  label: '${run.totalTrades ?? 0} сделок',
+                  theme: theme,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (run.endsAt != null)
+                  _infoChip(
+                    icon: PhosphorIconsFill.clock,
+                    label: _timeRemaining(run.endsAt!),
+                    theme: theme,
+                  ),
+                if (run.endsAt != null) const Spacer(),
+                if (run.pnl != null)
+                  Text(
+                    '${run.pnl! >= 0 ? '+' : ''}\$${run.pnl!.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: run.pnl! >= 0
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFFE53935),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoChip({
+    required IconData icon,
+    required String label,
+    required ThemeData theme,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PhosphorIcon(
+          icon,
+          size: 14,
+          color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  String _timeRemaining(DateTime endsAt) {
+    final remaining = endsAt.difference(DateTime.now());
+    if (remaining.isNegative) return 'Завершён';
+    if (remaining.inDays > 0) return '${remaining.inDays}д ${remaining.inHours % 24}ч';
+    if (remaining.inHours > 0) return '${remaining.inHours}ч ${remaining.inMinutes % 60}м';
+    return '${remaining.inMinutes}м';
+  }
+
+  Widget _buildHistoryTab() {
+    if (_loadingHistory) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_historyRuns.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadHistoryRuns,
+        child: ListView(
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.3,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PhosphorIcon(
+                      PhosphorIconsFill.clockCounterClockwise,
+                      size: 56,
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'История пуста',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withValues(alpha: 0.5),
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadHistoryRuns,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _historyRuns.length,
+        itemBuilder: (context, index) {
+          final run = _historyRuns[index];
+          return _buildHistoryRunCard(run);
+        },
+      ),
+    );
+  }
+
+  Widget _buildHistoryRunCard(TradingRun run) {
+    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Card(
+      color: isDark ? AppTheme.cardColor : AppTheme.lightCardColor,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => context.go('/trading/runs/${run.id}'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _statusIcon(run.status),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      run.strategyName ?? 'Стратегия',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  if (run.pnl != null)
+                    Text(
+                      '${run.pnl! >= 0 ? '+' : ''}\$${run.pnl!.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: run.pnl! >= 0
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFFE53935),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (run.finalBalance != null)
+                    _infoChip(
+                      icon: PhosphorIconsFill.wallet,
+                      label:
+                          '\$${run.finalBalance!.toStringAsFixed(0)}',
+                      theme: theme,
+                    ),
+                  if (run.finalBalance != null) const SizedBox(width: 12),
+                  if (run.totalTrades != null)
+                    _infoChip(
+                      icon: PhosphorIconsFill.arrowsLeftRight,
+                      label: '${run.totalTrades} сделок',
+                      theme: theme,
+                    ),
+                  if (run.totalTrades != null) const SizedBox(width: 12),
+                  if (run.successRate != null)
+                    _infoChip(
+                      icon: PhosphorIconsFill.checkCircle,
+                      label:
+                          '${run.successRate!.toStringAsFixed(1)}%',
+                      theme: theme,
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusIcon(String status) {
+    switch (status) {
+      case 'done':
+        return const PhosphorIcon(
+          PhosphorIconsFill.checkCircle,
+          size: 20,
+          color: Color(0xFF4CAF50),
+        );
+      case 'stopped':
+        return const PhosphorIcon(
+          PhosphorIconsFill.stopCircle,
+          size: 20,
+          color: Color(0xFFFF9800),
+        );
+      case 'error':
+        return const PhosphorIcon(
+          PhosphorIconsFill.xCircle,
+          size: 20,
+          color: Color(0xFFE53935),
+        );
+      default:
+        return const PhosphorIcon(
+          PhosphorIconsFill.question,
+          size: 20,
+          color: Colors.grey,
+        );
+    }
+  }
+
+  Color _modeColor(String mode) {
+    switch (mode) {
+      case 'historical':
+        return const Color(0xFF4CAF50);
+      case 'virtual':
+        return const Color(0xFF2196F3);
+      case 'real':
+        return const Color(0xFFE53935);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _modeIcon(String mode) {
+    switch (mode) {
+      case 'historical':
+        return PhosphorIconsFill.scroll;
+      case 'virtual':
+        return PhosphorIconsFill.desktop;
+      case 'real':
+        return PhosphorIconsFill.coins;
+      default:
+        return PhosphorIconsFill.question;
+    }
+  }
+
+  String _modeLabel(String mode) {
+    switch (mode) {
+      case 'historical':
+        return 'История';
+      case 'virtual':
+        return 'Виртуал';
+      case 'real':
+        return 'Реал';
+      default:
+        return mode;
+    }
+  }
+}
