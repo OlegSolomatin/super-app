@@ -193,7 +193,11 @@ class TradingScheduler:
         # Reload the run with config relationship loaded
         stmt = (
             select(DBTradingRun)
-            .options(selectinload(DBTradingRun.config), selectinload(DBTradingRun.result))
+            .options(
+                selectinload(DBTradingRun.config),
+                selectinload(DBTradingRun.result),
+                selectinload(DBTradingRun.trades),
+            )
             .where(DBTradingRun.id == run_id)
         )
         result = await session.execute(stmt)
