@@ -150,11 +150,60 @@ super-app backend
 
 ```bash
 # Фаза 1: Backend scaffold
-backend-coder chat -q "Создай FastAPI проект в ~/workspace/super-app/backend/ по структуре из ~/workspace/super-app/STRUCTURE.md"
 ```
 
-```bash
-# Фаза 11: Agent Monitoring Dashboard
-backend-coder chat -q "Создай скрипт collect_agent_stats.py и эндпоинт GET /admin/agents/status"
-flutter-coder chat -q "Добавь админ-тил на HomePage и страницу /admin/agents"
-```
+## ⚙️ Фаза 12: Trading Wizard (9-шаговый мастер)
+
+**Цель:** Плитка "Трейдинг" на главной → 9-шаговый мастер настройки бэктеста → запуск на исторических данных → позже live-торговля.
+
+### 🧩 9 шагов Wizard-а
+
+| Шаг | Название | Что настраивает |
+|-----|----------|-----------------|
+| 1 | **Биржа** | Выбор криптобиржи: Bybit / Binance / OKX / Mock |
+| 2 | **Пара** | Выбор торговой пары: BTCUSDT, ETHUSDT, TONUSDT, SOLUSDT и т.д. |
+| 3 | **Стратегия** | RSI, Hammer, Swing, Morning Star, Piercing Line, Две свечи |
+| 4 | **Индикаторы** | Параметры стратегии: период RSI, MACD, EMA, пороги |
+| 5 | **Риски** | Stop Loss %, Take Profit %, размер позиции % от баланса |
+| 6 | **Таймфрейм** | 1m / 5m / 15m / 30m / 1h / 4h / 1d |
+| 7 | **Период** | Дата начала и конца исторических данных |
+| 8 | **Баланс** | Стартовый баланс $, комиссия % |
+| 9 | **Запуск** | Сводка → кнопка "Запустить Backtest" → результаты |
+
+### 🎯 Что нужно сделать
+
+**Backend (`backend-coder`):**
+
+1. **Перенести существующий backtest.py** из `~/workspace/crypto-ton/` в `backend/`
+2. **Создать API эндпоинты:**
+   - `GET /api/v1/trading/pairs` — список доступных пар
+   - `GET /api/v1/trading/strategies` — список стратегий с параметрами
+   - `GET /api/v1/trading/exchanges` — список бирж
+   - `POST /api/v1/trading/backtest` — запуск бэктеста с конфигом
+   - `GET /api/v1/trading/backtest/{id}/results` — результаты
+   - `GET /api/v1/trading/backtest/{id}/history` — история сделок
+3. **Хранить результаты** в PostgreSQL (таблица backtest_results)
+
+**Flutter (`flutter-coder`):**
+
+4. **Плитка "Трейдинг" на HomePage** — под админ-плиткой
+5. **Страница `/trading/wizard`** — 9 шагов с Stepper/Slider
+6. **Страница `/trading/results`** — результаты бэктеста (графики, метрики)
+7. **Каждый шаг** — отдельный виджет с валидацией
+8. **Навигация** — вперёд/назад с сохранением состояния
+
+### 📊 Данные для бэктеста (из crypto-ton)
+
+- База: `~/workspace/crypto-ton/data.db` (SQLite с историческими данными)
+- Пары: BTCUSDT, ETHUSDT, TONUSDT, SOLUSDT и другие
+- Таймфреймы: 1m, 5m, 15m, 30m, 1h, 4h, 1d
+- Индикаторы: SMA, RSI, MACD, EMA, Bollinger, Volume Spike
+- Стратегии: RSI (3 варианта), Hammer, Morning Star, Piercing Line, Swing
+
+### 🚀 Этапы
+
+1. **MVP**: Backend API + Wizard UI (9 шагов) + виртуальный бэктест
+2. **V2**: Live-торговля через Bybit API с реальным балансом
+3. **V3**: Мониторинг открытых позиций, PnL, авто-закрытие
+
+---

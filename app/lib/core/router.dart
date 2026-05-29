@@ -3,6 +3,7 @@ import 'package:app/core/secure_storage.dart';
 import 'package:app/features/auth/presentation/login_page.dart';
 import 'package:app/features/auth/presentation/register_page.dart';
 import 'package:app/features/home/presentation/home_page.dart';
+import 'package:app/features/trading/presentation/wizard_page.dart';
 import 'package:app/features/admin/presentation/agents_page.dart';
 
 class AppRouter {
@@ -41,6 +42,10 @@ class AppRouter {
       GoRoute(
         path: '/admin/agents',
         builder: (context, state) => const AdminAgentsPage(),
+      ),
+      GoRoute(
+        path: '/trading/wizard',
+        builder: (context, state) => const TradingWizardPage(),
       ),
     ],
   );

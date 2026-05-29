@@ -385,6 +385,13 @@ class _HomePageState extends State<HomePage> {
         subtitle: 'Исследуйте карты',
         color: const Color(0xFF4DB6AC),
       ),
+      _DashboardCardData(
+        icon: PhosphorIconsFill.chartLine,
+        title: 'Трейдинг',
+        subtitle: 'Зарабатывайте на трейдинге',
+        color: const Color(0xFFFFD700),
+        onTap: () => context.go('/trading/wizard'),
+      ),
     ]);
 
     return GridView.builder(
