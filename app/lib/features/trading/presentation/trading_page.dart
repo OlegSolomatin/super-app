@@ -27,8 +27,15 @@ class _TradingPageState extends State<TradingPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _cleanupStaleRuns();
     _loadActiveRuns();
     _loadHistoryRuns();
+  }
+
+  Future<void> _cleanupStaleRuns() async {
+    try {
+      await widget.repository.cleanupStaleRuns();
+    } catch (_) {}
   }
 
   @override
@@ -395,7 +402,7 @@ class _TradingPageState extends State<TradingPage>
                 if (run.endsAt != null) const Spacer(),
                 if (run.pnl != null)
                   Text(
-                    '${run.pnl! >= 0 ? '+' : ''}\$${run.pnl!.toStringAsFixed(2)}',
+                    '+${run.pnl!.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -405,6 +412,29 @@ class _TradingPageState extends State<TradingPage>
                     ),
                   ),
               ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _confirmStopRun(run),
+                icon: const PhosphorIcon(
+                  PhosphorIconsFill.stop,
+                  size: 16,
+                ),
+                label: const Text(
+                  'Остановить',
+                  style: TextStyle(fontSize: 13),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFE53935),
+                  side: const BorderSide(color: Color(0xFFE53935)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
             ),
           ],
         ),
@@ -440,6 +470,50 @@ class _TradingPageState extends State<TradingPage>
     if (remaining.inDays > 0) return '${remaining.inDays}д ${remaining.inHours % 24}ч';
     if (remaining.inHours > 0) return '${remaining.inHours}ч ${remaining.inMinutes % 60}м';
     return '${remaining.inMinutes}м';
+  }
+
+  Future<void> _confirmStopRun(TradingRun run) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: const Text('Остановить запуск?'),
+        content: Text('Стратегия "${run.strategyName ?? run.id}" будет остановлена.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFE53935)),
+            child: const Text('Остановить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      try {
+        await widget.repository.deleteRun(run.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Запуск остановлен'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Color(0xFF4CAF50),
+          ),
+        );
+        _loadActiveRuns();
+        _loadHistoryRuns();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFE53935),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildHistoryTab() {
@@ -530,11 +604,11 @@ class _TradingPageState extends State<TradingPage>
                       ),
                     ),
                   ),
-                  if (run.pnl != null)
-                    Text(
-                      '${run.pnl! >= 0 ? '+' : ''}\$${run.pnl!.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 16,
+                if (run.pnl != null)
+                  Text(
+                    '+${run.pnl!.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: run.pnl! >= 0
                             ? const Color(0xFF4CAF50)

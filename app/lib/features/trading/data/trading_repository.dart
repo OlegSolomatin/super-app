@@ -111,4 +111,10 @@ class TradingRepository {
   Future<void> deleteRun(String id) async {
     await _dio.delete('/trading/runs/$id');
   }
+
+  Future<int> cleanupStaleRuns() async {
+    final response = await _dio.post('/trading/runs/cleanup');
+    final data = response.data as Map<String, dynamic>;
+    return data['cleaned'] as int? ?? 0;
+  }
 }

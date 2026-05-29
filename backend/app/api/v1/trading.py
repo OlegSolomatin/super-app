@@ -127,6 +127,33 @@ HARDCODED_EXCHANGES = [
 # ---------------------------------------------------------------------------
 
 
+@router.post("/runs/cleanup", response_model=dict)
+async def cleanup_stale_runs(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Mark stale 'running' runs as 'error' (they were orphaned by a restart)."""
+    stmt = (
+        select(DBTradingRun)
+        .where(
+            DBTradingRun.user_id == current_user.id,
+            DBTradingRun.status == "running",
+        )
+    )
+    result = await session.execute(stmt)
+    runs = result.scalars().all()
+    count = 0
+    for run in runs:
+        # Consider a run stale if the scheduler doesn't know about it
+        if run.id not in scheduler.get_active_run_ids():
+            run.status = "error"
+            run.error = "Прерван перезапуском сервера"
+            run.finished_at = datetime.now(timezone.utc)
+            count += 1
+    await session.commit()
+    return {"cleaned": count}
+
+
 @router.get("/pairs", response_model=PairsListResponse)
 async def list_pairs(
     search: Optional[str] = Query(None, description="Filter by symbol substring"),
