@@ -10,6 +10,8 @@
 - `infra` — инфраструктура
 
 ---
+- `fix` HomePage: отступ SizedBox теперь внутри if (_showBanner) — нет пустого места после скрытия | Hermes
+- `fix` HomePage: таймер баннера стартует после загрузки профиля (не в initState) | Hermes
 - `fix` AgentsPage: Navigator.pop → context.go('/') (GoRouter совместимость) | Hermes
 - `feat` HomePage: welcome banner auto-hide через 15 секунд с FadeTransition | Hermes
 - `fix` users.py: добавлен импорт selectinload (NameError), добавлена загрузка ролей в GET /users/me | Hermes

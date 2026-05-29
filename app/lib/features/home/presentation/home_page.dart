@@ -32,7 +32,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       parent: _bannerController,
       curve: Curves.easeOut,
     );
-    // Auto-hide banner after 15 seconds with fade animation
+    _loadUser();
+  }
+
+  void _startBannerTimer() {
+    // Start 15s timer only AFTER user loads and banner is actually visible
     Future.delayed(const Duration(seconds: 15), () {
       if (mounted) {
         _bannerController.forward().then((_) {
@@ -40,7 +44,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         });
       }
     });
-    _loadUser();
   }
 
   @override
@@ -58,6 +61,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       final user = await userRepository.getMe();
       if (mounted) {
         setState(() => _user = user);
+        _startBannerTimer(); // Start 15s timer NOW — banner just became visible
       }
     } catch (e) {
       if (mounted) {
@@ -108,7 +112,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Welcome section — auto-hides after 15s
-                    if (_showBanner)
+                    if (_showBanner) ...[
                       FadeTransition(
                         opacity: _bannerOpacity,
                         child: Container(
@@ -145,7 +149,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           ),
                         ),
                       ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
+                    ],
                     Text(
                       'Сервисы',
                       style: Theme.of(context).textTheme.headlineMedium,
