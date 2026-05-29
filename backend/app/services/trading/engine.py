@@ -7,10 +7,12 @@ and collects performance metrics.
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
-from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Callable, List, Optional, Tuple
 
+from app.services.trading.exchange.base import AbstractExchange
 from app.services.trading.models import (
     Candle,
     Metrics,
@@ -26,6 +28,8 @@ from app.services.trading.strategies import (
     HammerStrategy,
     InverseHammerStrategy,
 )
+
+logger = logging.getLogger(__name__)
 
 # Registry of available strategies
 STRATEGY_REGISTRY: dict[str, type[AbstractStrategy]] = {
@@ -53,14 +57,41 @@ class TradingEngine:
         """Run strategy against historical data — instant execution."""
         return await self._execute(candles)
 
-    async def run_virtual(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
-        """Run strategy on virtual balance — simulates real-time with candle delays.
+    @staticmethod
+    def _poll_interval(timeframe: str) -> float:
+        """Return polling interval in seconds for a given timeframe.
 
-        Each candle is processed with a delay matching real time intervals,
-        so the run duration reflects actual market time (e.g. 5 days for
-        30m timeframe).
+        Polls frequently enough to catch new candles within seconds of close.
+        For 30m → 15s, 1h → 30s, 1d → 60s, etc.
         """
-        return await self._execute_virtual(candles)
+        tf_map = {
+            "1m": 5, "3m": 10, "5m": 10, "15m": 15, "30m": 15,
+            "1h": 30, "2h": 30, "4h": 45, "6h": 45,
+            "12h": 60, "1d": 60, "1w": 120, "1M": 300,
+        }
+        return float(tf_map.get(timeframe, 30))
+
+    async def run_virtual_live(
+        self,
+        exchange: AbstractExchange,
+        on_progress: Optional[Callable[[List[Trade], Metrics], None]] = None,
+    ) -> Tuple[List[Trade], Metrics]:
+        """Virtual live trading — polls exchange for new candles in real time.
+
+        Does NOT load historical candles. Instead:
+        1. Every N seconds, fetches the latest candle from exchange
+        2. When a new completed candle arrives — analyses it
+        3. Enters/exits trades based on strategy signals
+        4. Runs indefinitely until cancelled
+
+        Args:
+            exchange: Exchange connector to poll for live data.
+            on_progress: Optional callback to save intermediate state.
+
+        Returns:
+            (trades, metrics) when cancelled — contains all trades made.
+        """
+        return await self._execute_virtual_live(exchange, on_progress)
 
     async def run_real(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
         """Run strategy with real data (same logic for now — no exchange orders)."""
@@ -81,14 +112,23 @@ class TradingEngine:
         delta = (curr - prev).total_seconds()
         return max(0.0, delta)
 
-    async def _execute_virtual(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
-        """Virtual execution — same as _execute but with real-time delays.
+    async def _execute_virtual_live(
+        self,
+        exchange: AbstractExchange,
+        on_progress: Optional[Callable[[List[Trade], Metrics], None]] = None,
+    ) -> Tuple[List[Trade], Metrics]:
+        """Live paper trading core — polls exchange for new completed candles.
 
-        Uses asyncio.sleep() between candles so the run takes real market time.
+        Architecture:
+        - Tracks last processed candle close time
+        - Every N seconds, fetches latest kline from exchange
+        - When a new completed candle is detected (its close time < now):
+          - Analyzes it via strategy
+          - Checks entry/exit, SL/TP
+          - Updates balance
+        - Runs until cancelled by the caller (CancelledError)
+        - On cancellation, returns all accumulated trades and metrics
         """
-        if not candles:
-            return [], Metrics()
-
         # 1. Select strategy
         strategy_cls = STRATEGY_REGISTRY.get(self.config.strategy)
         if strategy_cls is None:
@@ -104,103 +144,179 @@ class TradingEngine:
         max_trade_amount = self.config.max_trade_amount
         leverage = self.config.leverage
 
-        # 3. Iterate candles with real-time delay
-        for i in range(2, len(candles)):
-            window = candles[: i + 1]
-            current = candles[i]
+        poll_interval = self._poll_interval(self.config.timeframe)
+        last_processed: Optional[datetime] = None
+        # Preload some initial candles for indicator warmup
+        warmup_candles: List[Candle] = []
 
-            # Delay before processing this candle
-            delay = self._candle_delay(candles, i)
-            if delay > 0:
-                await asyncio.sleep(min(delay, 300.0))  # Cap at 5 min max per candle for safety
+        logger.info(
+            "Virtual live: starting for %s %s, poll every %.0fs, balance=$%.0f",
+            self.config.pair, self.config.timeframe,
+            poll_interval, balance,
+        )
 
-            # ── same trade logic as _execute ──
-            if open_trade is not None:
-                should_close = False
-                exit_price = current.close
-                exit_reason = "signal"
+        try:
+            while True:
+                try:
+                    # Fetch latest candle
+                    candles = await exchange.get_klines(
+                        pair=self.config.pair,
+                        timeframe=self.config.timeframe,
+                        limit=2,  # Last 2 candles
+                    )
+                except Exception as e:
+                    logger.warning("Virtual live: poll error %s, retrying in %ds", e, poll_interval)
+                    await asyncio.sleep(poll_interval)
+                    continue
 
-                if open_trade.side == "BUY":
-                    sl_price = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
-                    tp_price = open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+                if not candles:
+                    await asyncio.sleep(poll_interval)
+                    continue
 
-                    if sl_price and current.low <= sl_price:
-                        should_close = True
-                        exit_price = sl_price
-                        exit_reason = "stop_loss"
-                    elif tp_price and current.high >= tp_price:
-                        should_close = True
-                        exit_price = tp_price
-                        exit_reason = "take_profit"
-                else:
-                    sl_price = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
-                    tp_price = open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+                latest = candles[-1]
 
-                    if sl_price and current.high >= sl_price:
-                        should_close = True
-                        exit_price = sl_price
-                        exit_reason = "stop_loss"
-                    elif tp_price and current.low <= tp_price:
-                        should_close = True
-                        exit_price = tp_price
-                        exit_reason = "take_profit"
+                # Check if this candle is completed (its close time has passed)
+                now = datetime.now(timezone.utc)
+                tf_seconds = self._candle_delay(candles, len(candles) - 1) if len(candles) >= 2 else 1800
+                if tf_seconds <= 0:
+                    tf_seconds = 1800  # fallback 30 min
 
-                if not should_close:
+                candle_close_time = latest.timestamp + timedelta(seconds=tf_seconds)
+
+                # Skip if candle is still forming or already processed
+                if candle_close_time > now:
+                    await asyncio.sleep(poll_interval)
+                    continue
+
+                if last_processed and latest.timestamp <= last_processed:
+                    await asyncio.sleep(poll_interval)
+                    continue
+
+                # Mark this candle as processed
+                last_processed = latest.timestamp
+
+                # Rebuild window: keep last 50 candles for indicator calc
+                warmup_candles.append(latest)
+                if len(warmup_candles) > 50:
+                    warmup_candles = warmup_candles[-50:]
+
+                # Need at least 3 candles for strategy to work
+                if len(warmup_candles) < 3:
+                    await asyncio.sleep(poll_interval)
+                    continue
+
+                logger.debug(
+                    "Virtual live: new candle %s close=%.2f balance=$%.0f",
+                    latest.timestamp, latest.close, balance,
+                )
+
+                window = warmup_candles[:]  # Full window for strategy
+
+                # ── Check open trade ──
+                if open_trade is not None:
+                    should_close = False
+                    exit_price = latest.close
+                    exit_reason = "signal"
+
+                    if open_trade.side == "BUY":
+                        sl_price = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                        tp_price = open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+
+                        if sl_price and latest.low <= sl_price:
+                            should_close = True
+                            exit_price = sl_price
+                            exit_reason = "stop_loss"
+                        elif tp_price and latest.high >= tp_price:
+                            should_close = True
+                            exit_price = tp_price
+                            exit_reason = "take_profit"
+                    else:
+                        sl_price = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                        tp_price = open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+
+                        if sl_price and latest.high >= sl_price:
+                            should_close = True
+                            exit_price = sl_price
+                            exit_reason = "stop_loss"
+                        elif tp_price and latest.low <= tp_price:
+                            should_close = True
+                            exit_price = tp_price
+                            exit_reason = "take_profit"
+
+                    if not should_close:
+                        signals = await strategy.analyze(window)
+                        for sig in signals:
+                            if sig.type == "exit" and sig.side != open_trade.side:
+                                should_close = True
+                                exit_price = sig.price
+                                exit_reason = "signal"
+                                break
+
+                    if should_close:
+                        close_val = exit_price * open_trade.quantity * leverage
+                        trade_pnl = close_val - (open_trade.entry_price * open_trade.quantity * leverage)
+                        if open_trade.side == "SELL":
+                            trade_pnl = -trade_pnl
+
+                        open_trade.exit_price = exit_price
+                        open_trade.exit_time = latest.timestamp
+                        open_trade.pnl = trade_pnl
+                        trades.append(open_trade)
+                        balance += trade_pnl
+                        peak_balance = max(peak_balance, balance)
+                        dd = (peak_balance - balance) / peak_balance * 100 if peak_balance > 0 else 0
+                        max_drawdown = max(max_drawdown, dd)
+                        open_trade = None
+
+                        if on_progress:
+                            metrics = Metrics(
+                                total_trades=len(trades),
+                                win_trades=sum(1 for t in trades if t.pnl and t.pnl > 0),
+                                loss_trades=sum(1 for t in trades if t.pnl and t.pnl <= 0),
+                                win_rate=sum(1 for t in trades if t.pnl and t.pnl > 0) / len(trades) if trades else 0.0,
+                                profit_loss=sum((t.pnl or 0.0) for t in trades),
+                                final_balance=balance,
+                                max_drawdown=max_drawdown,
+                            )
+                            on_progress(trades, metrics)
+
+                # ── Check entry ──
+                if open_trade is None:
                     signals = await strategy.analyze(window)
                     for sig in signals:
-                        if sig.type == "exit" and sig.side != open_trade.side:
-                            should_close = True
-                            exit_price = sig.price
-                            exit_reason = "signal"
-                            break
+                        if sig.type == "entry":
+                            quantity = min(max_trade_amount / sig.price, balance * 0.5 / sig.price) if sig.price > 0 else 0
+                            if quantity > 0:
+                                open_trade = Trade(
+                                    side=sig.side,
+                                    entry_price=sig.price,
+                                    entry_time=latest.timestamp,
+                                    quantity=quantity,
+                                )
+                                logger.info(
+                                    "Virtual live: ENTRY %s %s at %.2f qty=%.4f",
+                                    sig.side, self.config.pair, sig.price, quantity,
+                                )
+                                break
 
-                if should_close:
-                    close_val = exit_price * open_trade.quantity * leverage
-                    trade_pnl = abs(close_val - open_trade.entry_price * open_trade.quantity * leverage)
-                    if open_trade.side == "BUY":
-                        trade_pnl = close_val - (open_trade.entry_price * open_trade.quantity * leverage)
-                    else:
-                        trade_pnl = (open_trade.entry_price * open_trade.quantity * leverage) - close_val
+                await asyncio.sleep(poll_interval)
 
-                    open_trade.exit_price = exit_price
-                    open_trade.exit_time = current.timestamp
-                    open_trade.pnl = trade_pnl
-                    trades.append(open_trade)
-                    balance += trade_pnl
-                    peak_balance = max(peak_balance, balance)
-                    dd = (peak_balance - balance) / peak_balance * 100 if peak_balance > 0 else 0
-                    max_drawdown = max(max_drawdown, dd)
-                    open_trade = None
+        except asyncio.CancelledError:
+            logger.info("Virtual live: cancelled after %d trades", len(trades))
+            # Close any open position at market
+            if open_trade is not None and trades:
+                last_price = trades[-1].exit_price or trades[-1].entry_price
+                close_val = last_price * open_trade.quantity * leverage
+                trade_pnl = close_val - (open_trade.entry_price * open_trade.quantity * leverage)
+                if open_trade.side == "SELL":
+                    trade_pnl = -trade_pnl
+                open_trade.exit_price = last_price
+                open_trade.exit_time = datetime.now(timezone.utc)
+                open_trade.pnl = trade_pnl
+                trades.append(open_trade)
+                balance += trade_pnl
 
-            # Check entry signal
-            if open_trade is None:
-                signals = await strategy.analyze(window)
-                for sig in signals:
-                    if sig.type == "entry":
-                        quantity = min(max_trade_amount / sig.price, balance * 0.5 / sig.price) if sig.price > 0 else 0
-                        if quantity > 0:
-                            open_trade = Trade(
-                                side=sig.side,
-                                entry_price=sig.price,
-                                entry_time=current.timestamp,
-                                quantity=quantity,
-                            )
-                            break
-
-        # 4. Close any open position at end
-        if open_trade is not None:
-            exit_price = candles[-1].close
-            close_val = exit_price * open_trade.quantity * leverage
-            trade_pnl = close_val - (open_trade.entry_price * open_trade.quantity * leverage)
-            if open_trade.side == "SELL":
-                trade_pnl = -trade_pnl
-            open_trade.exit_price = exit_price
-            open_trade.exit_time = candles[-1].timestamp
-            open_trade.pnl = trade_pnl
-            trades.append(open_trade)
-            balance += trade_pnl
-
-        # 5. Compute metrics
+        # Compute final metrics
         win_trades = sum(1 for t in trades if t.pnl and t.pnl > 0)
         loss_trades = sum(1 for t in trades if t.pnl and t.pnl <= 0)
         total_pnl = sum((t.pnl or 0.0) for t in trades)
@@ -212,6 +328,10 @@ class TradingEngine:
             profit_loss=total_pnl,
             final_balance=balance,
             max_drawdown=max_drawdown,
+        )
+        logger.info(
+            "Virtual live: finished with %d trades, PnL=$%.2f, balance=$%.0f",
+            len(trades), total_pnl, balance,
         )
         return trades, metrics
 

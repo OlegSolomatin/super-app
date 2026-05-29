@@ -22,6 +22,9 @@ from app.models.trading import TradingRun as DBTradingRun
 from app.models.trading import TradingTrade as DBTradingTrade
 from app.services.trading.data_loader import DataLoader
 from app.services.trading.engine import TradingEngine
+from app.services.trading.exchange.binance import BinanceExchange
+from app.services.trading.exchange.bybit import BybitExchange
+from app.services.trading.exchange.mock import MockExchange
 from app.services.trading.models import (
     Candle,
     Metrics,
@@ -98,33 +101,44 @@ class TradingScheduler:
         """
         async with async_session_factory() as session:
             try:
-                # 1. Load candles
-                now = datetime.now(timezone.utc)
-                period_start = config.period_start or (now - timedelta(days=config.duration_days or 30))
-                period_end = config.period_end or now
-
-                loader = DataLoader(pair=config.pair, timeframe=config.timeframe, exchange_name=config.exchange or "binance")
-                candles = await loader.load_history(period_start, period_end)
-
-                if not candles:
-                    raise ValueError(f"No candle data available for {config.pair} ({config.timeframe})")
-
-                logger.info(
-                    "Run %d: loaded %d candles for %s [%s]",
-                    run_id,
-                    len(candles),
-                    config.pair,
-                    config.timeframe,
-                )
-
-                # 2. Run engine
                 engine = TradingEngine(config)
-                if config.mode.value == "real":
-                    trades, metrics = await engine.run_real(candles)
-                elif config.mode.value == "virtual":
-                    trades, metrics = await engine.run_virtual(candles)
+
+                if config.mode.value == "virtual":
+                    # ── Virtual live: no historical data, poll exchange ──
+                    exchange_name = config.exchange or "binance"
+                    if exchange_name == "binance":
+                        exchange = BinanceExchange()
+                    elif exchange_name == "bybit":
+                        exchange = BybitExchange()
+                    else:
+                        exchange = MockExchange()
+
+                    trades, metrics = await engine.run_virtual_live(exchange)
+
                 else:
-                    trades, metrics = await engine.run_history(candles)
+                    # ── Historical/Real: load candles then run ──
+                    now = datetime.now(timezone.utc)
+                    period_start = config.period_start or (now - timedelta(days=config.duration_days or 30))
+                    period_end = config.period_end or now
+
+                    loader = DataLoader(pair=config.pair, timeframe=config.timeframe, exchange_name=config.exchange or "binance")
+                    candles = await loader.load_history(period_start, period_end)
+
+                    if not candles:
+                        raise ValueError(f"No candle data available for {config.pair} ({config.timeframe})")
+
+                    logger.info(
+                        "Run %d: loaded %d candles for %s [%s]",
+                        run_id,
+                        len(candles),
+                        config.pair,
+                        config.timeframe,
+                    )
+
+                    if config.mode.value == "real":
+                        trades, metrics = await engine.run_real(candles)
+                    else:
+                        trades, metrics = await engine.run_history(candles)
 
                 logger.info(
                     "Run %d: completed with %d trades, PnL=%.2f",
