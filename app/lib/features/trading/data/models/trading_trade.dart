@@ -13,10 +13,12 @@ class TradingTrade {
 
   factory TradingTrade.fromJson(Map<String, dynamic> json) {
     return TradingTrade(
-      side: json['side'] as String,
-      price: (json['price'] as num).toDouble(),
-      time: DateTime.parse(json['time'] as String),
-      pnl: (json['pnl'] as num).toDouble(),
+      side: json['side'] as String? ?? 'BUY',
+      price: (json['entry_price'] as num?)?.toDouble() ?? 0.0,
+      time: json['entry_time'] != null
+          ? DateTime.parse(json['entry_time'] as String)
+          : DateTime.now(),
+      pnl: (json['pnl'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -27,6 +29,6 @@ class TradingTrade {
         'pnl': pnl,
       };
 
-  bool get isBuy => side == 'buy';
-  bool get isSell => side == 'sell';
+  bool get isBuy => side.toUpperCase() == 'BUY';
+  bool get isSell => side.toUpperCase() == 'SELL';
 }
