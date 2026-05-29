@@ -272,70 +272,110 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: trade.isBuy
-                    ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
-                    : const Color(0xFFE53935).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: PhosphorIcon(
-                  trade.isBuy
-                      ? PhosphorIconsFill.arrowFatUp
-                      : PhosphorIconsFill.arrowFatDown,
-                  size: 16,
-                  color: trade.isBuy
-                      ? const Color(0xFF4CAF50)
-                      : const Color(0xFFE53935),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    trade.isBuy ? 'Покупка' : 'Продажа',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontSize: 14,
+            // ── Row 1: side icon + type + PnL ──
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: trade.isBuy
+                        ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
+                        : const Color(0xFFE53935).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: PhosphorIcon(
+                      trade.isBuy
+                          ? PhosphorIconsFill.arrowFatUp
+                          : PhosphorIconsFill.arrowFatDown,
+                      size: 16,
+                      color: trade.isBuy
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFFE53935),
                     ),
                   ),
-                  Text(
-                    '\$${trade.price.toStringAsFixed(2)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontSize: 12,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        trade.isBuy ? 'Покупка' : 'Продажа',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        'Цена входа: \$${trade.entryPrice.toStringAsFixed(2)}'
+                        '${trade.exitPrice != null ? ' → \$${trade.exitPrice!.toStringAsFixed(2)}' : ''}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: trade.pnl >= 0
+                        ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
+                        : const Color(0xFFE53935).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${trade.pnl >= 0 ? '+' : ''}\$${trade.pnl.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: trade.pnl >= 0
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFFE53935),
                     ),
                   ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: trade.pnl >= 0
-                    ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
-                    : const Color(0xFFE53935).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '${trade.pnl >= 0 ? '+' : ''}\$${trade.pnl.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: trade.pnl >= 0
-                      ? const Color(0xFF4CAF50)
-                      : const Color(0xFFE53935),
                 ),
-              ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // ── Row 2: entry time ──
+            Row(
+              children: [
+                PhosphorIcon(
+                  PhosphorIconsFill.signIn,
+                  size: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Вход: ${trade.entryDate} ${trade.entryTimeStr}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                PhosphorIcon(
+                  PhosphorIconsFill.signOut,
+                  size: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Выход: ${trade.exitDateTimeStr}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
