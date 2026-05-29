@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -64,7 +65,7 @@ class UserRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: UUID
     email: str
     username: str
     avatar_url: Optional[str] = None
@@ -89,7 +90,7 @@ class RoleRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: UUID
     name: str
     description: Optional[str] = None
     created_at: datetime

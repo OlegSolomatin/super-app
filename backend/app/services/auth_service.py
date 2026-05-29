@@ -76,10 +76,9 @@ class AuthService:
         await self.session.refresh(user)
 
         # Generate tokens
-        token_data = {"sub": str(user.id)}
         return TokenResponse(
-            access_token=create_access_token(data=token_data),
-            refresh_token=create_refresh_token(data=token_data),
+            access_token=create_access_token(subject=user.id),
+            refresh_token=create_refresh_token(subject=user.id),
         )
 
     async def login(self, data: LoginRequest) -> TokenResponse:
@@ -107,8 +106,8 @@ class AuthService:
 
         token_data = {"sub": str(user.id)}
         return TokenResponse(
-            access_token=create_access_token(data=token_data),
-            refresh_token=create_refresh_token(data=token_data),
+            access_token=create_access_token(subject=user.id),
+            refresh_token=create_refresh_token(subject=user.id),
         )
 
     async def refresh_token(self, refresh_token: str) -> TokenResponse:

@@ -10,6 +10,15 @@
 - `infra` — инфраструктура
 
 ---
+- `fix` White page/502: backend 500 из-за UUID → str, несовместимость secure_storage с web | Hermes
+- `fix` UserRead.id: UUID → str в Pydantic схеме (ошибка 500 при сериализации UUID) | Hermes
+- `fix` Flutter web: flutter_secure_storage → shared_preferences (совместимость с браузером) | Hermes
+- `fix` Flutter web: baseUrl localhost:8000 → /api/v1 (работа через прокси) | Hermes
+- `docs` ATOM.md — тех. сводка (порты, БД, запуск) + добавлен в .gitignore | Hermes
+- `fix` security.py: passlib → прямой bcrypt (совместимость с Python 3.14) | Hermes
+- `infra` super-app запущен на pfumiko.ru через Cloudflare Tunnel (Flutter web + FastAPI API) | Hermes
+- `feat` Phase 3: Flutter MVP — auth (login/register), dashboard, Dio client, GoRouter, Riverpod, тёмная тема (18 файлов) | flutter-coder
+- `feat` Phase 2: профиль (PATCH /me) + уведомления + Redis кэш + админка (18 файлов) | backend-coder
 - `fix` security.py: get_password_hash (вместо hash_password), create_access_token теперь принимает subject= вместо data= | Hermes
 - `agent` включены релевантные скиллы 19 агентам (вместо skip: true) | Hermes
 - `feat` backend scaffold: FastAPI + SQLAlchemy 2.0 async + JWT + Alembic + Docker (28 файлов) | backend-coder

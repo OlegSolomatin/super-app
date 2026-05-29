@@ -3,6 +3,7 @@
 .env.*
 *.key
 *.pem
+ATOM.md
 
 # ─── Python ──────────────────────────────────
 __pycache__/

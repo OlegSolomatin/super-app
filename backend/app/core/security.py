@@ -1,35 +1,34 @@
-"""
-Security utilities: JWT tokens and password hashing.
+"""Security utilities: JWT tokens and password hashing.
 
-Uses python-jose for JWT and passlib with bcrypt for passwords.
+Uses python-jose for JWT and bcrypt directly for passwords.
 """
 
 from __future__ import annotations
 
+import bcrypt
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def get_password_hash(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against a bcrypt hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
 
 
 def create_access_token(
     subject: str | Any,
-    data: Optional[Dict[str, Any]] = None,
+    data: Optional[dict] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create a JWT access token with short expiration.
@@ -51,7 +50,7 @@ def create_access_token(
 
 def create_refresh_token(
     subject: str | Any,
-    data: Optional[Dict[str, Any]] = None,
+    data: Optional[dict] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create a JWT refresh token with long expiration.
@@ -71,7 +70,7 @@ def create_refresh_token(
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def decode_token(token: str) -> Optional[Dict[str, Any]]:
+def decode_token(token: str) -> Optional[dict]:
     """Decode and validate a JWT token. Returns payload or None."""
     try:
         payload = jwt.decode(
