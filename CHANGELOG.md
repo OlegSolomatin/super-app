@@ -10,6 +10,8 @@
 - `infra` — инфраструктура
 
 ---
+- `docs` PLAN.md: добавлена Фаза 11 с детальным описанием, источниками данных и интеграцией с Agent Control Room | Hermes
+- `feat` Фаза 11: Agent Monitoring Dashboard — админ-панель мониторинга агентов (статусы, токены, задачи) | Hermes
 - `fix` White page/502: backend 500 из-за UUID → str, несовместимость secure_storage с web | Hermes
 - `fix` UserRead.id: UUID → str в Pydantic схеме (ошибка 500 при сериализации UUID) | Hermes
 - `fix` Flutter web: flutter_secure_storage → shared_preferences (совместимость с браузером) | Hermes
