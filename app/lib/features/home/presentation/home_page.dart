@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:app/core/theme.dart';
+import 'package:app/core/theme_provider.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/features/home/data/user_repository.dart';
@@ -13,13 +15,16 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   User? _user;
   bool _isLoading = true;
   bool _showBanner = true;
 
   late final AnimationController _bannerController;
   late final Animation<double> _bannerOpacity;
+
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -36,7 +41,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 
   void _startBannerTimer() {
-    // Start 15s timer only AFTER user loads and banner is actually visible
     Future.delayed(const Duration(seconds: 15), () {
       if (mounted) {
         _bannerController.forward().then((_) {
@@ -61,7 +65,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       final user = await userRepository.getMe();
       if (mounted) {
         setState(() => _user = user);
-        _startBannerTimer(); // Start 15s timer NOW — banner just became visible
+        _startBannerTimer();
       }
     } catch (e) {
       if (mounted) {
@@ -89,25 +93,30 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.bgColor,
+      key: _scaffoldKey,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Super App'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Выйти',
+            icon: const Icon(Icons.menu),
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+            tooltip: 'Меню',
           ),
         ],
       ),
+      endDrawer: _buildDrawer(context, themeProvider, isDark),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadUser,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -120,7 +129,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [AppTheme.accentColor, Color(0xFF9B7CFF)],
+                              colors: [
+                                AppTheme.accentColor,
+                                Color(0xFF9B7CFF)
+                              ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -153,7 +165,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     ],
                     Text(
                       'Сервисы',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w300,
+                            letterSpacing: 0.5,
+                          ),
                     ),
                     const SizedBox(height: 16),
                     _buildDashboardGrid(),
@@ -161,6 +179,174 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildDrawer(
+      BuildContext context, ThemeProvider themeProvider, bool isDark) {
+    final textColor = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+    final subColor =
+        isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+    final surface =
+        isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
+
+    return Drawer(
+      width: MediaQuery.of(context).size.width,
+      child: Container(
+        color: isDark
+            ? AppTheme.bgColor.withValues(alpha: 0.98)
+            : AppTheme.lightBgColor.withValues(alpha: 0.98),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Profile section
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+                decoration: BoxDecoration(
+                  color: surface.withValues(alpha: 0.5),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.06),
+                    ),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Avatar placeholder
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppTheme.accentColor, Color(0xFF9B7CFF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          _user?.username != null
+                              ? _user!.username[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _user?.username ?? 'Пользователь',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _user?.email ?? '',
+                      style: TextStyle(
+                        color: subColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Menu items
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    // Logout — first, red
+                    _DrawerMenuItem(
+                      icon: Icons.logout,
+                      title: 'Выйти',
+                      color: const Color(0xFFE53935),
+                      isDark: isDark,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _logout();
+                      },
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    _DrawerMenuItem(
+                      icon: Icons.person_outline,
+                      title: 'Профиль',
+                      isDark: isDark,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    _DrawerMenuItem(
+                      icon: Icons.settings_outlined,
+                      title: 'Настройки',
+                      isDark: isDark,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    _DrawerMenuItem(
+                      icon: Icons.info_outline,
+                      title: 'О приложении',
+                      isDark: isDark,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Bottom pinned: theme toggle
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                decoration: BoxDecoration(
+                  color: surface.withValues(alpha: 0.5),
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.06),
+                    ),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Тема',
+                      style: TextStyle(
+                        color: subColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _ThemeSegmentedControl(
+                      current: themeProvider.mode,
+                      onChanged: (mode) {
+                        themeProvider.setMode(mode);
+                        Navigator.of(context).pop();
+                      },
+                      isDark: isDark,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -218,17 +404,135 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         childAspectRatio: 1.1,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
       itemCount: cards.length,
       itemBuilder: (context, index) {
         final card = cards[index];
-        return _DashboardCard(data: card);
+        return _DashboardCard(
+          data: card,
+          index: index,
+        );
       },
     );
   }
 }
+
+// ─── Drawer Menu Item ────────────────────────────────────────────────────────
+
+class _DrawerMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color? color;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _DrawerMenuItem({
+    required this.icon,
+    required this.title,
+    this.color,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final defaultColor =
+        isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+    final itemColor = color ?? defaultColor;
+
+    return ListTile(
+      leading: Icon(icon, color: itemColor),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: itemColor,
+          fontSize: 16,
+          fontWeight: color != null ? FontWeight.w600 : FontWeight.w400,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+// ─── Theme Segmented Control ─────────────────────────────────────────────────
+
+class _ThemeSegmentedControl extends StatelessWidget {
+  final ThemeModePreference current;
+  final ValueChanged<ThemeModePreference> onChanged;
+  final bool isDark;
+
+  const _ThemeSegmentedControl({
+    required this.current,
+    required this.onChanged,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      (icon: '🌙', label: 'Тёмная', value: ThemeModePreference.dark),
+      (icon: '💻', label: 'Системная', value: ThemeModePreference.system),
+      (icon: '☀️', label: 'Светлая', value: ThemeModePreference.light),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: options.map((opt) {
+          final isActive = current == opt.value;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(opt.value),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                decoration: BoxDecoration(
+                  color: isActive ? AppTheme.accentColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      opt.icon,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      opt.label,
+                      style: TextStyle(
+                        color: isActive
+                            ? Colors.white
+                            : (isDark
+                                ? Colors.white.withValues(alpha: 0.5)
+                                : Colors.black.withValues(alpha: 0.5)),
+                        fontSize: 11,
+                        fontWeight:
+                            isActive ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ─── Dashboard Card Data ─────────────────────────────────────────────────────
 
 class _DashboardCardData {
   final IconData icon;
@@ -246,62 +550,168 @@ class _DashboardCardData {
   });
 }
 
-class _DashboardCard extends StatelessWidget {
-  final _DashboardCardData data;
+// ─── Dashboard Card ──────────────────────────────────────────────────────────
 
-  const _DashboardCard({required this.data});
+class _DashboardCard extends StatefulWidget {
+  final _DashboardCardData data;
+  final int index;
+
+  const _DashboardCard({required this.data, required this.index});
+
+  @override
+  State<_DashboardCard> createState() => _DashboardCardState();
+}
+
+class _DashboardCardState extends State<_DashboardCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _fadeCtrl;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
+
+    Future.delayed(Duration(milliseconds: 100 * widget.index), () {
+      if (mounted) _fadeCtrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: data.onTap ?? () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${data.title} — скоро'),
-              behavior: SnackBarBehavior.floating,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppTheme.cardColor : AppTheme.lightCardColor;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.08);
+
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: SlideTransition(
+        position: _slideAnim,
+        child: GestureDetector(
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) {
+            setState(() => _pressed = false);
+            final tap = widget.data.onTap;
+            if (tap != null) {
+              tap();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${widget.data.title} — скоро'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
+          onTapCancel: () => setState(() => _pressed = false),
+          child: AnimatedScale(
+            scale: _pressed ? 0.97 : 1.0,
+            duration: const Duration(milliseconds: 100),
+            child: Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.3)
+                        : Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () {
+                    final tap = widget.data.onTap;
+                    if (tap != null) {
+                      tap();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${widget.data.title} — скоро'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Icon with gradient container
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                widget.data.color.withValues(alpha: 0.2),
+                                widget.data.color.withValues(alpha: 0.05),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            widget.data.icon,
+                            color: widget.data.color,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          widget.data.title,
+                          style: TextStyle(
+                            color: isDark
+                                ? AppTheme.textPrimary
+                                : AppTheme.lightTextPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.data.subtitle,
+                          style: TextStyle(
+                            color: isDark
+                                ? AppTheme.textSecondary
+                                : AppTheme.lightTextSecondary,
+                            fontSize: 12,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: data.color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  data.icon,
-                  color: data.color,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                data.title,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                data.subtitle,
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 12,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
           ),
         ),
       ),

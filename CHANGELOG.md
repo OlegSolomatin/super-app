@@ -10,6 +10,10 @@
 - `infra` — инфраструктура
 
 ---
+- `feat` Дизайн-рефреш: карточки с border/shadow, scale-анимация, staggered fade-in | Hermes
+- `feat` Бургер-меню (endDrawer): профиль, меню, logout, переключатель темы внизу | Hermes
+- `feat` Светлая тема: #F5F5FA, белые карточки, тёмный текст | Hermes
+- `feat` ThemeProvider: три режима (dark/system/light) с сохранением в SharedPreferences | Hermes
 - `fix` HomePage: отступ SizedBox теперь внутри if (_showBanner) — нет пустого места после скрытия | Hermes
 - `fix` HomePage: таймер баннера стартует после загрузки профиля (не в initState) | Hermes
 - `fix` AgentsPage: Navigator.pop → context.go('/') (GoRouter совместимость) | Hermes
