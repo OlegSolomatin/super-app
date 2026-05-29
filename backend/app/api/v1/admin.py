@@ -1,14 +1,19 @@
 """
 Admin endpoints.
 
-GET   /admin/users       — List all users (paginated)
+GET   /admin/users          — List all users (paginated)
 PATCH /admin/users/{id}/role — Assign a role to a user
-GET   /admin/stats       — System statistics
+GET   /admin/stats          — System statistics
+GET   /admin/agents/status  — Agent monitoring dashboard status
 """
 
 from __future__ import annotations
 
+import json
 import math
+import subprocess
+import sys
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -20,6 +25,7 @@ from app.core.database import get_session
 from app.core.dependencies import require_admin
 from app.models.notification import Notification
 from app.models.user import Role, User, UserRole
+from app.schemas.admin import AgentStatusResponse
 from app.schemas.auth import RoleRead, UserRead
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -183,3 +189,67 @@ async def get_stats(
         total_notifications=total_notifications,
         total_roles=total_roles,
     )
+
+
+# ── Paths for agent stats ──────────────────────────────────────────────
+
+AGENT_STATS_JSON = Path.home() / "agent-control-room/bus/agent_stats.json"
+COLLECTOR_SCRIPT = Path.home() / "workspace/super-app/scripts/collect_agent_stats.py"
+
+
+@router.get(
+    "/agents/status",
+    response_model=AgentStatusResponse,
+    summary="Agent monitoring dashboard status (admin)",
+)
+async def get_agents_status(
+    admin_user: User = Depends(require_admin),
+) -> AgentStatusResponse:
+    """Return live status of all agents.
+
+    Reads ``agent_stats.json`` if available.  If the file does not exist
+    the collector script is executed on demand.
+
+    Requires admin privileges.
+    """
+    if not AGENT_STATS_JSON.is_file():
+        if not COLLECTOR_SCRIPT.is_file():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Agent stats collector script not found",
+            )
+        try:
+            subprocess.run(
+                [sys.executable, str(COLLECTOR_SCRIPT)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True,
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Agent stats collector timed out",
+            )
+        except subprocess.CalledProcessError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Agent stats collector failed: {exc.stderr.strip()}",
+            )
+
+    if not AGENT_STATS_JSON.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent stats data unavailable",
+        )
+
+    try:
+        with open(AGENT_STATS_JSON) as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to read agent stats: {exc}",
+        )
+
+    return AgentStatusResponse(**raw)

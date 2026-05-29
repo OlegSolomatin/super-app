@@ -10,6 +10,9 @@
 - `infra` — инфраструктура
 
 ---
+- `fix` Flutter: добавлено поле roles в User модель (проверка на admin) | Hermes
+- `feat` Phase 11: Flutter — админ-тил на HomePage + страница /admin/agents с анимацией статусов | Hermes
+- `feat` Phase 11: backend — collect_agent_stats.py + GET /admin/agents/status (20 агентов, статусы, токены) | Hermes
 - `docs` PLAN.md: добавлена Фаза 11 с детальным описанием, источниками данных и интеграцией с Agent Control Room | Hermes
 - `feat` Фаза 11: Agent Monitoring Dashboard — админ-панель мониторинга агентов (статусы, токены, задачи) | Hermes
 - `fix` White page/502: backend 500 из-за UUID → str, несовместимость secure_storage с web | Hermes

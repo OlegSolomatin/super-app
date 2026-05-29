@@ -130,7 +130,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildDashboardGrid() {
-    final cards = [
+    final cards = <_DashboardCardData>[];
+
+    // Admin card — first, only for admin users
+    final isAdmin = _user?.roles?.contains('admin') ?? false;
+    if (isAdmin) {
+      cards.add(_DashboardCardData(
+        icon: Icons.monitor_heart,
+        title: 'Агенты',
+        subtitle: 'Мониторинг системы',
+        color: const Color(0xFF7C5CFC),
+        onTap: () => context.go('/admin/agents'),
+      ));
+    }
+
+    cards.addAll([
       _DashboardCardData(
         icon: Icons.article_outlined,
         title: 'Посты',
@@ -161,7 +175,7 @@ class _HomePageState extends State<HomePage> {
         subtitle: 'Исследуйте карты',
         color: const Color(0xFF4DB6AC),
       ),
-    ];
+    ]);
 
     return GridView.builder(
       shrinkWrap: true,
@@ -186,12 +200,14 @@ class _DashboardCardData {
   final String title;
   final String subtitle;
   final Color color;
+  final VoidCallback? onTap;
 
   const _DashboardCardData({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.color,
+    this.onTap,
   });
 }
 
@@ -205,7 +221,7 @@ class _DashboardCard extends StatelessWidget {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
+        onTap: data.onTap ?? () {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('${data.title} — скоро'),
