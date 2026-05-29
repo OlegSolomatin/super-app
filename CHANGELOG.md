@@ -10,6 +10,8 @@
 - `infra` — инфраструктура
 
 ---
+- `fix` AgentsPage: Navigator.pop → context.go('/') (GoRouter совместимость) | Hermes
+- `feat` HomePage: welcome banner auto-hide через 15 секунд с FadeTransition | Hermes
 - `fix` users.py: добавлен импорт selectinload (NameError), добавлена загрузка ролей в GET /users/me | Hermes
 - `fix` User model: int id → String id (ошибка type 'String' is not subtype of type 'num' с UUID от API) | Hermes
 - `fix` Flutter: добавлено поле roles в User модель (проверка на admin) | Hermes

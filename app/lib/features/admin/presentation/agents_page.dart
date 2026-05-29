@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/features/admin/data/admin_repository.dart';
@@ -99,7 +100,7 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.go('/'),
         ),
         title: const Text(
           'Мониторинг агентов',

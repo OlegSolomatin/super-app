@@ -13,14 +13,40 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   User? _user;
   bool _isLoading = true;
+  bool _showBanner = true;
+
+  late final AnimationController _bannerController;
+  late final Animation<double> _bannerOpacity;
 
   @override
   void initState() {
     super.initState();
+    _bannerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _bannerOpacity = CurvedAnimation(
+      parent: _bannerController,
+      curve: Curves.easeOut,
+    );
+    // Auto-hide banner after 15 seconds with fade animation
+    Future.delayed(const Duration(seconds: 15), () {
+      if (mounted) {
+        _bannerController.forward().then((_) {
+          if (mounted) setState(() => _showBanner = false);
+        });
+      }
+    });
     _loadUser();
+  }
+
+  @override
+  void dispose() {
+    _bannerController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUser() async {
@@ -81,40 +107,44 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Welcome section
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppTheme.accentColor, Color(0xFF9B7CFF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    // Welcome section — auto-hides after 15s
+                    if (_showBanner)
+                      FadeTransition(
+                        opacity: _bannerOpacity,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppTheme.accentColor, Color(0xFF9B7CFF)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Привет, ${_user?.username ?? 'Пользователь'}!',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _user?.email ?? '',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Привет, ${_user?.username ?? 'Пользователь'}!',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _user?.email ?? '',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 24),
                     Text(
                       'Сервисы',
