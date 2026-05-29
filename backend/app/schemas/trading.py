@@ -7,9 +7,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
 
 
 class TradingRunMode(str, Enum):
@@ -72,13 +75,56 @@ class TradingRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    user_id: int
+    user_id: UUID
     status: TradingRunStatus
     mode: TradingRunMode
     config: Optional[TradingConfig] = None
     started_at: datetime
     finished_at: Optional[datetime] = None
     error: Optional[str] = None
+
+    @field_validator("user_id", mode="before")
+    @classmethod
+    def coerce_user_id(cls, v: Any) -> UUID:
+        if isinstance(v, UUID):
+            return v
+        if isinstance(v, str):
+            return UUID(v)
+        raise ValueError(f"Invalid user_id: {v}")
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_config(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return data
+        result = {
+            "id": data.id,
+            "user_id": data.user_id,
+            "status": data.status,
+            "mode": data.mode,
+            "started_at": data.started_at,
+            "finished_at": data.finished_at,
+            "error": data.error,
+        }
+        cfg = getattr(data, "config", None)
+        if cfg is not None and not isinstance(cfg, dict) and not isinstance(cfg, BaseModel):
+            from app.models.trading import TradingConfig as DBTradingConfig
+            if isinstance(cfg, DBTradingConfig):
+                run_mode = data.mode if hasattr(data, "mode") else "history"
+                result["config"] = {
+                    "mode": run_mode if isinstance(run_mode, str) else run_mode.value,
+                    "pair": cfg.pair or "",
+                    "strategy": cfg.strategy or "",
+                    "leverage": cfg.leverage or 1,
+                    "virtual_balance": cfg.virtual_balance or 1000,
+                    "max_trade_amount": cfg.max_trade_amount or 100,
+                    "timeframe": cfg.timeframe or "1h",
+                    "period_start": cfg.period_start,
+                    "period_end": cfg.period_end,
+                    "duration_days": cfg.duration_days,
+                    "exchange": cfg.exchange,
+                }
+        return result
 
 
 class TradingResultResponse(BaseModel):
@@ -134,6 +180,7 @@ class StrategyInfo(BaseModel):
     name: str
     description: str
     type: str  # candle_pattern, indicator_based, ml
+    nuances: Optional[str] = None  # Detailed info: SL, entry/exit, risk, etc.
 
 
 class ExchangeInfo(BaseModel):

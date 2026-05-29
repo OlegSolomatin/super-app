@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.database import Base
 
 # Import all models so Alembic can detect them
-from app.models import User, Role, UserRole, Notification  # noqa: F401
+from app.models import Notification, Role, TradingConfig, TradingResult, TradingRun, TradingTrade, User, UserRole  # noqa: F401
 
 # Alembic Config object
 config = context.config

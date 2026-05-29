@@ -13,15 +13,20 @@ DELETE /trading/runs/{run_id}       — Stop/delete a run
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user
-from app.models.trading import TradingRun
+from app.models.trading import TradingConfig as DBTradingConfig
+from app.models.trading import TradingResult as DBTradingResult
+from app.models.trading import TradingRun as DBTradingRun
+from app.models.trading import TradingTrade as DBTradingTrade
 from app.models.user import User
 from app.schemas.trading import (
     ExchangeInfo,
@@ -38,6 +43,11 @@ from app.schemas.trading import (
     TradingRunResponse,
     TradingRunStatus,
 )
+from app.services.trading.models import (
+    TradingConfig as DomainTradingConfig,
+    TradingRunMode,
+)
+from app.services.trading.scheduler import scheduler
 
 router = APIRouter(prefix="/trading", tags=["trading"])
 
@@ -63,13 +73,43 @@ HARDCODED_PAIRS = [
 HARDCODED_STRATEGIES = [
     StrategyInfo(
         name="hammer",
-        description="Hammer candlestick pattern — bullish reversal. Small body, long lower wick.",
+        description="Молот — бычий разворотный паттерн. Маленькое тело, длинная нижняя тень.",
         type="candle_pattern",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Тело свечи малое (≤30% от всего диапазона)\n"
+            "• Нижняя тень ≥2× тела\n"
+            "• Верхняя тень малая (≤10% от диапазона)\n"
+            "• Свеча находится после нисходящего тренда\n\n"
+            "📉 **Условия выхода:**\n"
+            "• Стоп-лосс (SL): −2% от цены входа\n"
+            "• Тейк-профит (TP): +5% от цены входа\n"
+            "• Либо по сигналу Inverse Hammer\n\n"
+            "⚙️ **Настройки по умолчанию:**\n"
+            "• SL: 2% | TP: 5% | Риск:Reward = 1:2.5\n"
+            "• Плечо: 1×–10×\n"
+            "• Рекомендуемый таймфрейм: 1h–4h"
+        ),
     ),
     StrategyInfo(
         name="inverse_hammer",
-        description="Inverse Hammer candlestick pattern — bearish reversal. Small body, long upper wick.",
+        description="Перевёрнутый Молот — медвежий разворотный паттерн. Маленькое тело, длинная верхняя тень.",
         type="candle_pattern",
+        nuances=(
+            "📈 **Условия входа (SELL):**\n"
+            "• Тело свечи малое (≤30% от всего диапазона)\n"
+            "• Верхняя тень ≥2× тела\n"
+            "• Нижняя тень малая (≤10% от диапазона)\n"
+            "• Свеча находится после восходящего тренда\n\n"
+            "📉 **Условия выхода:**\n"
+            "• Стоп-лосс (SL): +2% от цены входа (для шорта)\n"
+            "• Тейк-профит (TP): −5% от цены входа\n"
+            "• Либо по сигналу Hammer\n\n"
+            "⚙️ **Настройки по умолчанию:**\n"
+            "• SL: 2% | TP: 5% | Риск:Reward = 1:2.5\n"
+            "• Плечо: 1×–10×\n"
+            "• Рекомендуемый таймфрейм: 1h–4h"
+        ),
     ),
 ]
 
@@ -79,7 +119,7 @@ HARDCODED_STRATEGIES = [
 HARDCODED_EXCHANGES = [
     ExchangeInfo(name="binance", display_name="Binance", supports_history=True, supports_websocket=True),
     ExchangeInfo(name="bybit", display_name="Bybit", supports_history=True, supports_websocket=True),
-    ExchangeInfo(name="mock", display_name="Mock (test)", supports_history=True, supports_websocket=False),
+    ExchangeInfo(name="mock", display_name="Мок (тест)", supports_history=True, supports_websocket=False),
 ]
 
 # ---------------------------------------------------------------------------
@@ -134,11 +174,72 @@ async def start_run(
 
     Creates a database record and schedules the run via the trading engine.
     """
-    # TODO: implement actual strategy execution
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Trading run execution is not yet implemented.",
+    # Check scheduler capacity
+    if not scheduler.can_start():
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Достигнут лимит одновременных запусков (15). Остановите активный запуск.",
+        )
+
+    # Create DB record
+    db_run = DBTradingRun(
+        user_id=current_user.id,
+        status="running",
+        mode=config.mode.value,
     )
+    session.add(db_run)
+    await session.flush()  # Get the run_id
+
+    # Create config snapshot
+    db_config = DBTradingConfig(
+        run_id=db_run.id,
+        pair=config.pair,
+        strategy=config.strategy,
+        leverage=config.leverage,
+        virtual_balance=config.virtual_balance,
+        max_trade_amount=config.max_trade_amount,
+        timeframe=config.timeframe,
+        period_start=config.period_start,
+        period_end=config.period_end,
+        duration_days=config.duration_days,
+        exchange=config.exchange,
+    )
+    session.add(db_config)
+
+    await session.commit()
+
+    # Eagerly load the config relationship before validation
+    stmt = (
+        select(DBTradingRun)
+        .options(selectinload(DBTradingRun.config))
+        .where(DBTradingRun.id == db_run.id)
+    )
+    result = await session.execute(stmt)
+    db_run = result.scalar_one()
+
+    # Convert to domain config for the engine
+    domain_config = DomainTradingConfig(
+        mode=TradingRunMode(config.mode.value),
+        pair=config.pair,
+        strategy=config.strategy,
+        leverage=config.leverage,
+        virtual_balance=config.virtual_balance,
+        max_trade_amount=config.max_trade_amount,
+        timeframe=config.timeframe,
+        period_start=config.period_start,
+        period_end=config.period_end,
+        duration_days=config.duration_days,
+        exchange=config.exchange,
+    )
+
+    # Schedule the run (fire-and-forget via async task)
+    # Scheduler creates its own DB session internally
+    await scheduler.start_run(
+        run_id=db_run.id,
+        config=domain_config,
+    )
+
+    return TradingRunResponse.model_validate(db_run)
 
 
 @router.get("/runs", response_model=TradingRunListResponse)
@@ -152,10 +253,14 @@ async def list_runs(
     session: AsyncSession = Depends(get_session),
 ) -> TradingRunListResponse:
     """List all trading runs for the current user, with optional status filter."""
-    stmt = select(TradingRun).where(TradingRun.user_id == current_user.id)
+    stmt = (
+        select(DBTradingRun)
+        .options(selectinload(DBTradingRun.config), selectinload(DBTradingRun.result))
+        .where(DBTradingRun.user_id == current_user.id)
+    )
     if status_filter:
-        stmt = stmt.where(TradingRun.status == status_filter.value)
-    stmt = stmt.order_by(TradingRun.started_at.desc())
+        stmt = stmt.where(DBTradingRun.status == status_filter.value)
+    stmt = stmt.order_by(DBTradingRun.started_at.desc())
     result = await session.execute(stmt)
     runs = result.scalars().all()
     total = len(runs)
@@ -177,16 +282,20 @@ async def get_run(
     session: AsyncSession = Depends(get_session),
 ) -> TradingRunResponse:
     """Return details of a specific trading run."""
-    stmt = select(TradingRun).where(
-        TradingRun.id == run_id,
-        TradingRun.user_id == current_user.id,
+    stmt = (
+        select(DBTradingRun)
+        .options(selectinload(DBTradingRun.config), selectinload(DBTradingRun.result))
+        .where(
+            DBTradingRun.id == run_id,
+            DBTradingRun.user_id == current_user.id,
+        )
     )
     result = await session.execute(stmt)
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trading run not found.",
+            detail="Запуск не найден.",
         )
     return TradingRunResponse.model_validate(run)
 
@@ -201,24 +310,43 @@ async def get_run_trades(
 ) -> TradeListResponse:
     """Return trades associated with a specific trading run."""
     # Verify the run exists and belongs to the user
-    stmt = select(TradingRun).where(
-        TradingRun.id == run_id,
-        TradingRun.user_id == current_user.id,
+    stmt = select(DBTradingRun).where(
+        DBTradingRun.id == run_id,
+        DBTradingRun.user_id == current_user.id,
     )
     result = await session.execute(stmt)
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trading run not found.",
+            detail="Запуск не найден.",
         )
-    # TODO: fetch trades from DB or trading engine
+
+    # Fetch trades from DB
+    stmt = (
+        select(DBTradingTrade)
+        .where(DBTradingTrade.run_id == run_id)
+        .order_by(DBTradingTrade.entry_time.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    result = await session.execute(stmt)
+    db_trades = result.scalars().all()
+
+    # Get total count
+    count_stmt = select(DBTradingTrade).where(DBTradingTrade.run_id == run_id)
+    count_result = await session.execute(count_stmt)
+    total = len(count_result.scalars().all())
+
+    items = [TradeResponse.model_validate(t) for t in db_trades]
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
     return TradeListResponse(
-        items=[],
-        total=0,
+        items=items,
+        total=total,
         page=page,
         page_size=page_size,
-        total_pages=1,
+        total_pages=total_pages,
     )
 
 
@@ -229,22 +357,36 @@ async def get_run_strategy_code(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Return the strategy code/logic used by a trading run."""
-    stmt = select(TradingRun).where(
-        TradingRun.id == run_id,
-        TradingRun.user_id == current_user.id,
+    stmt = (
+        select(DBTradingRun)
+        .options(selectinload(DBTradingRun.config))
+        .where(
+            DBTradingRun.id == run_id,
+            DBTradingRun.user_id == current_user.id,
+        )
     )
     result = await session.execute(stmt)
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trading run not found.",
+            detail="Запуск не найден.",
         )
-    # TODO: fetch strategy source code from a registry
+
+    strategy_name = run.config.strategy if run.config else "unknown"
+
+    # Return the strategy description from the hardcoded list
+    strategy_desc = "Неизвестная стратегия"
+    for s in HARDCODED_STRATEGIES:
+        if s.name == strategy_name:
+            strategy_desc = s.description
+            break
+
     return {
         "run_id": run_id,
-        "strategy": run.mode,
-        "code": "# Strategy source code will be returned here",
+        "strategy": strategy_name,
+        "description": strategy_desc,
+        "code": f"# {strategy_name} strategy\n# {strategy_desc}",
     }
 
 
@@ -255,17 +397,25 @@ async def stop_run(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Stop and delete a trading run."""
-    stmt = select(TradingRun).where(
-        TradingRun.id == run_id,
-        TradingRun.user_id == current_user.id,
+    stmt = select(DBTradingRun).where(
+        DBTradingRun.id == run_id,
+        DBTradingRun.user_id == current_user.id,
     )
     result = await session.execute(stmt)
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trading run not found.",
+            detail="Запуск не найден.",
         )
-    # TODO: stop the strategy engine and delete the run
-    await session.delete(run)
-    return None
+
+    # Try to stop the engine if it's running
+    try:
+        await scheduler.stop_run(run_id)
+    except KeyError:
+        pass  # Not active in scheduler, still delete from DB
+
+    # Update status to stopped
+    run.status = "stopped"
+    run.finished_at = datetime.now(timezone.utc)
+    await session.commit()

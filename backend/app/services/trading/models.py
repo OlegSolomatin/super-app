@@ -70,6 +70,7 @@ class Metrics:
     loss_trades: int = 0
     win_rate: float = 0.0
     profit_loss: float = 0.0
+    final_balance: float = 0.0
     max_drawdown: float = 0.0
     sharpe: float = 0.0
 
@@ -89,6 +90,8 @@ class TradingConfig:
     period_end: Optional[datetime] = None
     duration_days: Optional[int] = None
     exchange: Optional[str] = None
+    stop_loss_percent: float = 2.0
+    take_profit_percent: float = 5.0
 
 
 @dataclass

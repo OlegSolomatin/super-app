@@ -383,7 +383,7 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
 extension _RunModeLabel on TradingRun {
   String get modeLabel {
     switch (mode) {
-      case 'historical':
+      case 'history':
         return 'Исторические данные 📜';
       case 'virtual':
         return 'Виртуальный баланс 💻';

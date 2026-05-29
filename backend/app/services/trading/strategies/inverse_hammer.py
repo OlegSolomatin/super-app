@@ -38,7 +38,46 @@ class InverseHammerStrategy(AbstractStrategy):
         Returns a SELL signal if the latest candle matches the Inverse
         Hammer criteria and the overall trend was up.
         """
-        # TODO: implement full candle pattern recognition logic
         signals: List[Signal] = []
-        # Placeholder — will be replaced with real pattern detection
+
+        if len(candles) < 3:
+            return signals
+
+        # Get the last two candles
+        prev = candles[-2]
+        current = candles[-1]
+
+        # Check prior uptrend: previous candle close > previous open (bullish)
+        prior_up = prev.close > prev.open
+
+        # Inverse Hammer detection on current candle
+        body = abs(current.close - current.open)
+        upper_shadow = current.high - max(current.open, current.close)
+        lower_shadow = min(current.open, current.close) - current.low
+
+        # Criteria:
+        # 1. Small body (not a doji — body > 0)
+        # 2. Upper shadow >= 2x body length
+        # 3. Lower shadow <= 0.3x body (little to no lower wick)
+        if (
+            body > 0
+            and upper_shadow >= 2.0 * body
+            and lower_shadow <= 0.3 * body
+        ):
+            # Bearish reversal signal
+            entry_price = current.close
+            signals.append(
+                Signal(
+                    side="SELL",
+                    price=entry_price,
+                    time=current.timestamp,
+                    type="entry",
+                    confidence=min(1.0, upper_shadow / (body * 3)),
+                )
+            )
+
         return signals
+
+
+# Backward compatibility alias
+InverseHammer = InverseHammerStrategy

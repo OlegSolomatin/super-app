@@ -188,54 +188,59 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     }
   }
 
+  String _modeApiValue(RunMode mode) {
+    return switch (mode) {
+      RunMode.historical => 'history',
+      RunMode.virtual => 'virtual',
+      RunMode.real => 'real',
+    };
+  }
+
   Future<void> _submitRun() async {
     setState(() => _loadingStep = true);
     try {
       final config = <String, dynamic>{
-        'mode': _runMode!.name,
+        'mode': _modeApiValue(_runMode!),
         'strategy': _selectedStrategy!.name,
-        'leverage': _leverage,
+        'leverage': _leverage.round(),
         'timeframe': _timeframe,
-        'max_trade': _maxTrade,
       };
       if (_runMode != RunMode.real) {
         config['pair'] = _selectedPair!.symbol;
-        config['balance'] = _balance;
+        config['virtual_balance'] = _balance;
+        config['max_trade_amount'] = _maxTrade;
       } else {
         config['exchange'] = _selectedExchange!.name;
       }
       if (_runMode == RunMode.historical && _dateRange != null) {
-        config['date_from'] =
-            _dateRange!.start.toIso8601String().split('T').first;
-        config['date_to'] =
-            _dateRange!.end.toIso8601String().split('T').first;
+        config['period_start'] = _dateRange!.start.toIso8601String();
+        config['period_end'] = _dateRange!.end.toIso8601String();
       }
       if (_runMode == RunMode.virtual && _duration != null) {
         config['duration_days'] = _duration;
       }
 
-      try {
-        await widget.repository.createRun(config);
-      } catch (e) {
-        // API returns 501, still show success message
-      }
+      await widget.repository.createRun(config);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Запуск бэктеста — скоро!'),
+          SnackBar(
+            content: Text(
+              '${_strategyDisplayName(_selectedStrategy!.name)} запущена!',
+            ),
             behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFF4CAF50),
           ),
         );
         context.go('/trading');
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ошибка при запуске стратегии'),
+          SnackBar(
+            content: Text('Ошибка: ${e.toString().length > 100 ? e.toString().substring(0, 100) : e.toString()}'),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Color(0xFFE53935),
+            backgroundColor: const Color(0xFFE53935),
           ),
         );
       }
@@ -501,10 +506,10 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
               top: 0,
               right: 0,
               child: GestureDetector(
-                onTap: () => _showModeInfo(context, mode),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
+              onTap: () => _showModeInfo(context, mode),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.1)
                         : Colors.black.withValues(alpha: 0.05),
@@ -593,6 +598,86 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         ),
       ),
     );
+  }
+
+  void _showStrategyInfo(StrategyInfo strategy) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).cardTheme.color,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _strategyDisplayName(strategy.name),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              strategy.description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withValues(alpha: 0.7),
+                  ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.accentColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.accentColor.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Text(
+                strategy.nuances ?? '',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      height: 1.6,
+                      fontSize: 14,
+                    ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Понятно'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _strategyDisplayName(String name) {
+    return switch (name) {
+      'hammer' => 'Молот (Hammer)',
+      'inverse_hammer' => 'Перевёрнутый Молот (Inverse Hammer)',
+      _ => name[0].toUpperCase() + name.substring(1),
+    };
   }
 
   // ─── Step 2: Pair ────────────────────────────────────────────────
@@ -817,38 +902,70 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                     width: 2,
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Stack(
                   children: [
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        PhosphorIcon(
-                          PhosphorIconsFill.chartLine,
-                          size: 20,
-                          color: isSelected
-                              ? AppTheme.accentColor
-                              : theme.textTheme.bodyMedium?.color,
+                        Row(
+                          children: [
+                            PhosphorIcon(
+                              PhosphorIconsFill.chartLine,
+                              size: 20,
+                              color: isSelected
+                                  ? AppTheme.accentColor
+                                  : theme.textTheme.bodyMedium?.color,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              _strategyDisplayName(strategy.name),
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontSize: 16,
+                                color:
+                                    isSelected ? AppTheme.accentColor : null,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(height: 8),
                         Text(
-                          strategy.name,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 16,
-                            color:
-                                isSelected ? AppTheme.accentColor : null,
+                          strategy.description,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.4,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      strategy.description,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.4,
+                    // Info button in top-right corner
+                    if (strategy.nuances != null)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: () => _showStrategyInfo(strategy),
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentColor.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '!',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.accentColor,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ),
             );
           }),

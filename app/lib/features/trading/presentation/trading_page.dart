@@ -608,7 +608,7 @@ class _TradingPageState extends State<TradingPage>
 
   Color _modeColor(String mode) {
     switch (mode) {
-      case 'historical':
+      case 'history':
         return const Color(0xFF4CAF50);
       case 'virtual':
         return const Color(0xFF2196F3);
@@ -621,7 +621,7 @@ class _TradingPageState extends State<TradingPage>
 
   IconData _modeIcon(String mode) {
     switch (mode) {
-      case 'historical':
+      case 'history':
         return PhosphorIconsFill.scroll;
       case 'virtual':
         return PhosphorIconsFill.desktop;
@@ -634,7 +634,7 @@ class _TradingPageState extends State<TradingPage>
 
   String _modeLabel(String mode) {
     switch (mode) {
-      case 'historical':
+      case 'history':
         return 'История';
       case 'virtual':
         return 'Виртуал';

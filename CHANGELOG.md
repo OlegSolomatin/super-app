@@ -10,6 +10,8 @@
 - `infra` — инфраструктура
 
 ---
+- `feat` Phase 12: Trading Module — backend (22 файла, 9 API, индикаторы RSI/SMA/EMA/MACD/Bollinger, стратегии Hammer+Inverse Hammer) | Hermes
+- `feat` Phase 12: Flutter — главная торговли (табы), 9-шаговый мастер, страница деталей запуска | Hermes
 - `feat` Material icons → Phosphor Icons Fill (robot, fileText, barbell, musicNotes, videoCamera, mapPin) | Hermes
 - `fix` Card text centering: textAlign.center на заголовки, убрана фоновая иконка | Hermes
 - `fix` Theme sync: login, register, agents pages now use Theme.of(context) — light/dark applies globally | Hermes
