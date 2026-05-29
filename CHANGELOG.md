@@ -10,6 +10,8 @@
 - `infra` — инфраструктура
 
 ---
+- `fix` users.py: добавлен импорт selectinload (NameError), добавлена загрузка ролей в GET /users/me | Hermes
+- `fix` User model: int id → String id (ошибка type 'String' is not subtype of type 'num' с UUID от API) | Hermes
 - `fix` Flutter: добавлено поле roles в User модель (проверка на admin) | Hermes
 - `feat` Phase 11: Flutter — админ-тил на HomePage + страница /admin/agents с анимацией статусов | Hermes
 - `feat` Phase 11: backend — collect_agent_stats.py + GET /admin/agents/status (20 агентов, статусы, токены) | Hermes

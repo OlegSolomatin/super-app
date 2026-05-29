@@ -70,6 +70,7 @@ class UserRead(BaseModel):
     username: str
     avatar_url: Optional[str] = None
     bio: Optional[str] = None
+    roles: list[str] = []
     created_at: datetime
     updated_at: datetime
 

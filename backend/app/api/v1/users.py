@@ -11,11 +11,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user
-from app.models.user import User
-from app.schemas.auth import UserRead, UserUpdate
+from app.models.notification import Notification
+from app.models.user import Role, User, UserRole
+from app.schemas.auth import RoleRead, UserRead, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -27,9 +29,29 @@ router = APIRouter(prefix="/users", tags=["users"])
 )
 async def get_me(
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ) -> UserRead:
     """Return the profile of the currently authenticated user."""
-    return UserRead.model_validate(current_user)
+    # Build user dict without roles (SQLAlchemy relationship can't auto-extract)
+    user_data = UserRead(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        avatar_url=current_user.avatar_url,
+        bio=current_user.bio,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+    )
+    # Load roles from the many-to-many relationship
+    stmt = (
+        select(UserRole)
+        .options(selectinload(UserRole.role))
+        .where(UserRole.user_id == current_user.id)
+    )
+    result = await session.execute(stmt)
+    user_roles = result.scalars().all()
+    user_data.roles = [ur.role.name for ur in user_roles]
+    return user_data
 
 
 @router.patch(
