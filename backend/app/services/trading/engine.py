@@ -74,6 +74,8 @@ class TradingEngine:
     async def run_virtual_live(
         self,
         exchange: AbstractExchange,
+        start_time: Optional[datetime] = None,
+        duration_seconds: Optional[float] = None,
         on_progress: Optional[Callable[[List[Trade], Metrics], None]] = None,
     ) -> Tuple[List[Trade], Metrics]:
         """Virtual live trading — polls exchange for new candles in real time.
@@ -82,16 +84,18 @@ class TradingEngine:
         1. Every N seconds, fetches the latest candle from exchange
         2. When a new completed candle arrives — analyses it
         3. Enters/exits trades based on strategy signals
-        4. Runs indefinitely until cancelled
+        4. Runs until duration_seconds elapses or cancelled
 
         Args:
             exchange: Exchange connector to poll for live data.
+            start_time: When the run started (for timeout + progress).
+            duration_seconds: Max run duration in seconds (from duration_days).
             on_progress: Optional callback to save intermediate state.
 
         Returns:
-            (trades, metrics) when cancelled — contains all trades made.
+            (trades, metrics) when finished or cancelled.
         """
-        return await self._execute_virtual_live(exchange, on_progress)
+        return await self._execute_virtual_live(exchange, start_time, duration_seconds, on_progress)
 
     async def run_real(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
         """Run strategy with real data (same logic for now — no exchange orders)."""
@@ -115,6 +119,8 @@ class TradingEngine:
     async def _execute_virtual_live(
         self,
         exchange: AbstractExchange,
+        start_time: Optional[datetime] = None,
+        duration_seconds: Optional[float] = None,
         on_progress: Optional[Callable[[List[Trade], Metrics], None]] = None,
     ) -> Tuple[List[Trade], Metrics]:
         """Live paper trading core — polls exchange for new completed candles.
@@ -126,8 +132,9 @@ class TradingEngine:
           - Analyzes it via strategy
           - Checks entry/exit, SL/TP
           - Updates balance
-        - Runs until cancelled by the caller (CancelledError)
-        - On cancellation, returns all accumulated trades and metrics
+        - Runs until duration_seconds elapses or cancelled (CancelledError)
+        - Calls on_progress periodically with progress % and state
+        - On completion/cancellation, returns all accumulated trades and metrics
         """
         # 1. Select strategy
         strategy_cls = STRATEGY_REGISTRY.get(self.config.strategy)
@@ -146,19 +153,55 @@ class TradingEngine:
 
         poll_interval = self._poll_interval(self.config.timeframe)
         last_processed: Optional[datetime] = None
-        # Preload some initial candles for indicator warmup
         warmup_candles: List[Candle] = []
+        run_start = start_time or datetime.now(timezone.utc)
+        last_progress_call: float = 0.0
 
         logger.info(
-            "Virtual live: starting for %s %s, poll every %.0fs, balance=$%.0f",
+            "Virtual live: starting for %s %s, poll every %.0fs, balance=$%.0f, duration=%.0fs",
             self.config.pair, self.config.timeframe,
             poll_interval, balance,
+            duration_seconds or float("inf"),
         )
 
         try:
             while True:
+                # ── Check timeout ──
+                now = datetime.now(timezone.utc)
+                if duration_seconds is not None:
+                    elapsed = (now - run_start).total_seconds()
+                    if elapsed >= duration_seconds:
+                        logger.info(
+                            "Virtual live: timeout after %.0fs (limit %.0fs)",
+                            elapsed, duration_seconds,
+                        )
+                        break
+
+                # ── Compute progress & notify ──
+                if duration_seconds and duration_seconds > 0:
+                    progress_pct = min(100.0, (elapsed / duration_seconds) * 100.0)
+                else:
+                    progress_pct = 0.0
+
+                # Call on_progress at most once per 30s to avoid DB spam
+                if on_progress and (progress_pct - last_progress_call >= 2.0 or progress_pct >= 99.9):
+                    last_progress_call = progress_pct
+                    win = sum(1 for t in trades if t.pnl and t.pnl > 0)
+                    loss = sum(1 for t in trades if t.pnl and t.pnl <= 0)
+                    metrics = Metrics(
+                        total_trades=len(trades),
+                        win_trades=win,
+                        loss_trades=loss,
+                        win_rate=win / len(trades) if trades else 0.0,
+                        profit_loss=sum((t.pnl or 0.0) for t in trades),
+                        final_balance=balance,
+                        max_drawdown=max_drawdown,
+                        progress=progress_pct,
+                    )
+                    on_progress(trades, metrics)
+
+                # ── Fetch latest candle ──
                 try:
-                    # Fetch latest candle
                     candles = await exchange.get_klines(
                         pair=self.config.pair,
                         timeframe=self.config.timeframe,

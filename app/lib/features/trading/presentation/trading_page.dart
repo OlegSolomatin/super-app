@@ -440,6 +440,46 @@ class _TradingPageState extends State<TradingPage>
               ],
             ),
             const SizedBox(height: 8),
+            // ── Progress bar for virtual live runs ──
+            if (run.mode == 'virtual' && run.progressPercent != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: run.progressPercent! / 100.0,
+                  minHeight: 6,
+                  backgroundColor: theme.colorScheme.surfaceVariant,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    run.progressPercent! < 50
+                        ? AppTheme.accentColor
+                        : run.progressPercent! < 90
+                            ? const Color(0xFFF59E0B)
+                            : const Color(0xFF4CAF50),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text(
+                    '${run.progressPercent!.toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (run.timeRemainingLabel != null)
+                    Text(
+                      'Осталось ${run.timeRemainingLabel}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(

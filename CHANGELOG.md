@@ -75,3 +75,4 @@
 - `build` PWA v1.0.0+10 | Hermes
 - `feat` Virtual mode — real-time candle delays (asyncio.sleep между свечами) | Hermes
 - `feat` Virtual live — live paper trading (polling Binance каждые N секунд, real-time) | Hermes
+- `feat` Virtual live — таймаут по duration_days + прогресс-бар с таймером в UI | Hermes

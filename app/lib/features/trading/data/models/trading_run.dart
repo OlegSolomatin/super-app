@@ -11,6 +11,7 @@ class TradingRun {
   final double? pnl;
   final DateTime? createdAt;
   final DateTime? endsAt;
+  final int? durationDays;
 
   const TradingRun({
     required this.id,
@@ -25,6 +26,7 @@ class TradingRun {
     this.pnl,
     this.createdAt,
     this.endsAt,
+    this.durationDays,
   });
 
   factory TradingRun.fromJson(Map<String, dynamic> json) {
@@ -49,6 +51,7 @@ class TradingRun {
       endsAt: json['finished_at'] != null
           ? DateTime.parse(json['finished_at'] as String)
           : null,
+      durationDays: cfg['duration_days'] as int?,
     );
   }
 
@@ -66,6 +69,29 @@ class TradingRun {
       };
 
   bool get isActive => status == 'running' || status == 'pending';
+
+  /// Progress 0–100% for live virtual runs
+  double? get progressPercent {
+    if (createdAt == null || durationDays == null || durationDays == 0) return null;
+    if (status != 'running') return 100.0;
+    final elapsed = DateTime.now().difference(createdAt!).inSeconds;
+    final total = durationDays! * 86400;
+    return (elapsed / total * 100).clamp(0.0, 100.0);
+  }
+
+  /// Human-readable time remaining
+  String? get timeRemainingLabel {
+    if (createdAt == null || durationDays == null || durationDays == 0) return null;
+    if (status != 'running') return null;
+    final elapsed = DateTime.now().difference(createdAt!).inSeconds;
+    final total = durationDays! * 86400;
+    final remaining = total - elapsed;
+    if (remaining <= 0) return 'Завершается…';
+    final hours = remaining ~/ 3600;
+    final minutes = (remaining % 3600) ~/ 60;
+    if (hours > 24) return '${hours ~/ 24}д ${hours % 24}ч';
+    return '${hours}ч ${minutes}м';
+  }
 
   String get statusLabel {
     switch (status) {

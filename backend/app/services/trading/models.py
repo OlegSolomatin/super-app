@@ -73,6 +73,7 @@ class Metrics:
     final_balance: float = 0.0
     max_drawdown: float = 0.0
     sharpe: float = 0.0
+    progress: float = 0.0  # 0-100% for live runs
 
 
 @dataclass

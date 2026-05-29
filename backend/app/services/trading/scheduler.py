@@ -113,7 +113,14 @@ class TradingScheduler:
                     else:
                         exchange = MockExchange()
 
-                    trades, metrics = await engine.run_virtual_live(exchange)
+                    run_start = datetime.now(timezone.utc)
+                    dur_sec = (config.duration_days or 30) * 86400.0
+                    trades, metrics = await engine.run_virtual_live(
+                        exchange,
+                        start_time=run_start,
+                        duration_seconds=dur_sec,
+                        on_progress=lambda tr, m: None,  # progress saved via scheduler polling
+                    )
 
                 else:
                     # ── Historical/Real: load candles then run ──
