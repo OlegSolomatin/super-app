@@ -6,8 +6,9 @@ and collects performance metrics.
 
 from __future__ import annotations
 
+import asyncio
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 from app.services.trading.models import (
@@ -49,16 +50,170 @@ class TradingEngine:
         self.run = TradingRun(config=config)
 
     async def run_history(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
-        """Run strategy against historical data and return trades + metrics."""
+        """Run strategy against historical data — instant execution."""
         return await self._execute(candles)
 
     async def run_virtual(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
-        """Run strategy on virtual balance (same logic as history)."""
-        return await self._execute(candles)
+        """Run strategy on virtual balance — simulates real-time with candle delays.
+
+        Each candle is processed with a delay matching real time intervals,
+        so the run duration reflects actual market time (e.g. 5 days for
+        30m timeframe).
+        """
+        return await self._execute_virtual(candles)
 
     async def run_real(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
         """Run strategy with real data (same logic for now — no exchange orders)."""
         return await self._execute(candles)
+
+    @staticmethod
+    def _candle_delay(candles: List[Candle], index: int) -> float:
+        """Calculate delay in seconds between candle[i-1] and candle[i]."""
+        if index < 1:
+            return 0.0
+        prev = candles[index - 1].timestamp
+        curr = candles[index].timestamp
+        # Ensure both are timezone-aware
+        if prev.tzinfo is None:
+            prev = prev.replace(tzinfo=timezone.utc)
+        if curr.tzinfo is None:
+            curr = curr.replace(tzinfo=timezone.utc)
+        delta = (curr - prev).total_seconds()
+        return max(0.0, delta)
+
+    async def _execute_virtual(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
+        """Virtual execution — same as _execute but with real-time delays.
+
+        Uses asyncio.sleep() between candles so the run takes real market time.
+        """
+        if not candles:
+            return [], Metrics()
+
+        # 1. Select strategy
+        strategy_cls = STRATEGY_REGISTRY.get(self.config.strategy)
+        if strategy_cls is None:
+            raise ValueError(f"Unknown strategy: {self.config.strategy}")
+        strategy = strategy_cls()
+
+        # 2. State
+        open_trade: Optional[Trade] = None
+        trades: List[Trade] = []
+        balance = self.config.virtual_balance
+        peak_balance = balance
+        max_drawdown = 0.0
+        max_trade_amount = self.config.max_trade_amount
+        leverage = self.config.leverage
+
+        # 3. Iterate candles with real-time delay
+        for i in range(2, len(candles)):
+            window = candles[: i + 1]
+            current = candles[i]
+
+            # Delay before processing this candle
+            delay = self._candle_delay(candles, i)
+            if delay > 0:
+                await asyncio.sleep(min(delay, 300.0))  # Cap at 5 min max per candle for safety
+
+            # ── same trade logic as _execute ──
+            if open_trade is not None:
+                should_close = False
+                exit_price = current.close
+                exit_reason = "signal"
+
+                if open_trade.side == "BUY":
+                    sl_price = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                    tp_price = open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+
+                    if sl_price and current.low <= sl_price:
+                        should_close = True
+                        exit_price = sl_price
+                        exit_reason = "stop_loss"
+                    elif tp_price and current.high >= tp_price:
+                        should_close = True
+                        exit_price = tp_price
+                        exit_reason = "take_profit"
+                else:
+                    sl_price = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                    tp_price = open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+
+                    if sl_price and current.high >= sl_price:
+                        should_close = True
+                        exit_price = sl_price
+                        exit_reason = "stop_loss"
+                    elif tp_price and current.low <= tp_price:
+                        should_close = True
+                        exit_price = tp_price
+                        exit_reason = "take_profit"
+
+                if not should_close:
+                    signals = await strategy.analyze(window)
+                    for sig in signals:
+                        if sig.type == "exit" and sig.side != open_trade.side:
+                            should_close = True
+                            exit_price = sig.price
+                            exit_reason = "signal"
+                            break
+
+                if should_close:
+                    close_val = exit_price * open_trade.quantity * leverage
+                    trade_pnl = abs(close_val - open_trade.entry_price * open_trade.quantity * leverage)
+                    if open_trade.side == "BUY":
+                        trade_pnl = close_val - (open_trade.entry_price * open_trade.quantity * leverage)
+                    else:
+                        trade_pnl = (open_trade.entry_price * open_trade.quantity * leverage) - close_val
+
+                    open_trade.exit_price = exit_price
+                    open_trade.exit_time = current.timestamp
+                    open_trade.pnl = trade_pnl
+                    trades.append(open_trade)
+                    balance += trade_pnl
+                    peak_balance = max(peak_balance, balance)
+                    dd = (peak_balance - balance) / peak_balance * 100 if peak_balance > 0 else 0
+                    max_drawdown = max(max_drawdown, dd)
+                    open_trade = None
+
+            # Check entry signal
+            if open_trade is None:
+                signals = await strategy.analyze(window)
+                for sig in signals:
+                    if sig.type == "entry":
+                        quantity = min(max_trade_amount / sig.price, balance * 0.5 / sig.price) if sig.price > 0 else 0
+                        if quantity > 0:
+                            open_trade = Trade(
+                                side=sig.side,
+                                entry_price=sig.price,
+                                entry_time=current.timestamp,
+                                quantity=quantity,
+                            )
+                            break
+
+        # 4. Close any open position at end
+        if open_trade is not None:
+            exit_price = candles[-1].close
+            close_val = exit_price * open_trade.quantity * leverage
+            trade_pnl = close_val - (open_trade.entry_price * open_trade.quantity * leverage)
+            if open_trade.side == "SELL":
+                trade_pnl = -trade_pnl
+            open_trade.exit_price = exit_price
+            open_trade.exit_time = candles[-1].timestamp
+            open_trade.pnl = trade_pnl
+            trades.append(open_trade)
+            balance += trade_pnl
+
+        # 5. Compute metrics
+        win_trades = sum(1 for t in trades if t.pnl and t.pnl > 0)
+        loss_trades = sum(1 for t in trades if t.pnl and t.pnl <= 0)
+        total_pnl = sum((t.pnl or 0.0) for t in trades)
+        metrics = Metrics(
+            total_trades=len(trades),
+            win_trades=win_trades,
+            loss_trades=loss_trades,
+            win_rate=win_trades / len(trades) if trades else 0.0,
+            profit_loss=total_pnl,
+            final_balance=balance,
+            max_drawdown=max_drawdown,
+        )
+        return trades, metrics
 
     async def _execute(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
         """Core strategy execution loop.

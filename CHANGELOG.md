@@ -73,3 +73,4 @@
 - `fix` Trading API — добавлен eager load result+trades (MissingGreenlet fix) | Hermes
 - `feat` Trading page — polling активных запусков (каждые 2 сек), автообновление истории | Hermes
 - `build` PWA v1.0.0+10 | Hermes
+- `feat` Virtual mode — real-time candle delays (asyncio.sleep между свечами) | Hermes
