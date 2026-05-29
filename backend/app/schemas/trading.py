@@ -13,8 +13,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-
-
 class TradingRunMode(str, Enum):
     """Run mode for a trading strategy execution."""
 
@@ -69,6 +67,22 @@ class TradingConfig(BaseModel):
 # ---------- responses ----------
 
 
+class TradingResultResponse(BaseModel):
+    """Aggregated result of a completed trading run."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: int
+    total_trades: int = 0
+    win_trades: int = 0
+    loss_trades: int = 0
+    win_rate: float = 0.0
+    profit_loss: float = 0.0
+    final_balance: float = 0.0
+    max_drawdown: float = 0.0
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+
 class TradingRunResponse(BaseModel):
     """Response model for a trading run."""
 
@@ -79,6 +93,7 @@ class TradingRunResponse(BaseModel):
     status: TradingRunStatus
     mode: TradingRunMode
     config: Optional[TradingConfig] = None
+    result: Optional[TradingResultResponse] = None
     started_at: datetime
     finished_at: Optional[datetime] = None
     error: Optional[str] = None
@@ -124,23 +139,21 @@ class TradingRunResponse(BaseModel):
                     "duration_days": cfg.duration_days,
                     "exchange": cfg.exchange,
                 }
+        # Include result data
+        res = getattr(data, "result", None)
+        if res is not None:
+            result["result"] = {
+                "run_id": res.run_id,
+                "total_trades": res.total_trades or 0,
+                "win_trades": res.win_trades or 0,
+                "loss_trades": res.loss_trades or 0,
+                "win_rate": res.win_rate or 0.0,
+                "profit_loss": res.profit_loss or 0.0,
+                "final_balance": res.final_balance or 0.0,
+                "max_drawdown": res.max_drawdown or 0.0,
+                "metrics": res.metrics or {},
+            }
         return result
-
-
-class TradingResultResponse(BaseModel):
-    """Aggregated result of a completed trading run."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    run_id: int
-    total_trades: int = 0
-    win_trades: int = 0
-    loss_trades: int = 0
-    win_rate: float = 0.0
-    profit_loss: float = 0.0
-    final_balance: float = 0.0
-    max_drawdown: float = 0.0
-    metrics: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TradeResponse(BaseModel):
@@ -231,3 +244,7 @@ class TradeListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# Rebuild models with forward references and __future__ annotations
+TradingRunResponse.model_rebuild()

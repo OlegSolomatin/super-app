@@ -30,6 +30,8 @@ class TradingRun {
   factory TradingRun.fromJson(Map<String, dynamic> json) {
     // Config is nested in the API response
     final cfg = (json['config'] as Map<String, dynamic>?) ?? {};
+    // Result is nested (if present)
+    final res = (json['result'] as Map<String, dynamic>?);
     return TradingRun(
       id: json['id'].toString(),
       status: json['status'] as String? ?? 'unknown',
@@ -37,10 +39,10 @@ class TradingRun {
       config: cfg,
       strategyName: cfg['strategy'] as String?,
       startingBalance: (cfg['virtual_balance'] as num?)?.toDouble(),
-      finalBalance: (json['final_balance'] as num?)?.toDouble(),
-      totalTrades: json['total_trades'] as int?,
-      successRate: (json['success_rate'] as num?)?.toDouble(),
-      pnl: (json['profit_loss'] as num?)?.toDouble(),
+      finalBalance: res != null ? (res['final_balance'] as num?)?.toDouble() : null,
+      totalTrades: res != null ? res['total_trades'] as int? : null,
+      successRate: res != null ? (res['win_rate'] as num?)?.toDouble() : null,
+      pnl: res != null ? (res['profit_loss'] as num?)?.toDouble() : null,
       createdAt: json['started_at'] != null
           ? DateTime.parse(json['started_at'] as String)
           : null,
