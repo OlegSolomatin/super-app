@@ -30,12 +30,17 @@ class MockExchange(AbstractExchange):
         end: Optional[datetime] = None,
         limit: int = 500,
     ) -> List[Candle]:
-        """Return randomly generated candles."""
+        """Return randomly generated candles in the requested time range."""
         candles: List[Candle] = []
         now = datetime.now()
         base_price = 50000.0
+        end_dt = end or now
+        start_dt = start or (end_dt - timedelta(hours=limit))
+        # Generate candles from end_dt backwards
         for i in range(limit):
-            ts = now - timedelta(hours=i)
+            ts = end_dt - timedelta(hours=i)
+            if ts < start_dt:
+                break
             change = random.uniform(-200, 200)
             open_price = base_price + change
             close_price = open_price + random.uniform(-100, 100)
@@ -52,7 +57,7 @@ class MockExchange(AbstractExchange):
                     timestamp=ts,
                 )
             )
-        return candles
+        return candles[::-1]  # Return in chronological order
 
     async def get_ticker(self, pair: str) -> Dict[str, float]:
         """Return a simulated ticker."""
