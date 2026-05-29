@@ -18,44 +18,24 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage>
-    with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> {
   User? _user;
   bool _isLoading = true;
-  bool _showBanner = true;
 
-  late final AnimationController _bannerController;
-  late final Animation<double> _bannerOpacity;
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
-    _bannerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _bannerOpacity = CurvedAnimation(
-      parent: _bannerController,
-      curve: Curves.easeOut,
-    );
+
     _loadUser();
   }
 
-  void _startBannerTimer() {
-    Future.delayed(const Duration(seconds: 15), () {
-      if (mounted) {
-        _bannerController.forward().then((_) {
-          if (mounted) setState(() => _showBanner = false);
-        });
-      }
-    });
-  }
 
   @override
   void dispose() {
-    _bannerController.dispose();
+
     super.dispose();
   }
 
@@ -68,7 +48,6 @@ class _HomePageState extends State<HomePage>
       final user = await userRepository.getMe();
       if (mounted) {
         setState(() => _user = user);
-        _startBannerTimer();
       }
     } catch (e) {
       if (mounted) {
@@ -132,49 +111,7 @@ class _HomePageState extends State<HomePage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Welcome section — auto-hides after 15s
-                        if (_showBanner) ...[
-                          FadeTransition(
-                            opacity: _bannerOpacity,
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    AppTheme.accentColor,
-                                    Color(0xFF9B7CFF)
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Привет, ${_user?.username ?? 'Пользователь'}!',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _user?.email ?? '',
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
+
                         // Elegant "Сервисы" header with accent underline
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
