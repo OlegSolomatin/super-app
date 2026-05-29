@@ -729,20 +729,7 @@ class _DashboardCardState extends State<_DashboardCard>
                               ? _buildGlassBackground()
                               : _buildLightBackground(),
                         ),
-                        // Decorative semi-transparent icon in background
-                        if (isDark)
-                          Positioned(
-                            right: -8,
-                            bottom: -8,
-                            child: Opacity(
-                              opacity: 0.05,
-                              child: Icon(
-                                widget.data.icon,
-                                size: 80,
-                                color: widget.data.color,
-                              ),
-                            ),
-                          ),
+                        // (Background decorative icon removed for cleaner look)
                         // Content layer
                         Material(
                           color: Colors.transparent,
@@ -767,6 +754,7 @@ class _DashboardCardState extends State<_DashboardCard>
                                   const SizedBox(height: 14),
                                   Text(
                                     widget.data.title,
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: isDark
                                           ? AppTheme.textPrimary
