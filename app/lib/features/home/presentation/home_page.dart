@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -101,6 +103,10 @@ class _HomePageState extends State<HomePage>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Super App'),
+        backgroundColor: isDark
+            ? AppTheme.bgColor.withValues(alpha: 0.85)
+            : AppTheme.lightSurfaceColor.withValues(alpha: 0.85),
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),
@@ -110,75 +116,97 @@ class _HomePageState extends State<HomePage>
         ],
       ),
       endDrawer: _buildDrawer(context, themeProvider, isDark),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadUser,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Welcome section — auto-hides after 15s
-                    if (_showBanner) ...[
-                      FadeTransition(
-                        opacity: _bannerOpacity,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                AppTheme.accentColor,
-                                Color(0xFF9B7CFF)
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+      body: Stack(
+        children: [
+          // Subtle background pattern — only on dark theme
+          _buildBackgroundPattern(isDark),
+          // Main content
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: _loadUser,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Welcome section — auto-hides after 15s
+                        if (_showBanner) ...[
+                          FadeTransition(
+                            opacity: _bannerOpacity,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    AppTheme.accentColor,
+                                    Color(0xFF9B7CFF)
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Привет, ${_user?.username ?? 'Пользователь'}!',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _user?.email ?? '',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Привет, ${_user?.username ?? 'Пользователь'}!',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          const SizedBox(height: 24),
+                        ],
+                        // Elegant "Сервисы" header with accent underline
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Сервисы',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.3,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              width: 36,
+                              height: 3.5,
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentColor,
+                                borderRadius: BorderRadius.circular(2),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _user?.email ?? '',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                    Text(
-                      'Сервисы',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.w300,
-                            letterSpacing: 0.5,
-                          ),
+                        const SizedBox(height: 20),
+                        _buildDashboardGrid(),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    _buildDashboardGrid(),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+        ],
+      ),
     );
   }
 
@@ -350,6 +378,28 @@ class _HomePageState extends State<HomePage>
     );
   }
 
+  Widget _buildBackgroundPattern(bool isDark) {
+    if (!isDark) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              colors: [
+                AppTheme.accentColor.withValues(alpha: 0.04),
+                AppTheme.accentColor.withValues(alpha: 0.01),
+                Colors.transparent,
+              ],
+              radius: 0.7,
+              center: const Alignment(-0.3, -0.3),
+              stops: const [0.0, 0.4, 1.0],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDashboardGrid() {
     final cards = <_DashboardCardData>[];
 
@@ -362,6 +412,7 @@ class _HomePageState extends State<HomePage>
         subtitle: 'Мониторинг системы',
         color: const Color(0xFF7C5CFC),
         onTap: () => context.go('/admin/agents'),
+        isHighlighted: true,
       ));
     }
 
@@ -540,6 +591,7 @@ class _DashboardCardData {
   final String subtitle;
   final Color color;
   final VoidCallback? onTap;
+  final bool isHighlighted;
 
   const _DashboardCardData({
     required this.icon,
@@ -547,6 +599,7 @@ class _DashboardCardData {
     required this.subtitle,
     required this.color,
     this.onTap,
+    this.isHighlighted = false,
   });
 }
 
@@ -563,10 +616,12 @@ class _DashboardCard extends StatefulWidget {
 }
 
 class _DashboardCardState extends State<_DashboardCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
   bool _pressed = false;
 
   @override
@@ -582,6 +637,17 @@ class _DashboardCardState extends State<_DashboardCard>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
 
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    _pulseAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOutSine),
+    );
+    if (widget.data.isHighlighted) {
+      _pulseCtrl.repeat(reverse: true);
+    }
+
     Future.delayed(Duration(milliseconds: 100 * widget.index), () {
       if (mounted) _fadeCtrl.forward();
     });
@@ -590,16 +656,15 @@ class _DashboardCardState extends State<_DashboardCard>
   @override
   void dispose() {
     _fadeCtrl.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? AppTheme.cardColor : AppTheme.lightCardColor;
-    final borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.08)
-        : Colors.black.withValues(alpha: 0.08);
+    final isAdmin = widget.data.isHighlighted;
+    final pulseVal = _pulseAnim.value;
 
     return FadeTransition(
       opacity: _fadeAnim,
@@ -613,107 +678,212 @@ class _DashboardCardState extends State<_DashboardCard>
             if (tap != null) {
               tap();
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${widget.data.title} — скоро'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              _showComingSoon();
             }
           },
           onTapCancel: () => setState(() => _pressed = false),
           child: AnimatedScale(
-            scale: _pressed ? 0.97 : 1.0,
-            duration: const Duration(milliseconds: 100),
-            child: Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: borderColor, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: isDark
-                        ? Colors.black.withValues(alpha: 0.3)
-                        : Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+            scale: _pressed ? 0.95 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            child: AnimatedBuilder(
+              animation: _pulseCtrl,
+              builder: (context, child) {
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isAdmin
+                          ? AppTheme.accentColor
+                              .withValues(alpha: 0.25 + 0.35 * pulseVal)
+                          : isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.black.withValues(alpha: 0.06),
+                      width: isAdmin ? 1.5 : 1.0,
+                    ),
+                    boxShadow: [
+                      if (isAdmin)
+                        BoxShadow(
+                          color: AppTheme.accentColor
+                              .withValues(alpha: 0.12 + 0.18 * pulseVal),
+                          blurRadius: 12 + 10 * pulseVal,
+                          spreadRadius: 1 * pulseVal,
+                        )
+                      else
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
                   ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    final tap = widget.data.onTap;
-                    if (tap != null) {
-                      tap();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${widget.data.title} — скоро'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: Stack(
                       children: [
-                        // Icon with gradient container
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                widget.data.color.withValues(alpha: 0.2),
-                                widget.data.color.withValues(alpha: 0.05),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                        // Background layer: glassmorphism (dark) or white (light)
+                        Positioned.fill(
+                          child: isDark
+                              ? _buildGlassBackground()
+                              : _buildLightBackground(),
+                        ),
+                        // Decorative semi-transparent icon in background
+                        if (isDark)
+                          Positioned(
+                            right: -8,
+                            bottom: -8,
+                            child: Opacity(
+                              opacity: 0.05,
+                              child: Icon(
+                                widget.data.icon,
+                                size: 80,
+                                color: widget.data.color,
+                              ),
                             ),
-                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(
-                            widget.data.icon,
-                            color: widget.data.color,
-                            size: 28,
+                        // Content layer
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              final tap = widget.data.onTap;
+                              if (tap != null) {
+                                tap();
+                              } else {
+                                _showComingSoon();
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  // Gradient icon with glow
+                                  _buildIconWithGradient(isAdmin, isDark),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    widget.data.title,
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? AppTheme.textPrimary
+                                          : AppTheme.lightTextPrimary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    widget.data.subtitle,
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? AppTheme.textSecondary
+                                          : AppTheme.lightTextSecondary,
+                                      fontSize: 12,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          widget.data.title,
-                          style: TextStyle(
-                            color: isDark
-                                ? AppTheme.textPrimary
-                                : AppTheme.lightTextPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.data.subtitle,
-                          style: TextStyle(
-                            color: isDark
-                                ? AppTheme.textSecondary
-                                : AppTheme.lightTextSecondary,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildGlassBackground() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            widget.data.color.withValues(alpha: 0.12),
+            Colors.transparent,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        color: Colors.white.withValues(alpha: 0.04),
+      ),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(color: Colors.transparent),
+      ),
+    );
+  }
+
+  Widget _buildLightBackground() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.lightCardColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );
+  }
+
+  Widget _buildIconWithGradient(bool isAdmin, bool isDark) {
+    final iconSize = isAdmin ? 30.0 : 26.0;
+    final containerSize = isAdmin ? 56.0 : 52.0;
+
+    return Container(
+      width: containerSize,
+      height: containerSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [
+            widget.data.color.withValues(alpha: 0.25),
+            widget.data.color.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: widget.data.color.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: Center(
+        child: ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            colors: [
+              widget.data.color,
+              widget.data.color.withValues(alpha: 0.6),
+            ],
+          ).createShader(bounds),
+          child: Icon(
+            widget.data.icon,
+            size: iconSize,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showComingSoon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${widget.data.title} — скоро'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

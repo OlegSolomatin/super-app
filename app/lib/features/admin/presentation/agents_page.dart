@@ -5,11 +5,6 @@ import 'package:app/core/secure_storage.dart';
 import 'package:app/features/admin/data/admin_repository.dart';
 import 'package:app/features/admin/models/agent_status.dart';
 
-const Color _bgColor = Color(0xFF08081C);
-const Color _cardColor = Color(0xFF1A1A2E);
-const Color _accentColor = Color(0xFF7C5CFC);
-const Color _textPrimary = Color(0xFFFFFFFF);
-const Color _textSecondary = Color(0xFFA0A0A0);
 const double _maxTokens = 100000.0;
 
 class AdminAgentsPage extends StatefulWidget {
@@ -93,19 +88,19 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: _bgColor,
-        foregroundColor: _textPrimary,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
-        title: const Text(
+        title: Text(
           'Мониторинг агентов',
           style: TextStyle(
-            color: _textPrimary,
+            color: Theme.of(context).colorScheme.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -117,8 +112,8 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: _accentColor),
+      return Center(
+        child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
       );
     }
 
@@ -131,12 +126,12 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
             const SizedBox(height: 16),
             Text(
               'Ошибка загрузки',
-              style: TextStyle(color: _textSecondary, fontSize: 16),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16),
             ),
             const SizedBox(height: 8),
             Text(
               _error!,
-              style: TextStyle(color: _textSecondary, fontSize: 12),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 12),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -145,7 +140,7 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
               icon: const Icon(Icons.refresh),
               label: const Text('Повторить'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentColor,
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -158,7 +153,7 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
 
     return RefreshIndicator(
       onRefresh: _loadAgentStatuses,
-      color: _accentColor,
+      color: Theme.of(context).colorScheme.primary,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -184,9 +179,9 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _accentColor.withValues(alpha: 0.3)),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,10 +197,10 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
                 ),
               ),
               const SizedBox(width: 10),
-              const Text(
+              Text(
                 'Сессия',
                 style: TextStyle(
-                  color: _textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -215,8 +210,8 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
           const SizedBox(height: 8),
           Text(
             '⚡ $_sessionTask',
-            style: const TextStyle(
-              color: _textSecondary,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
               fontSize: 14,
               fontStyle: FontStyle.italic,
             ),
@@ -245,7 +240,7 @@ class _AgentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: _cardColor,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -302,8 +297,8 @@ class _AgentCard extends StatelessWidget {
                     children: [
                       Text(
                         agent.name,
-                        style: const TextStyle(
-                          color: _textPrimary,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -311,8 +306,8 @@ class _AgentCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         agent.role,
-                        style: const TextStyle(
-                          color: _textSecondary,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                           fontSize: 13,
                         ),
                       ),
@@ -325,12 +320,12 @@ class _AgentCard extends StatelessWidget {
             // Model and provider
             Row(
               children: [
-                Icon(Icons.memory, size: 14, color: _textSecondary),
+                Icon(Icons.memory, size: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                 const SizedBox(width: 6),
                 Text(
                   '${agent.model} · ${agent.provider}',
-                  style: const TextStyle(
-                    color: _textSecondary,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                     fontSize: 12,
                   ),
                 ),
@@ -338,13 +333,13 @@ class _AgentCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             // Token progress
-            _buildTokenProgress(),
+            _buildTokenProgress(context),
             const SizedBox(height: 8),
             // Cost row
             if (agent.costUsd > 0)
               Row(
                 children: [
-                  const Icon(Icons.attach_money, size: 14, color: _textSecondary),
+                  Icon(Icons.attach_money, size: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                   const SizedBox(width: 4),
                   Text(
                     '\$${agent.costUsd.toStringAsFixed(4)}',
@@ -366,10 +361,10 @@ class _AgentCard extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: _accentColor.withValues(alpha: 0.1),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: _accentColor.withValues(alpha: 0.2),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
@@ -382,8 +377,8 @@ class _AgentCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Выполняет: ${agent.currentTask}',
-                        style: const TextStyle(
-                          color: _textSecondary,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                           fontSize: 12,
                           fontStyle: FontStyle.italic,
                         ),
@@ -401,11 +396,12 @@ class _AgentCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTokenProgress() {
+  Widget _buildTokenProgress(BuildContext context) {
     final totalTokens = agent.tokensIn + agent.tokensOut;
     final progress = (totalTokens / _maxTokens).clamp(0.0, 1.0);
     final inFraction =
         totalTokens > 0 ? agent.tokensIn / totalTokens : 0.5;
+    final theme = Theme.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,11 +411,17 @@ class _AgentCard extends StatelessWidget {
           children: [
             Text(
               'Токены',
-              style: TextStyle(color: _textSecondary, fontSize: 11),
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                fontSize: 11,
+              ),
             ),
             Text(
               '$totalTokens / ${_maxTokens.toInt()}',
-              style: TextStyle(color: _textSecondary, fontSize: 11),
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                fontSize: 11,
+              ),
             ),
           ],
         ),
@@ -431,7 +433,7 @@ class _AgentCard extends StatelessWidget {
             child: Stack(
               children: [
                 Container(
-                  color: const Color(0xFF2A2A45),
+                  color: theme.colorScheme.surfaceContainerHighest,
                 ),
                 FractionallySizedBox(
                   alignment: Alignment.centerLeft,
@@ -441,13 +443,13 @@ class _AgentCard extends StatelessWidget {
                       Flexible(
                         flex: (inFraction * 100).round().clamp(1, 99),
                         child: Container(
-                          color: _accentColor,
+                          color: theme.colorScheme.primary,
                         ),
                       ),
                       Flexible(
                         flex: ((1 - inFraction) * 100).round().clamp(1, 99),
                         child: Container(
-                          color: const Color(0xFFA78BFA),
+                          color: theme.colorScheme.primary.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -463,11 +465,14 @@ class _AgentCard extends StatelessWidget {
           children: [
             Text(
               'IN: ${agent.tokensIn}',
-              style: TextStyle(color: _accentColor, fontSize: 10),
+              style: TextStyle(color: theme.colorScheme.primary, fontSize: 10),
             ),
             Text(
               'OUT: ${agent.tokensOut}',
-              style: const TextStyle(color: Color(0xFFA78BFA), fontSize: 10),
+              style: TextStyle(
+                color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                fontSize: 10,
+              ),
             ),
           ],
         ),
