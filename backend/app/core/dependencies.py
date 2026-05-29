@@ -1,7 +1,7 @@
 """
 Dependency injection for FastAPI.
 
-Provides reusable dependencies like current user retrieval.
+Provides reusable dependencies like current user retrieval and admin checks.
 """
 
 from __future__ import annotations
@@ -12,10 +12,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_session
 from app.core.security import decode_token
-from app.models.user import User
+from app.models.user import Role, User, UserRole
 
 security_scheme = HTTPBearer()
 
@@ -74,3 +75,32 @@ async def get_optional_user(
 
     result = await session.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
+
+
+async def require_admin(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    """Dependency that verifies the current user has the 'admin' role.
+
+    Raises:
+        HTTPException 403: If user does not have the admin role.
+    """
+    stmt = (
+        select(UserRole)
+        .options(selectinload(UserRole.role))
+        .where(
+            UserRole.user_id == current_user.id,
+        )
+    )
+    result = await session.execute(stmt)
+    user_roles = result.scalars().all()
+
+    for ur in user_roles:
+        if ur.role.name == "admin":
+            return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin privileges required",
+    )

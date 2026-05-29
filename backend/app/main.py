@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     # Shutdown
     await engine.dispose()
+    from app.core.cache import close_redis
+    await close_redis()
     print("🛑 Super-App backend shut down")
 
 
