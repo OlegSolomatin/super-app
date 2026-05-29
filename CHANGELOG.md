@@ -10,6 +10,7 @@
 - `infra` — инфраструктура
 
 ---
+- `feat` Material icons → Phosphor Icons Fill (robot, fileText, barbell, musicNotes, videoCamera, mapPin) | Hermes
 - `fix` Card text centering: textAlign.center на заголовки, убрана фоновая иконка | Hermes
 - `fix` Theme sync: login, register, agents pages now use Theme.of(context) — light/dark applies globally | Hermes
 - `feat` Дизайн-рефреш: карточки с border/shadow, scale-анимация, staggered fade-in | Hermes

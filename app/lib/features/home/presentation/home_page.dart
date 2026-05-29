@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:app/core/theme.dart';
 import 'package:app/core/theme_provider.dart';
 import 'package:app/core/secure_storage.dart';
@@ -407,7 +408,7 @@ class _HomePageState extends State<HomePage>
     final isAdmin = _user?.roles?.contains('admin') ?? false;
     if (isAdmin) {
       cards.add(_DashboardCardData(
-        icon: Icons.monitor_heart,
+        icon: PhosphorIconsFill.robot,
         title: 'Агенты',
         subtitle: 'Мониторинг системы',
         color: const Color(0xFF7C5CFC),
@@ -418,31 +419,31 @@ class _HomePageState extends State<HomePage>
 
     cards.addAll([
       _DashboardCardData(
-        icon: Icons.article_outlined,
+        icon: PhosphorIconsFill.fileText,
         title: 'Посты',
         subtitle: 'Читайте и создавайте посты',
         color: const Color(0xFF4FC3F7),
       ),
       _DashboardCardData(
-        icon: Icons.fitness_center,
+        icon: PhosphorIconsFill.barbell,
         title: 'Тренировки',
         subtitle: 'Планируйте тренировки',
         color: const Color(0xFF81C784),
       ),
       _DashboardCardData(
-        icon: Icons.music_note,
+        icon: PhosphorIconsFill.musicNotes,
         title: 'Музыка',
         subtitle: 'Слушайте музыку',
         color: const Color(0xFFCE93D8),
       ),
       _DashboardCardData(
-        icon: Icons.videocam,
+        icon: PhosphorIconsFill.videoCamera,
         title: 'Видео',
         subtitle: 'Смотрите видео',
         color: const Color(0xFFFF8A65),
       ),
       _DashboardCardData(
-        icon: Icons.map,
+        icon: PhosphorIconsFill.mapPin,
         title: 'Карты',
         subtitle: 'Исследуйте карты',
         color: const Color(0xFF4DB6AC),
