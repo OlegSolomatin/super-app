@@ -1,0 +1,63 @@
+# ─── Secrets ─────────────────────────────────
+.env
+.env.*
+*.key
+*.pem
+
+# ─── Python ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+*.whl
+*.egg
+.venv/
+venv/
+
+# ─── Flutter ─────────────────────────────────
+app/build/
+app/.dart_tool/
+app/.packages
+app/.pub/
+app/pubspec.lock
+app/*.iml
+app/android/.gradle/
+app/android/local.properties
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/Flutter.podspec
+
+# ─── Node / Vite ────────────────────────────
+node_modules/
+frontend-new/node_modules/
+frontend-new/dist/
+
+# ─── IDE ─────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── OS ──────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+
+# ─── Agent Control Room ──────────────────────
+# Runtime task files (gitkeep tracks dirs)
+agent-control-room/bus/tasks/*/TASK-*.md
+agent-control-room/backups/
+
+# ─── Бэкапы ──────────────────────────────────
+*.bak
+*.backup
+
+# ─── Сборки ──────────────────────────────────
+backend/dist/
+backend/*.egg-info/
+
+# ─── Docker ──────────────────────────────────
+docker-compose.override.yml
