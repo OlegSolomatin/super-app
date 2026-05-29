@@ -65,3 +65,11 @@
 - `docs` Создан ~/workspace/super-app/ — полная документация (PLAN, ARCHITECTURE, STRUCTURE, DB, API, CODESTYLE) | Hermes
 - `docs` Добавлен Code Style Guide в PLAN.md (Python + Dart правила) | Hermes
 - `docs` STRUCTURE.md — указаны рабочие директории и запреты на дублирование | Hermes
+- `feat` BinanceExchange — реальные исторические свечи через публичный API (get_klines с пагинацией) | Hermes
+- `feat` BybitExchange — реальные исторические свечи через публичный API v5 | Hermes
+- `fix` DataLoader — принимает exchange_name, по умолчанию binance (вместо mock) | Hermes
+- `fix` DataLoader — исправлено сравнение offset-naive/offset-aware datetime | Hermes
+- `fix` Scheduler — передаёт exchange_name в DataLoader | Hermes
+- `fix` Trading API — добавлен eager load result+trades (MissingGreenlet fix) | Hermes
+- `feat` Trading page — polling активных запусков (каждые 2 сек), автообновление истории | Hermes
+- `build` PWA v1.0.0+10 | Hermes

@@ -103,7 +103,7 @@ class TradingScheduler:
                 period_start = config.period_start or (now - timedelta(days=config.duration_days or 30))
                 period_end = config.period_end or now
 
-                loader = DataLoader(pair=config.pair, timeframe=config.timeframe)
+                loader = DataLoader(pair=config.pair, timeframe=config.timeframe, exchange_name=config.exchange or "binance")
                 candles = await loader.load_history(period_start, period_end)
 
                 if not candles:

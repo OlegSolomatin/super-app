@@ -235,10 +235,14 @@ async def start_run(
 
     await session.commit()
 
-    # Eagerly load the config relationship before validation
+    # Eagerly load relationships before validation
     stmt = (
         select(DBTradingRun)
-        .options(selectinload(DBTradingRun.config))
+        .options(
+            selectinload(DBTradingRun.config),
+            selectinload(DBTradingRun.result),
+            selectinload(DBTradingRun.trades),
+        )
         .where(DBTradingRun.id == db_run.id)
     )
     result = await session.execute(stmt)

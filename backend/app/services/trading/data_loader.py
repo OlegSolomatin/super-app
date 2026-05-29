@@ -7,19 +7,38 @@ load from DB (trading_cached_klines) or via exchange API.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List, Optional
 
+logger = logging.getLogger(__name__)
+
+from app.services.trading.exchange.binance import BinanceExchange
+from app.services.trading.exchange.bybit import BybitExchange
 from app.services.trading.exchange.mock import MockExchange
 from app.services.trading.models import Candle
 
 
 class DataLoader:
-    """Loads OHLCV candle data for a given pair and timeframe."""
+    """Loads OHLCV candle data for a given pair and timeframe from a specified exchange."""
 
-    def __init__(self, pair: str, timeframe: str) -> None:
+    def __init__(self, pair: str, timeframe: str, exchange_name: str = "binance") -> None:
         self.pair = pair
         self.timeframe = timeframe
+        self.exchange_name = exchange_name
+
+    def _create_exchange(self):
+        """Create exchange connector by name."""
+        name = self.exchange_name.lower()
+        if name == "binance":
+            return BinanceExchange()
+        elif name == "bybit":
+            return BybitExchange()
+        elif name == "mock":
+            return MockExchange()
+        else:
+            logger.warning("Unknown exchange '%s', falling back to mock", name)
+            return MockExchange()
 
     async def load_history(
         self,
@@ -28,10 +47,9 @@ class DataLoader:
     ) -> List[Candle]:
         """Load historical candles between start and end timestamps.
 
-        Uses MockExchange to generate synthetic data.
-        In the future, will check DB cache first, then exchange API.
+        Uses the configured exchange (binance/bybit/mock).
         """
-        exchange = MockExchange()
+        exchange = self._create_exchange()
 
         # Calculate approximate number of candles needed
         tf_minutes = self._timeframe_minutes(self.timeframe)
@@ -49,11 +67,10 @@ class DataLoader:
             limit=limit,
         )
 
-        # Filter by time range and sort chronologically
-        # Make timestamps timezone-naive for comparison
-        _start = start.replace(tzinfo=None) if start.tzinfo else start
-        _end = end.replace(tzinfo=None) if end.tzinfo else end
-        candles = [c for c in candles if _start <= c.timestamp <= _end]
+        # Filter by time range and sort
+        _start = start.astimezone(timezone.utc) if start else start
+        _end = end.astimezone(timezone.utc) if end else end
+        candles = [c for c in candles if _start <= c.timestamp.replace(tzinfo=timezone.utc) <= _end]
         candles.sort(key=lambda c: c.timestamp)
         return candles
 
@@ -64,7 +81,7 @@ class DataLoader:
         """
         import asyncio
 
-        exchange = MockExchange()
+        exchange = self._create_exchange()
         while True:
             candles = await exchange.get_klines(
                 pair=self.pair,

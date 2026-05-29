@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +24,7 @@ class _TradingPageState extends State<TradingPage>
   List<TradingRun> _historyRuns = [];
   bool _loadingActive = true;
   bool _loadingHistory = true;
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -30,6 +33,10 @@ class _TradingPageState extends State<TradingPage>
     _cleanupStaleRuns();
     _loadActiveRuns();
     _loadHistoryRuns();
+    // Poll active runs every 2 seconds
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _pollActiveRuns();
+    });
   }
 
   Future<void> _cleanupStaleRuns() async {
@@ -38,8 +45,27 @@ class _TradingPageState extends State<TradingPage>
     } catch (_) {}
   }
 
+  /// Quick poll — no loading spinner, just update list.
+  Future<void> _pollActiveRuns() async {
+    try {
+      final result = await widget.repository.getRuns(status: 'running');
+      if (!mounted) return;
+      final hadActive = _activeRuns.isNotEmpty;
+      setState(() {
+        _activeRuns = result.items;
+      });
+      // If active runs just finished — reload history
+      if (hadActive && result.items.isEmpty) {
+        _loadHistoryRuns();
+      }
+    } catch (_) {
+      // Silently retry on next tick
+    }
+  }
+
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
