@@ -77,3 +77,4 @@
 - `feat` Virtual live — live paper trading (polling Binance каждые N секунд, real-time) | Hermes
 - `feat` Virtual live — таймаут по duration_days + прогресс-бар с таймером в UI | Hermes
 - `fix` Детали сделки — дата/время входа и выхода в карточке сделки | Hermes
+- `fix` Список пар — pageSize 50 (вместо 20), lazy load по 50 при скролле | Hermes
