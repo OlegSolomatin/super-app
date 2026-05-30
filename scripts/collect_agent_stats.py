@@ -29,6 +29,7 @@ AGENTS_YAML = Path.home() / "agent-control-room/bus/registry/agents.yaml"
 KNOWLEDGE_YAML = Path.home() / "agent-control-room/bus/knowledge.yaml"
 LOGS_DIR = Path.home() / "agent-control-room/logs"
 SESSIONS_DIR = Path.home() / ".hermes/webui/sessions"
+JSONL_SESSIONS_DIR = Path.home() / ".hermes/sessions"
 OUTPUT = Path.home() / "agent-control-room/bus/agent_stats.json"
 
 # ── Cost rates (USD per token) ────────────────────────────────────────────
@@ -122,35 +123,48 @@ def get_agent_tokens(profile: str, model: str = "") -> tuple[int, int, float]:
     total_output = 0
     total_cost = 0.0
 
-    if not SESSIONS_DIR.is_dir():
-        return total_input, total_output, total_cost
-
-    rate = COST_RATES.get(model, DEFAULT_COST_RATE)
-
-    for fpath in sorted(SESSIONS_DIR.iterdir()):
-        if not fpath.name.endswith(".json") or fpath.name.startswith("_"):
-            continue
-        try:
-            with open(fpath, encoding="utf-8") as f:
-                session: dict[str, Any] = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            continue
-
+    def _sum_session_data(session: dict[str, Any]) -> None:
+        nonlocal total_input, total_output, total_cost
         if session.get("profile") != profile:
-            continue
-
+            return
         inp = session.get("input_tokens") or 0
         out = session.get("output_tokens") or 0
         cost = session.get("estimated_cost")
-
         total_input += inp
         total_output += out
-
         if cost is not None and isinstance(cost, (int, float)):
             total_cost += cost
         else:
-            # Fallback calculation
+            rate = COST_RATES.get(model, DEFAULT_COST_RATE)
             total_cost += inp * rate["input"] + out * rate["output"]
+
+    # 1. Read old-style .json sessions from WebUI
+    if SESSIONS_DIR.is_dir():
+        for fpath in sorted(SESSIONS_DIR.iterdir()):
+            if not fpath.name.endswith(".json") or fpath.name.startswith("_"):
+                continue
+            try:
+                with open(fpath, encoding="utf-8") as f:
+                    session: dict[str, Any] = json.load(f)
+                _sum_session_data(session)
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    # 2. Read new-style .jsonl sessions from CLI/Gateway
+    if JSONL_SESSIONS_DIR.is_dir():
+        for fpath in sorted(JSONL_SESSIONS_DIR.iterdir()):
+            if not fpath.name.endswith(".jsonl") or fpath.name.startswith("_"):
+                continue
+            try:
+                with open(fpath, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        session = json.loads(line)
+                        _sum_session_data(session)
+            except (json.JSONDecodeError, OSError):
+                continue
 
     return total_input, total_output, round(total_cost, 6)
 

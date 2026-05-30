@@ -4,6 +4,7 @@ import 'package:app/core/dio_client.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/features/admin/data/admin_repository.dart';
 import 'package:app/features/admin/models/agent_status.dart';
+import 'package:app/shared/widgets/responsive_layout.dart';
 
 const double _maxTokens = 100000.0;
 
@@ -106,7 +107,7 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
           ),
         ),
       ),
-      body: _buildBody(),
+      body: ConstrainedContent(child: _buildBody()),
     );
   }
 

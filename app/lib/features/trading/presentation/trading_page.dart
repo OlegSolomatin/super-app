@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:app/core/theme.dart';
 import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
+import 'package:app/shared/widgets/responsive_layout.dart';
 
 class TradingPage extends StatefulWidget {
   final TradingRepository repository;
@@ -148,7 +149,8 @@ class _TradingPageState extends State<TradingPage>
         ],
       ),
       endDrawer: _buildDrawer(context),
-      body: Column(
+      body: ConstrainedContent(
+        child: Column(
         children: [
           const SizedBox(height: 16),
           // Strategy button
@@ -206,6 +208,7 @@ class _TradingPageState extends State<TradingPage>
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -672,7 +675,7 @@ class _TradingPageState extends State<TradingPage>
                   ),
                 if (run.pnl != null)
                   Text(
-                    '+${run.pnl!.toStringAsFixed(2)}',
+                    '${run.pnl! >= 0 ? '+' : ''}${run.pnl!.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 16,
                         fontWeight: FontWeight.bold,

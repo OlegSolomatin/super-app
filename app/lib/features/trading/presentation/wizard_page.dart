@@ -6,6 +6,7 @@ import 'package:app/features/trading/data/models/trading_pair.dart';
 import 'package:app/features/trading/data/models/strategy_info.dart';
 import 'package:app/features/trading/data/models/exchange_info.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
+import 'package:app/shared/widgets/responsive_layout.dart';
 
 enum RunMode { historical, virtual, real }
 
@@ -273,7 +274,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           },
         ),
       ),
-      body: Column(
+      body: ConstrainedContent(
+        child: Column(
         children: [
           _buildProgressBar(theme, isDark),
           Expanded(
@@ -281,6 +283,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           ),
           _buildNavigation(theme, isDark),
         ],
+      ),
       ),
     );
   }

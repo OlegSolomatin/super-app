@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 # ── Super-App ──────────────────────────────────────────
 FLUTTER_DIST = Path.home() / "workspace/super-app/app/build/web"
 API_BASE = "http://localhost:8000"          # FastAPI backend
-PORT = 8789
+PORT = 8790
 
 # ── Content Types ──────────────────────────────────────
 CONTENT_TYPES = {

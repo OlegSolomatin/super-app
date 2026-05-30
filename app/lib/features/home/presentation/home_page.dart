@@ -10,6 +10,9 @@ import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/features/home/data/user_repository.dart';
 import 'package:app/models/user.dart';
+import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/shared/widgets/adaptive_scaffold.dart';
+import 'package:app/shared/widgets/responsive_grid.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -78,41 +81,25 @@ class _HomePageState extends State<HomePage> {
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
+    return AdaptiveScaffold(
       key: _scaffoldKey,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Super App'),
-        backgroundColor: isDark
-            ? AppTheme.bgColor.withValues(alpha: 0.85)
-            : AppTheme.lightSurfaceColor.withValues(alpha: 0.85),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-            tooltip: 'Меню',
-          ),
-        ],
-      ),
-      endDrawer: _buildDrawer(context, themeProvider, isDark),
+      title: 'Super App',
+      currentPath: '/',
+      navDestinations: _buildNavDestinations(),
+      drawer: _buildDrawer(context, themeProvider, isDark),
       body: Stack(
         children: [
-          // Subtle background pattern — only on dark theme
           _buildBackgroundPattern(isDark),
-          // Main content
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                   onRefresh: _loadUser,
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
+                    padding: ResponsiveLayout.horizontalPadding(context).copyWith(top: 20, bottom: 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
-                        // Elegant "Сервисы" header with accent underline
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -146,6 +133,63 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  /// Navigation destinations for the desktop sidebar.
+  List<NavDestination> _buildNavDestinations() {
+    final isAdmin = _user?.roles?.contains('admin') ?? false;
+    final destinations = <NavDestination>[
+      NavDestination(
+        icon: const Icon(PhosphorIconsFill.house, size: 20),
+        label: 'Главная',
+        path: '/',
+        isActive: true,
+      ),
+      NavDestination(
+        icon: const Icon(PhosphorIconsFill.chartLine, size: 20),
+        label: 'Трейдинг',
+        path: '/trading',
+      ),
+      NavDestination(
+        icon: const Icon(PhosphorIconsFill.musicNotes, size: 20),
+        label: 'Музыка',
+        path: '/music',
+      ),
+      NavDestination(
+        icon: const Icon(PhosphorIconsFill.videoCamera, size: 20),
+        label: 'Видео',
+        path: '/video',
+      ),
+    ];
+
+    if (isAdmin) {
+      destinations.insert(
+        1,
+        NavDestination(
+          icon: const Icon(PhosphorIconsFill.robot, size: 20),
+          label: 'Агенты',
+          path: '/admin/agents',
+        ),
+      );
+      destinations.insert(
+        2,
+        NavDestination(
+          icon: const Icon(PhosphorIconsFill.coin, size: 20),
+          label: 'DeepSeek',
+          path: '/admin/deepseek-balance',
+        ),
+      );
+      destinations.insert(
+        3,
+        NavDestination(
+          icon: const Icon(PhosphorIconsFill.brain, size: 20),
+          label: 'Мозг',
+          path: '/admin/brain',
+        ),
+      );
+    }
+
+    return destinations;
   }
 
   Widget _buildDrawer(
@@ -352,6 +396,20 @@ class _HomePageState extends State<HomePage> {
         onTap: () => context.go('/admin/agents'),
         isHighlighted: true,
       ));
+      cards.add(_DashboardCardData(
+        icon: PhosphorIconsFill.coin,
+        title: 'DeepSeek',
+        subtitle: 'Баланс API',
+        color: const Color(0xFF4FC3F7),
+        onTap: () => context.go('/admin/deepseek-balance'),
+      ));
+      cards.add(_DashboardCardData(
+        icon: PhosphorIconsFill.brain,
+        title: 'Мозг',
+        subtitle: 'Второй мозг · граф знаний',
+        color: const Color(0xFFD2A8FF),
+        onTap: () => context.go('/admin/brain'),
+      ));
     }
 
     cards.addAll([
@@ -394,15 +452,7 @@ class _HomePageState extends State<HomePage> {
       ),
     ]);
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.1,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
+    return ResponsiveGrid(
       itemCount: cards.length,
       itemBuilder: (context, index) {
         final card = cards[index];
@@ -411,6 +461,10 @@ class _HomePageState extends State<HomePage> {
           index: index,
         );
       },
+      mobileColumns: 2,
+      tabletColumns: 3,
+      desktopColumns: 4,
+      childAspectRatio: 1.1,
     );
   }
 }
@@ -688,42 +742,57 @@ class _DashboardCardState extends State<_DashboardCard>
                                 _showComingSoon();
                               }
                             },
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.center,
-                                children: [
-                                  // Gradient icon with glow
-                                  _buildIconWithGradient(isAdmin, isDark),
-                                  const SizedBox(height: 14),
-                                  Text(
-                                    widget.data.title,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: isDark
-                                          ? AppTheme.textPrimary
-                                          : AppTheme.lightTextPrimary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 18,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.center,
+                                  children: [
+                                    // Gradient icon with glow
+                                    _buildIconWithGradient(isAdmin, isDark),
+                                    // Use Spacer to push text down to balance icon
+                                    const SizedBox(height: 12),
+                                    Flexible(
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          widget.data.title,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? AppTheme.textPrimary
+                                                : AppTheme.lightTextPrimary,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    widget.data.subtitle,
-                                    style: TextStyle(
-                                      color: isDark
-                                          ? AppTheme.textSecondary
-                                          : AppTheme.lightTextSecondary,
-                                      fontSize: 12,
+                                    const SizedBox(height: 2),
+                                    Flexible(
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          widget.data.subtitle,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? AppTheme.textSecondary
+                                                : AppTheme.lightTextSecondary,
+                                            fontSize: 12,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
                                     ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
                           ),
                         ),
                       ],

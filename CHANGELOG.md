@@ -8,8 +8,25 @@
 - `agent` — изменения в агентах/профилях
 - `docs` — документация
 - `infra` — инфраструктура
-
 ---
+
+## 2026-05-30
+
+- `feat` Граф Мозга: InteractiveViewer (pinch-zoom, pan, scroll-zoom), force-directed расталкивание 30k, авто-fit на экран, адаптация под мобилу (узлы 32px, метки компактнее) | Hermes
+- `feat` Второй мозг: страница `/admin/brain` с графом (force-directed) и лентой (поиск, сортировка по дате) — админ-плитка + навдестинация | Hermes
+- `fix` Чистка хедера: убраны иконки темы, агентов и выхода — только заголовок + бургер | Hermes
+- `fix` Центрирование текста в плитках на главной (FittedBox, mainAxisSize: min, убран maxLines) | Hermes
+- `fix` DeepSeek баланс: 502 ошибка из-за отсутствия DEEPSEEK_API_KEY в env процесса — сервер перезапущен с ключом | Hermes
+- `fix` AgentsPage + LoginPage обёрнуты в ConstrainedContent для адаптивности | Hermes
+- `infra` Бэкенд: эндпоинты `/admin/brain/graph` (GET) и `/admin/brain/status` (POST) — смена статуса заметок через frontmatter + регенерация графа | Hermes
+
+## 2026-05-29
+
+- `feat` DeepSeek API balance — admin page + tile on HomePage | Hermes
+- `fix` PnL sign fix in history tab — always showed '+' even for negative values | Hermes
+- `feat` Splash screen loader in index.html. responsive fix for WizardPage + DashboardCards | Hermes
+- `feat` WizardPage wrapped in ConstrainedContent. DashboardCards crossAxisAlignment fix | Hermes
+- `feat` Responsive desktop layout. responsive_layout, adaptive_scaffold, responsive_grid. LoginPage centered card, HomePage with sidebar+grid. TradingPage/AgentsPage constrained. Build v11 | Hermes
 - `feat` Phase 12: Trading Module — backend (22 файла, 9 API, индикаторы RSI/SMA/EMA/MACD/Bollinger, стратегии Hammer+Inverse Hammer) | Hermes
 - `feat` Phase 12: Flutter — главная торговли (табы), 9-шаговый мастер, страница деталей запуска | Hermes
 - `feat` Material icons → Phosphor Icons Fill (robot, fileText, barbell, musicNotes, videoCamera, mapPin) | Hermes

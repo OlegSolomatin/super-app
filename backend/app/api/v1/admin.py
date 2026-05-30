@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import subprocess
 import sys
+import urllib.request
+import urllib.error
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -253,3 +257,260 @@ async def get_agents_status(
         )
 
     return AgentStatusResponse(**raw)
+
+
+# ── DeepSeek Balance ──────────────────────────────────────────────────────────
+
+
+DEEPSEEK_BALANCE_CACHE: dict[str, Any] = {"data": None, "updated": 0.0}
+
+
+@router.get("/deepseek-balance")
+async def get_deepseek_balance(
+    admin_user: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """Return current DeepSeek API account balance.
+
+    Cached for 60 seconds to avoid hitting the API on every request.
+    Requires admin privileges.
+    """
+    import time as _time
+
+    now = _time.time()
+    if DEEPSEEK_BALANCE_CACHE["data"] and now - DEEPSEEK_BALANCE_CACHE["updated"] < 60:
+        return DEEPSEEK_BALANCE_CACHE["data"]
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="DEEPSEEK_API_KEY not configured",
+        )
+
+    try:
+        req = urllib.request.Request(
+            "https://api.deepseek.com/user/balance",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw: dict[str, Any] = json.loads(resp.read().decode())
+    except urllib.error.URLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"DeepSeek API error: {exc.reason}",
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to parse DeepSeek response: {exc}",
+        )
+
+    DEEPSEEK_BALANCE_CACHE["data"] = raw
+    DEEPSEEK_BALANCE_CACHE["updated"] = now
+    return raw
+
+
+# ── Second Brain ──────────────────────────────────────────────────────────────
+
+BRAIN_DIR = Path.home() / "brain"
+BRAIN_GRAPH_JSON = BRAIN_DIR / "graph.json"
+BRAIN_PARSER = BRAIN_DIR / ".parser" / "brain_parser.py"
+REGENERATE_SCRIPT = BRAIN_DIR / ".parser" / "regenerate_graph.py"
+
+
+class BrainNode(BaseModel):
+    id: str
+    title: str
+    folder: str
+    tags: list[str] = []
+    status: str = ""
+    date: str = ""
+    lat: float | None = None
+    lon: float | None = None
+    address: str = ""
+    time: str = ""
+    weight: int = 1
+    x: float = 0.0
+    y: float = 0.0
+
+
+class BrainEdge(BaseModel):
+    source: str
+    target: str
+    weight: int = 1
+
+
+class BrainGraphResponse(BaseModel):
+    nodes: list[BrainNode]
+    edges: list[BrainEdge]
+
+
+class StatusChangeRequest(BaseModel):
+    id: str
+    status: str
+
+
+@router.get(
+    "/brain/graph",
+    response_model=BrainGraphResponse,
+    summary="Get brain knowledge graph (admin)",
+)
+async def get_brain_graph(
+    admin_user: User = Depends(require_admin),
+) -> BrainGraphResponse:
+    """Return the brain knowledge graph from ~/brain/graph.json.
+
+    Automatically regenerates if graph.json is stale or missing.
+    Requires admin privileges.
+    """
+    _ensure_brain_parser()
+
+    if not (BRAIN_DIR / "graph.json").is_file():
+        _run_brain_parser()
+
+    try:
+        with open(BRAIN_GRAPH_JSON) as f:
+            raw: dict[str, Any] = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to read brain graph: {exc}",
+        )
+
+    nodes = raw.get("nodes", [])
+    edges = raw.get("edges", [])
+
+    # Compute circle positions if not present
+    import math as _math
+    n = len(nodes)
+    for i, node in enumerate(nodes):
+        if not node.get("x") or not node.get("y"):
+            angle = 2 * _math.pi * i / max(n, 1)
+            radius = max(200, n * 30)
+            node["x"] = radius * _math.cos(angle) + 400
+            node["y"] = radius * _math.sin(angle) + 300
+
+    return BrainGraphResponse(
+        nodes=[BrainNode(**n) for n in nodes],
+        edges=[BrainEdge(**e) for e in edges],
+    )
+
+
+@router.post(
+    "/brain/status",
+    summary="Change note status (admin)",
+)
+async def set_brain_status(
+    data: StatusChangeRequest,
+    admin_user: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """Change the status of a brain note.
+
+    Finds the note by id, updates its YAML frontmatter status,
+    and regenerates the graph.
+    Requires admin privileges.
+    """
+    note_id: str = data.id
+    new_status: str = data.status
+
+    # Find the .md file by relative path stored in graph.json id
+    md_path = BRAIN_DIR / f"{note_id}.md"
+    if not md_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Note not found: {note_id}",
+        )
+
+    try:
+        content = md_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to read note: {exc}",
+        )
+
+    # Update status in YAML frontmatter
+    lines = content.split("\n")
+    if not content.startswith("---"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Note has no YAML frontmatter",
+        )
+
+    updated = False
+    new_lines: list[str] = []
+    in_frontmatter = False
+    for line in lines:
+        if line.strip() == "---":
+            if not in_frontmatter:
+                in_frontmatter = True
+                new_lines.append(line)
+                continue
+            else:
+                # End of frontmatter
+                if not updated:
+                    new_lines.append(f"status: {new_status}")
+                    updated = True
+                new_lines.append(line)
+                in_frontmatter = False
+                continue
+        if in_frontmatter and line.strip().startswith("status:"):
+            new_lines.append(f"status: {new_status}")
+            updated = True
+            continue
+        new_lines.append(line)
+
+    try:
+        md_path.write_text("\n".join(new_lines), encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to write note: {exc}",
+        )
+
+    # Regenerate graph
+    _run_brain_parser()
+
+    return {"status": "ok", "id": note_id, "new_status": new_status}
+
+
+def _ensure_brain_parser() -> None:
+    """Ensure the brain parser scripts exist."""
+    if not BRAIN_DIR.is_dir():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Brain directory not found: {BRAIN_DIR}",
+        )
+
+
+def _run_brain_parser() -> None:
+    """Run the brain parser to regenerate graph.json."""
+    if REGENERATE_SCRIPT.is_file():
+        script = str(REGENERATE_SCRIPT)
+    elif BRAIN_PARSER.is_file():
+        script = str(BRAIN_PARSER)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Brain parser script not found",
+        )
+
+    try:
+        subprocess.run(
+            [sys.executable or "python3", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+            cwd=str(BRAIN_DIR),
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Brain parser timed out",
+        )
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Brain parser failed: {exc.stderr.strip()[:500]}",
+        )

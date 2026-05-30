@@ -9,6 +9,8 @@ import 'package:app/features/trading/presentation/wizard_page.dart';
 import 'package:app/features/trading/presentation/run_detail_page.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/admin/presentation/agents_page.dart';
+import 'package:app/features/admin/presentation/deepseek_balance_page.dart';
+import 'package:app/features/admin/presentation/brain_page.dart';
 
 class AppRouter {
   final SecureStorage _storage;
@@ -51,6 +53,14 @@ class AppRouter {
       GoRoute(
         path: '/admin/agents',
         builder: (context, state) => const AdminAgentsPage(),
+      ),
+      GoRoute(
+        path: '/admin/deepseek-balance',
+        builder: (context, state) => const DeepSeekBalancePage(),
+      ),
+      GoRoute(
+        path: '/admin/brain',
+        builder: (context, state) => const BrainPage(),
       ),
       GoRoute(
         path: '/trading',
