@@ -1658,24 +1658,22 @@ class _PairTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppTheme.accentColor.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  pair.base.substring(0, 1),
-                  style: TextStyle(
-                    color: isSelected ? AppTheme.accentColor : Colors.white70,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: pair.iconUrl != null
+                    ? Image.network(
+                        pair.iconUrl!,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => _coinLetterBox(theme),
+                        loadingBuilder: (_, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return _coinLetterBox(theme);
+                        },
+                      )
+                    : _coinLetterBox(theme),
               ),
             ),
             const SizedBox(width: 12),
@@ -1704,6 +1702,29 @@ class _PairTile extends StatelessWidget {
                 color: AppTheme.accentColor,
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _coinLetterBox(ThemeData theme) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppTheme.accentColor.withValues(alpha: 0.2)
+            : Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(
+        child: Text(
+          pair.base.substring(0, 1),
+          style: TextStyle(
+            color: isSelected ? AppTheme.accentColor : Colors.white70,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
       ),
     );

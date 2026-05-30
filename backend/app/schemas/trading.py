@@ -185,6 +185,7 @@ class PairInfo(BaseModel):
     quote: str
     min_qty: float
     tick_size: float
+    icon_url: Optional[str] = None
 
 
 class StrategyInfo(BaseModel):

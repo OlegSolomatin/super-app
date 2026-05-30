@@ -54,6 +54,59 @@ router = APIRouter(prefix="/trading", tags=["trading"])
 # ---------------------------------------------------------------------------
 # Hardcoded pair list
 # ---------------------------------------------------------------------------
+COIN_ICON_NAMES: dict[str, str] = {
+    "BTC": "bitcoin-btc",
+    "ETH": "ethereum-eth",
+    "BNB": "binance-coin-bnb",
+    "SOL": "solana-sol",
+    "XRP": "xrp-xrp",
+    "ADA": "cardano-ada",
+    "DOGE": "dogecoin-doge",
+    "AVAX": "avalanche-avax",
+    "DOT": "polkadot-dot",
+    "MATIC": "polygon-matic",
+    "LTC": "litecoin-ltc",
+    "LINK": "chainlink-link",
+    "UNI": "uniswap-uni",
+    "ATOM": "cosmos-atom",
+    "ETC": "ethereum-classic-etc",
+    "FIL": "filecoin-fil",
+    "TRX": "tron-trx",
+    "XLM": "stellar-xlm",
+    "VET": "vechain-vet",
+    "ALGO": "algorand-algo",
+    "NEAR": "near-protocol-near",
+    "FTM": "fantom-ftm",
+    "SAND": "the-sandbox-sand",
+    "MANA": "decentraland-mana",
+    "AXS": "axie-infinity-axs",
+    "APE": "apecoin-ape",
+    "SHIB": "shiba-inu-shib",
+    "CRO": "crypto-com-cro",
+    "EOS": "eos-eos",
+    "ICX": "icon-icx",
+    "ZEC": "zcash-zec",
+    "XMR": "monero-xmr",
+    "DASH": "dash-dash",
+    "ZIL": "zilliqa-zil",
+    "KSM": "kusama-ksm",
+    "COMP": "compound-comp",
+    "YFI": "yearn-finance-yfi",
+    "AAVE": "aave-aave",
+    "MKR": "maker-mkr",
+    "BAT": "basic-attention-token-bat",
+    "ENJ": "enjin-coin-enj",
+    "CHZ": "chiliz-chz",
+    "ONE": "harmony-one",
+    "ANKR": "ankr-ankr",
+    "IOST": "iost-iost",
+    "WAVES": "waves-waves",
+    "ONT": "ontology-ont",
+    "IOTA": "miota-iota",
+    "NANO": "nano-nano",
+    "LSK": "lisk-lsk",
+}
+
 HARDCODED_PAIRS = [
     PairInfo(symbol="BTCUSDT", base="BTC", quote="USDT", min_qty=0.001, tick_size=0.01),
     PairInfo(symbol="ETHUSDT", base="ETH", quote="USDT", min_qty=0.01, tick_size=0.01),
@@ -65,7 +118,67 @@ HARDCODED_PAIRS = [
     PairInfo(symbol="AVAXUSDT", base="AVAX", quote="USDT", min_qty=0.01, tick_size=0.01),
     PairInfo(symbol="DOTUSDT", base="DOT", quote="USDT", min_qty=0.1, tick_size=0.001),
     PairInfo(symbol="MATICUSDT", base="MATIC", quote="USDT", min_qty=1.0, tick_size=0.0001),
+    PairInfo(symbol="LTCUSDT", base="LTC", quote="USDT", min_qty=0.01, tick_size=0.01),
+    PairInfo(symbol="LINKUSDT", base="LINK", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="UNIUSDT", base="UNI", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="ATOMUSDT", base="ATOM", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="ETCUSDT", base="ETC", quote="USDT", min_qty=0.1, tick_size=0.01),
+    PairInfo(symbol="FILUSDT", base="FIL", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="TRXUSDT", base="TRX", quote="USDT", min_qty=1.0, tick_size=0.00001),
+    PairInfo(symbol="XLMUSDT", base="XLM", quote="USDT", min_qty=1.0, tick_size=0.00001),
+    PairInfo(symbol="VETUSDT", base="VET", quote="USDT", min_qty=1.0, tick_size=0.000001),
+    PairInfo(symbol="ALGOUSDT", base="ALGO", quote="USDT", min_qty=1.0, tick_size=0.001),
+    PairInfo(symbol="NEARUSDT", base="NEAR", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="FTMUSDT", base="FTM", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="SANDUSDT", base="SAND", quote="USDT", min_qty=1.0, tick_size=0.0001),
+    PairInfo(symbol="MANAUSDT", base="MANA", quote="USDT", min_qty=1.0, tick_size=0.0001),
+    PairInfo(symbol="AXSUSDT", base="AXS", quote="USDT", min_qty=0.01, tick_size=0.001),
+    PairInfo(symbol="APEUSDT", base="APE", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="SHIBUSDT", base="SHIB", quote="USDT", min_qty=100000, tick_size=0.00000001),
+    PairInfo(symbol="CROUSDT", base="CRO", quote="USDT", min_qty=1.0, tick_size=0.0001),
+    PairInfo(symbol="EOSUSDT", base="EOS", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="ICXUSDT", base="ICX", quote="USDT", min_qty=1.0, tick_size=0.001),
+    PairInfo(symbol="ZECUSDT", base="ZEC", quote="USDT", min_qty=0.001, tick_size=0.01),
+    PairInfo(symbol="XMRUSDT", base="XMR", quote="USDT", min_qty=0.001, tick_size=0.01),
+    PairInfo(symbol="DASHUSDT", base="DASH", quote="USDT", min_qty=0.01, tick_size=0.01),
+    PairInfo(symbol="ZILUSDT", base="ZIL", quote="USDT", min_qty=1.0, tick_size=0.00001),
+    PairInfo(symbol="KSMUSDT", base="KSM", quote="USDT", min_qty=0.01, tick_size=0.01),
+    PairInfo(symbol="COMPUSDT", base="COMP", quote="USDT", min_qty=0.01, tick_size=0.01),
+    PairInfo(symbol="YFIUSDT", base="YFI", quote="USDT", min_qty=0.0001, tick_size=0.01),
+    PairInfo(symbol="AAVEUSDT", base="AAVE", quote="USDT", min_qty=0.01, tick_size=0.01),
+    PairInfo(symbol="MKRUSDT", base="MKR", quote="USDT", min_qty=0.001, tick_size=0.01),
+    PairInfo(symbol="BATUSDT", base="BAT", quote="USDT", min_qty=1.0, tick_size=0.0001),
+    PairInfo(symbol="ENJUSDT", base="ENJ", quote="USDT", min_qty=1.0, tick_size=0.001),
+    PairInfo(symbol="CHZUSDT", base="CHZ", quote="USDT", min_qty=1.0, tick_size=0.0001),
+    PairInfo(symbol="ONEUSDT", base="ONE", quote="USDT", min_qty=1.0, tick_size=0.00001),
+    PairInfo(symbol="ANKRUSDT", base="ANKR", quote="USDT", min_qty=1.0, tick_size=0.00001),
+    PairInfo(symbol="IOSTUSDT", base="IOST", quote="USDT", min_qty=1.0, tick_size=0.00001),
+    PairInfo(symbol="WAVESUSDT", base="WAVES", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="ONTUSDT", base="ONT", quote="USDT", min_qty=1.0, tick_size=0.0001),
+    PairInfo(symbol="IOTAUSDT", base="IOTA", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="NANOUSDT", base="NANO", quote="USDT", min_qty=0.1, tick_size=0.001),
+    PairInfo(symbol="LSKUSDT", base="LSK", quote="USDT", min_qty=0.1, tick_size=0.001),
 ]
+
+def _get_pair_list() -> list[dict]:
+    """Build pair list with icon_url populated."""
+    items = []
+    for p in HARDCODED_PAIRS:
+        coin_name = COIN_ICON_NAMES.get(p.base)
+        icon_url = (
+            f"https://cryptologos.cc/logos/{coin_name}-logo.png?v=040"
+            if coin_name
+            else None
+        )
+        items.append({
+            "symbol": p.symbol,
+            "base": p.base,
+            "quote": p.quote,
+            "min_qty": p.min_qty,
+            "tick_size": p.tick_size,
+            "icon_url": icon_url,
+        })
+    return items
 
 # ---------------------------------------------------------------------------
 # Hardcoded strategy list
@@ -161,10 +274,10 @@ async def list_pairs(
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
 ) -> PairsListResponse:
     """Return available trading pairs with optional search and pagination."""
-    items = HARDCODED_PAIRS
+    items = _get_pair_list()
     if search:
         search_upper = search.upper()
-        items = [p for p in items if search_upper in p.symbol.upper()]
+        items = [p for p in items if search_upper in p["symbol"].upper()]
     total = len(items)
     offset = (page - 1) * page_size
     page_items = items[offset : offset + page_size]
