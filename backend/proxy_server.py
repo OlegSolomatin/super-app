@@ -2,6 +2,7 @@
 """Super-App proxy — serves Flutter web app and proxies API to super-app backend."""
 import gzip
 import json
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 from pathlib import Path
@@ -18,7 +19,9 @@ CONTENT_TYPES = {
     ".html": "text/html",
     ".css": "text/css",
     ".js": "application/javascript",
+    ".mjs": "application/javascript",
     ".json": "application/json",
+    ".wasm": "application/wasm",
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -32,13 +35,27 @@ CONTENT_TYPES = {
     ".dart": "text/plain",
 }
 
+# Files that can be gzip-compressed
+GZIP_TYPES = {
+    ".html", ".css", ".js", ".mjs", ".json", ".svg",
+    ".wasm", ".ttf", ".woff", ".woff2",
+}
+
+# Files with content hashes in their URL → cache forever
+IMMUTABLE_PATTERN = re.compile(
+    r"\.(js|wasm|css|woff2?|ttf|png|svg|ico|webp)(\?.*)?$",
+    re.IGNORECASE,
+)
+
 
 class SuperAppProxy(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
 
         # ── API proxy (включая health и docs) ──────────
-        if parsed.path.startswith("/api/") or parsed.path in ("/health", "/openapi.json", "/docs", "/redoc"):
+        if parsed.path.startswith("/api/") or parsed.path in (
+            "/health", "/openapi.json", "/docs", "/redoc"
+        ):
             self._proxy(parsed, API_BASE)
             return
 
@@ -47,7 +64,7 @@ class SuperAppProxy(BaseHTTPRequestHandler):
         if serve_path in ("/", ""):
             serve_path = "/index.html"
 
-        # SPA fallback — все неизвестные пути отдают index.html
+        # SPA fallback
         file_path = FLUTTER_DIST / serve_path.lstrip("/")
         if not (file_path.exists() and file_path.is_file() and
                 file_path.resolve().is_relative_to(FLUTTER_DIST.resolve())):
@@ -57,14 +74,34 @@ class SuperAppProxy(BaseHTTPRequestHandler):
         suffix = file_path.suffix
         ct = CONTENT_TYPES.get(suffix, "application/octet-stream")
 
+        # ── Caching ─────────────────────────────────────
+        is_html = suffix == ".html"
+        if is_html:
+            # index.html — never cache (ensures new SW gets picked up)
+            cache_control = "no-cache, no-store, must-revalidate"
+        else:
+            # Everything else (js, wasm, css, fonts, images) — cache forever
+            # Flutter rebuild changes filenames/references, so immutable is safe
+            cache_control = "public, max-age=31536000, immutable"
+
+        # ── Gzip compression ────────────────────────────
+        accept_gzip = self.headers.get("Accept-Encoding", "")
+        can_gzip = suffix in GZIP_TYPES and "gzip" in accept_gzip and len(content) > 1400
+
         self.send_response(200)
         self.send_header("Content-Type", f"{ct}; charset=utf-8" if ct.startswith("text/") else ct)
+        self.send_header("Cache-Control", cache_control)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
-        self.end_headers()
-        self.wfile.write(content)
+        if can_gzip:
+            compressed = gzip.compress(content, compresslevel=6)
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(compressed)))
+            self.end_headers()
+            self.wfile.write(compressed)
+        else:
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -77,8 +114,10 @@ class SuperAppProxy(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Methods",
+                         "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers",
+                         "Content-Type, Authorization")
         self.end_headers()
 
     def _proxy(self, parsed, api_base):
@@ -102,7 +141,9 @@ class SuperAppProxy(BaseHTTPRequestHandler):
                 content_type = resp.headers.get("Content-Type", "application/json")
                 content_encoding = resp.headers.get("Content-Encoding", "")
 
-                if content_encoding == "gzip" or (len(raw_body) >= 2 and raw_body[:2] == b'\x1f\x8b'):
+                if content_encoding == "gzip" or (
+                    len(raw_body) >= 2 and raw_body[:2] == b'\x1f\x8b'
+                ):
                     try:
                         raw_body = gzip.decompress(raw_body)
                     except Exception:
@@ -111,7 +152,7 @@ class SuperAppProxy(BaseHTTPRequestHandler):
                 self.send_response(resp.status)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Access-Control-Allow-Origin", "*")
-                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Pragma", "no-cache")
                 self.send_header("Expires", "0")
                 self.end_headers()
@@ -129,5 +170,5 @@ class SuperAppProxy(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = HTTPServer(("0.0.0.0", PORT), SuperAppProxy)
-    print(f"🚀 Super-App proxy running on :{PORT} → Flutter web + {API_BASE}")
+    print(f"🚀 Super-App proxy running on :{PORT} → Flutter web + {API_BASE} (gzip + caching)")
     server.serve_forever()

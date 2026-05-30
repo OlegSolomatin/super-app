@@ -12,6 +12,9 @@
 
 ## 2026-05-30
 
+- `infra` Оптимизация загрузки: gzip-сжатие статики в proxy (JS/WASM/CSS —70%), Cache-Control immutable на год, preload main.dart.js + canvaskit.wasm в index.html | Hermes
+- `fix` Сплэш-скрин: теперь ждёт первый кадр Flutter (canvas/flt-glass-pane) вместо window.load — убран пустой экран между сплэшем и приложением | Hermes
+
 - `refactor` DashboardTile вынесен в отдельный виджет `lib/shared/widgets/dashboard_tile.dart` — единый стиль для всех плиток (центрирование, иконка, текст, анимации). Новая плитка = одна строка `DashboardTileData(...)` | Hermes
 
 - `feat` Граф Мозга: InteractiveViewer (pinch-zoom, pan, scroll-zoom), force-directed расталкивание 30k, авто-fit на экран, адаптация под мобилу (узлы 32px, метки компактнее) | Hermes

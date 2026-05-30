@@ -32,6 +32,11 @@
   <title>Super App</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- Preload critical resources — browser starts downloading immediately -->
+  <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="canvaskit/canvaskit.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
+  <link rel="preload" href="flutter.js" as="script">
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #08081C; overflow: hidden; }
@@ -45,7 +50,7 @@
       align-items: center;
       justify-content: center;
       background: #08081C;
-      transition: opacity 0.5s ease;
+      transition: opacity 0.4s ease;
     }
     
     #splash.hide {
@@ -119,14 +124,56 @@
       <div class="splash-loader-bar"></div>
     </div>
   </div>
+
   <script src="flutter_bootstrap.js" async></script>
   <script>
-    // Hide splash when Flutter is ready
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        document.getElementById('splash').classList.add('hide');
-      }, 500);
-    });
+    // Hide splash only when Flutter has actually rendered its first frame.
+    // This eliminates the blank-screen gap between splash and the app.
+    (function() {
+      var splash = document.getElementById('splash');
+      var checkInterval = 200; // check every 200ms
+      var maxWait = 15000;     // force-hide after 15s
+
+      function hideSplash() {
+        splash.classList.add('hide');
+      }
+
+      function checkFlutter() {
+        // Flutter renders into a <canvas> or <flt-glass-pane> element
+        var flutterApp = document.querySelector('canvas') ||
+                         document.querySelector('flt-glass-pane');
+        if (flutterApp) {
+          // Give Flutter a tiny frame to paint
+          requestAnimationFrame(hideSplash);
+          return true;
+        }
+        return false;
+      }
+
+      // Start checking
+      if (!checkFlutter()) {
+        var timer = setInterval(function() {
+          if (checkFlutter()) {
+            clearInterval(timer);
+          }
+        }, checkInterval);
+
+        // Fallback: force-hide after maxWait
+        setTimeout(function() {
+          clearInterval(timer);
+          hideSplash();
+        }, maxWait);
+      }
+
+      // Also hide if load event fires (fallback)
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          if (!splash.classList.contains('hide')) {
+            hideSplash();
+          }
+        }, 1000);
+      });
+    })();
   </script>
 </body>
 </html>
