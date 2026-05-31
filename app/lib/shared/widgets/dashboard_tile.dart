@@ -173,49 +173,44 @@ class _DashboardTileState extends State<DashboardTile>
                                 horizontal: 14,
                                 vertical: 18,
                               ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // Icon — guaranteed centered in its container
-                                  _buildIcon(isAdmin, isDark),
-                                  const SizedBox(height: 12),
-                                  // Title — auto-scaled, always centered
-                                  Flexible(
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        widget.data.title,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? AppTheme.textPrimary
-                                              : AppTheme.lightTextPrimary,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // Icon — guaranteed centered in its container
+                                    _buildIcon(isAdmin, isDark),
+                                    const SizedBox(height: 12),
+                                    // Title — always centered
+                                    Text(
+                                      widget.data.title,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? AppTheme.textPrimary
+                                            : AppTheme.lightTextPrimary,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  // Subtitle — auto-scaled, always centered
-                                  Flexible(
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        widget.data.subtitle,
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? AppTheme.textSecondary
-                                              : AppTheme.lightTextSecondary,
-                                          fontSize: 12,
-                                        ),
-                                        textAlign: TextAlign.center,
+                                    const SizedBox(height: 2),
+                                    // Subtitle — always centered
+                                    Text(
+                                      widget.data.subtitle,
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? AppTheme.textSecondary
+                                            : AppTheme.lightTextSecondary,
+                                        fontSize: 12,
                                       ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
