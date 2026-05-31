@@ -40,13 +40,13 @@ async def register(
 @router.post(
     "/login",
     response_model=TokenResponse,
-    summary="Login with email and password",
+    summary="Login with username and password",
 )
 async def login(
     data: LoginRequest,
     service: AuthService = Depends(),
 ) -> TokenResponse:
-    """Authenticate a user with email and password.
+    """Authenticate a user with username and password.
 
     Returns JWT access and refresh tokens upon successful authentication.
     """

@@ -15,7 +15,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -23,7 +23,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -39,7 +39,7 @@ class _LoginPageState extends State<LoginPage> {
       final authRepository = AuthRepository(dioClient.dio);
 
       final tokens = await authRepository.login(
-        email: _emailController.text.trim(),
+        username: _usernameController.text.trim(),
         password: _passwordController.text,
       );
 
@@ -144,18 +144,19 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         SizedBox(height: isDesktop ? 32 : 40),
                         TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
+                          controller: _usernameController,
+                          keyboardType: TextInputType.text,
+                          textCapitalization: TextCapitalization.none,
                           decoration: const InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined),
+                            labelText: 'Имя пользователя',
+                            prefixIcon: Icon(Icons.person_outline),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'Введите email';
+                              return 'Введите имя пользователя';
                             }
-                            if (!value.contains('@')) {
-                              return 'Некорректный email';
+                            if (value.trim().length < 2) {
+                              return 'Минимум 2 символа';
                             }
                             return null;
                           },

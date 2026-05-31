@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `feat` Replace email login field with username — backend + frontend | Hermes
 - `fix` Fix centering of dashboard tiles — replaced GridView with Wrap in ResponsiveGrid | Hermes
 
 ## 2026-05-30

@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 class LoginRequest(BaseModel):
     """Login request payload."""
 
-    email: EmailStr
+    username: str = Field(..., min_length=2, max_length=100)
     password: str = Field(..., min_length=6)
 
 
