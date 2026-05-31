@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `feat` Auto redirect HTTP→HTTPS via X-Forwarded-Proto header — pfumiko.ru всегда форсирует HTTPS | Hermes
 - `fix` Proxy: HTTP/1.0 + proxy /auth/* routes — fixes login timeout through super-app proxy | Hermes
 - `fix` HTTP/1.1 keep-alive in proxy + clean restart — fixes Cloudflare errors and stale cache | Hermes
 - `fix` Rebuild v23 — full restart (clean cloudflared + proxy), email → username login | Hermes

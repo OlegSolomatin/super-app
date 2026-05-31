@@ -50,7 +50,22 @@ IMMUTABLE_PATTERN = re.compile(
 
 class SuperAppProxy(BaseHTTPRequestHandler):
     """Super-App proxy — serves Flutter web app and proxies API to FastAPI."""
+
+    def _redirect_http_to_https(self) -> bool:
+        """Redirect HTTP → HTTPS based on X-Forwarded-Proto header.
+        Returns True if redirected (caller should stop), False otherwise."""
+        proto = self.headers.get("X-Forwarded-Proto", "")
+        if proto == "http":
+            host = self.headers.get("Host", "pfumiko.ru")
+            self.send_response(301)
+            self.send_header("Location", f"https://{host}{self.path}")
+            self.end_headers()
+            return True
+        return False
+
     def do_GET(self):
+        if self._redirect_http_to_https():
+            return
         parsed = urlparse(self.path)
 
         # ── API proxy (включая health, docs и auth) ──
@@ -105,6 +120,8 @@ class SuperAppProxy(BaseHTTPRequestHandler):
             self.wfile.write(content)
 
     def do_POST(self):
+        if self._redirect_http_to_https():
+            return
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/") or parsed.path.startswith("/auth/"):
             self._proxy(parsed, API_BASE)
