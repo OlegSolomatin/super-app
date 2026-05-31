@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `fix` Proxy: HTTP/1.0 + proxy /auth/* routes — fixes login timeout through super-app proxy | Hermes
 - `fix` HTTP/1.1 keep-alive in proxy + clean restart — fixes Cloudflare errors and stale cache | Hermes
 - `fix` Rebuild v23 — full restart (clean cloudflared + proxy), email → username login | Hermes
 - `feat` Replace email login field with username — backend + frontend | Hermes

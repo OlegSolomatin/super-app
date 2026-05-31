@@ -50,12 +50,11 @@ IMMUTABLE_PATTERN = re.compile(
 
 class SuperAppProxy(BaseHTTPRequestHandler):
     """Super-App proxy — serves Flutter web app and proxies API to FastAPI."""
-    protocol_version = "HTTP/1.1"
     def do_GET(self):
         parsed = urlparse(self.path)
 
-        # ── API proxy (включая health и docs) ──────────
-        if parsed.path.startswith("/api/") or parsed.path in (
+        # ── API proxy (включая health, docs и auth) ──
+        if parsed.path.startswith("/api/") or parsed.path.startswith("/auth/") or parsed.path in (
             "/health", "/openapi.json", "/docs", "/redoc"
         ):
             self._proxy(parsed, API_BASE)
@@ -93,7 +92,6 @@ class SuperAppProxy(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", f"{ct}; charset=utf-8" if ct.startswith("text/") else ct)
         self.send_header("Cache-Control", cache_control)
-        self.send_header("Connection", "keep-alive")
         self.send_header("Access-Control-Allow-Origin", "*")
         if can_gzip:
             compressed = gzip.compress(content, compresslevel=6)
@@ -108,7 +106,7 @@ class SuperAppProxy(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path.startswith("/api/"):
+        if parsed.path.startswith("/api/") or parsed.path.startswith("/auth/"):
             self._proxy(parsed, API_BASE)
             return
         self.send_response(404)
