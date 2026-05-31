@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'responsive_layout.dart';
 
 /// GridView that adapts its column count to screen width.
+///
+/// Last incomplete rows are always centered (not left-aligned like GridView).
 class ResponsiveGrid extends StatelessWidget {
   final int itemCount;
   final IndexedWidgetBuilder itemBuilder;
@@ -40,18 +42,27 @@ class ResponsiveGrid extends StatelessWidget {
           ScreenSize.desktop => desktopColumns,
         };
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: padding,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: childAspectRatio ?? 1.1,
-            crossAxisSpacing: spacing,
-            mainAxisSpacing: runSpacing,
+        final hp = padding?.horizontal ?? 0;
+        final cardWidth =
+            (width - hp - spacing * (crossAxisCount - 1)) / crossAxisCount;
+        final aspect = childAspectRatio ?? 1.1;
+        final cardHeight = aspect > 0 ? cardWidth / aspect : cardWidth;
+
+        return Padding(
+          padding: padding ?? EdgeInsets.zero,
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: runSpacing,
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: List.generate(itemCount, (i) {
+              return SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: itemBuilder(context, i),
+              );
+            }),
           ),
-          itemCount: itemCount,
-          itemBuilder: itemBuilder,
         );
       },
     );
@@ -84,7 +95,8 @@ class ResponsiveWrap extends StatelessWidget {
     return Column(
       children: List.generate(children.length, (i) {
         return Padding(
-          padding: EdgeInsets.only(bottom: i < children.length - 1 ? runSpacing : 0),
+          padding: EdgeInsets.only(
+              bottom: i < children.length - 1 ? runSpacing : 0),
           child: children[i],
         );
       }),

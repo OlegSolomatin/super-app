@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `fix` Fix centering of dashboard tiles — replaced GridView with Wrap in ResponsiveGrid | Hermes
 
 ## 2026-05-30
 
