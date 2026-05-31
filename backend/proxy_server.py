@@ -3,7 +3,7 @@
 import gzip
 import json
 import re
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
@@ -49,6 +49,8 @@ IMMUTABLE_PATTERN = re.compile(
 
 
 class SuperAppProxy(BaseHTTPRequestHandler):
+    """Super-App proxy — serves Flutter web app and proxies API to FastAPI."""
+    protocol_version = "HTTP/1.1"
     def do_GET(self):
         parsed = urlparse(self.path)
 
@@ -91,6 +93,7 @@ class SuperAppProxy(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", f"{ct}; charset=utf-8" if ct.startswith("text/") else ct)
         self.send_header("Cache-Control", cache_control)
+        self.send_header("Connection", "keep-alive")
         self.send_header("Access-Control-Allow-Origin", "*")
         if can_gzip:
             compressed = gzip.compress(content, compresslevel=6)
@@ -169,6 +172,6 @@ class SuperAppProxy(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", PORT), SuperAppProxy)
-    print(f"🚀 Super-App proxy running on :{PORT} → Flutter web + {API_BASE} (gzip + caching)")
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), SuperAppProxy)
+    print(f"🚀 Super-App proxy running on :{PORT} → Flutter web + {API_BASE} (HTTP/1.1, gzip + caching)")
     server.serve_forever()

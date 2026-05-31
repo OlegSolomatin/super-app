@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `fix` HTTP/1.1 keep-alive in proxy + clean restart — fixes Cloudflare errors and stale cache | Hermes
 - `fix` Rebuild v23 — full restart (clean cloudflared + proxy), email → username login | Hermes
 - `feat` Replace email login field with username — backend + frontend | Hermes
 - `fix` Fix centering of dashboard tiles — replaced GridView with Wrap in ResponsiveGrid | Hermes
