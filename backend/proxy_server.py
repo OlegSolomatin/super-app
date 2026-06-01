@@ -96,9 +96,9 @@ class SuperAppProxy(BaseHTTPRequestHandler):
             # index.html — never cache (ensures new SW gets picked up)
             cache_control = "no-cache, no-store, must-revalidate"
         else:
-            # Everything else (js, wasm, css, fonts, images) — cache forever
-            # Flutter rebuild changes filenames/references, so immutable is safe
-            cache_control = "public, max-age=31536000, immutable"
+            # Everything else (js, wasm, css, fonts, images) — cache 1 hour
+            # Short TTL so Cloudflare edge cache doesn't get stale on rebuild
+            cache_control = "public, max-age=3600"
 
         # ── Gzip compression ────────────────────────────
         accept_gzip = self.headers.get("Accept-Encoding", "")
