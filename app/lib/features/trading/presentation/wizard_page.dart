@@ -1359,8 +1359,52 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
   // ─── Step 8: Period ──────────────────────────────────────────────
 
+  static const _periodPresets = [
+    ('1н', 7),
+    ('2н', 14),
+    ('1м', 30),
+    ('3м', 90),
+    ('6м', 180),
+    ('1г', 365),
+  ];
+
+  DateTime _presetDate(int daysBack) {
+    final d = DateTime.now().subtract(Duration(days: daysBack));
+    return DateTime(d.year, d.month, d.day);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _displayDate(DateTime d) {
+    return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+  }
+
+  Future<DateTime?> _pickDate(ThemeData theme, DateTime initial) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2015),
+      lastDate: DateTime.now(),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: AppTheme.accentColor,
+            surface: AppTheme.surfaceColor,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    return picked;
+  }
+
   Widget _buildStep8Period(ThemeData theme, bool isDark) {
     if (_runMode == RunMode.historical) {
+      final start = _dateRange?.start;
+      final end = _dateRange?.end;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1373,81 +1417,206 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             'Выберите отрезок дат для исторического тестирования',
             style: theme.textTheme.bodyMedium,
           ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: () async {
-              final picked = await showDateRangePicker(
-                context: context,
-                firstDate: DateTime(2015),
-                lastDate: DateTime.now(),
-                initialDateRange: _dateRange,
-                builder: (context, child) {
-                  return Theme(
-                    data: Theme.of(context).copyWith(
-                      colorScheme: ColorScheme.dark(
-                        primary: AppTheme.accentColor,
-                        surface: AppTheme.surfaceColor,
+          const SizedBox(height: 20),
+
+          // ── Быстрые пресеты ──
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _periodPresets.map((preset) {
+              final label = preset.$1;
+              final days = preset.$2;
+              // Check if this preset matches current selection
+              final matching = start != null && end != null &&
+                  _isSameDay(start, _presetDate(days)) &&
+                  _isSameDay(end, DateTime.now());
+              return ActionChip(
+                label: Text(label),
+                backgroundColor: matching
+                    ? AppTheme.accentColor
+                    : theme.cardTheme.color,
+                labelStyle: TextStyle(
+                  color: matching ? Colors.white : null,
+                  fontWeight: matching ? FontWeight.w600 : null,
+                  fontSize: 13,
+                ),
+                side: matching
+                    ? BorderSide.none
+                    : BorderSide(
+                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.2) ?? Colors.grey.withValues(alpha: 0.2),
                       ),
-                    ),
-                    child: child!,
-                  );
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _dateRange = DateTimeRange(
+                      start: _presetDate(days),
+                      end: DateTime.now(),
+                    );
+                  });
                 },
               );
-              if (picked != null) {
-                setState(() => _dateRange = picked);
-              }
-            },
-            child: Container(
+            }).toList(),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Карточка с датами ──
+          Row(
+            children: [
+              // Дата начала
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final picked = await _pickDate(
+                      theme,
+                      start ?? DateTime.now().subtract(const Duration(days: 7)),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _dateRange = DateTimeRange(
+                          start: picked,
+                          end: end ?? DateTime.now(),
+                        );
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: theme.cardTheme.color,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            PhosphorIcon(
+                              PhosphorIconsFill.calendar,
+                              size: 16,
+                              color: AppTheme.accentColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Начало',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontSize: 12,
+                                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          start != null ? _displayDate(start) : '--.--.----',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: PhosphorIcon(
+                  PhosphorIconsFill.arrowRight,
+                  size: 18,
+                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
+                ),
+              ),
+              // Дата окончания
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final picked = await _pickDate(
+                      theme,
+                      end ?? DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _dateRange = DateTimeRange(
+                          start: start ?? DateTime.now().subtract(const Duration(days: 7)),
+                          end: picked,
+                        );
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: theme.cardTheme.color,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            PhosphorIcon(
+                              PhosphorIconsFill.calendar,
+                              size: 16,
+                              color: AppTheme.accentColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Конец',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontSize: 12,
+                                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          end != null ? _displayDate(end) : '--.--.----',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          if (start != null && end != null) ...[
+            const SizedBox(height: 12),
+            Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
               decoration: BoxDecoration(
-                color: theme.cardTheme.color,
-                borderRadius: BorderRadius.circular(12),
+                color: AppTheme.accentColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
                   PhosphorIcon(
-                    PhosphorIconsFill.calendar,
-                    size: 24,
-                    color: AppTheme.accentColor,
+                    PhosphorIconsFill.info,
+                    size: 16,
+                    color: AppTheme.accentColor.withValues(alpha: 0.7),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _dateRange != null
-                              ? '${_formatDate(_dateRange!.start)} — ${_formatDate(_dateRange!.end)}'
-                              : 'Нажмите для выбора дат',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 15,
-                            color: _dateRange != null
-                                ? null
-                                : theme.textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                        if (_dateRange != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '${_dateRange!.end.difference(_dateRange!.start).inDays + 1} дней',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                      ],
+                  const SizedBox(width: 8),
+                  Text(
+                    '${end.difference(start).inDays + 1} дней',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.accentColor.withValues(alpha: 0.9),
+                      fontWeight: FontWeight.w500,
                     ),
-                  ),
-                  const PhosphorIcon(
-                    PhosphorIconsFill.caretRight,
-                    size: 20,
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ],
       );
     }
