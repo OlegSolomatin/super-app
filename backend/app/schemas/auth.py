@@ -75,6 +75,13 @@ class UserRead(BaseModel):
     updated_at: datetime
 
 
+class PasswordChange(BaseModel):
+    """Password change payload."""
+
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6)
+
+
 # ─── Role ────────────────────────────────────────────────────────────────────
 
 class RoleCreate(BaseModel):

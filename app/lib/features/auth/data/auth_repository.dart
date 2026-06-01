@@ -48,4 +48,17 @@ class AuthRepository {
 
     return AuthTokens.fromJson(response.data);
   }
+
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await _dio.post(
+      '/auth/change-password',
+      data: {
+        'old_password': oldPassword,
+        'new_password': newPassword,
+      },
+    );
+  }
 }

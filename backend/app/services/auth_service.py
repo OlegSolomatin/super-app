@@ -21,6 +21,7 @@ from app.core.security import (
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
+    PasswordChange,
     TokenResponse,
     UserCreate,
     UserRead,
@@ -147,6 +148,33 @@ class AuthService:
             access_token=create_access_token(subject=user_id),
             refresh_token=create_refresh_token(subject=user_id),
         )
+
+    async def change_password(
+        self,
+        data: PasswordChange,
+        current_user: User,
+    ) -> dict:
+        """Change the current user's password.
+
+        Args:
+            data: Old and new password.
+            current_user: The authenticated user.
+
+        Returns:
+            A success message.
+
+        Raises:
+            HTTPException: If old password is incorrect.
+        """
+        if not verify_password(data.old_password, current_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect",
+            )
+
+        current_user.password_hash = get_password_hash(data.new_password)
+        await self.session.flush()
+        return {"message": "Password changed successfully"}
 
     async def get_user_by_id(self, user_id: str) -> UserRead:
         """Get a user by their ID.

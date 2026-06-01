@@ -7,10 +7,13 @@ import 'package:app/core/theme.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/core/theme_provider.dart';
+import 'package:app/features/auth/data/auth_repository.dart';
 import 'package:app/features/home/data/user_repository.dart';
 import 'package:app/models/user.dart';
-import 'package:app/shared/widgets/adaptive_scaffold.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
+
+/// Settings sections available in the sidebar.
+enum SettingsSection { profile }
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -20,13 +23,23 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final _usernameController = TextEditingController();
-  final _bioController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  // Form controllers
+  final _loginController = TextEditingController();
+  final _oldPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _loginFormKey = GlobalKey<FormState>();
+  final _passwordFormKey = GlobalKey<FormState>();
+
+  // State
   bool _isLoading = true;
-  bool _isSaving = false;
+  bool _isSavingLogin = false;
+  bool _isSavingPassword = false;
+  bool _obscureOld = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
   User? _user;
+  SettingsSection _selectedSection = SettingsSection.profile;
 
   @override
   void initState() {
@@ -36,8 +49,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _bioController.dispose();
+    _loginController.dispose();
+    _oldPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -51,311 +66,351 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         setState(() {
           _user = user;
-          _usernameController.text = user.username;
-          _bioController.text = user.bio ?? '';
+          _loginController.text = user.username;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Не удалось загрузить профиль: $e'),
-            backgroundColor: Colors.red.shade800,
-          ),
-        );
+        _showError('Не удалось загрузить профиль: $e');
       }
     }
   }
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _saveLogin() async {
+    if (!_loginFormKey.currentState!.validate()) return;
 
-    setState(() => _isSaving = true);
+    setState(() => _isSavingLogin = true);
     try {
       final storage = SecureStorage();
       final dioClient = DioClient(storage);
       final userRepository = UserRepository(dioClient.dio);
 
       final updated = await userRepository.updateMe(
-        username: _usernameController.text.trim(),
-        bio: _bioController.text.trim().isEmpty
-            ? null
-            : _bioController.text.trim(),
+        username: _loginController.text.trim(),
       );
 
       if (mounted) {
-        setState(() {
-          _user = updated;
-          _usernameController.text = updated.username;
-          _bioController.text = updated.bio ?? '';
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Настройки сохранены'),
-            backgroundColor: Color(0xFF2E7D32),
-          ),
-        );
+        setState(() => _user = updated);
+        _showSuccess('Логин изменён');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка сохранения: $e'),
-            backgroundColor: Colors.red.shade800,
-          ),
-        );
-      }
+      if (mounted) _showError('Ошибка: $e');
     } finally {
+      if (mounted) setState(() => _isSavingLogin = false);
+    }
+  }
+
+  Future<void> _savePassword() async {
+    if (!_passwordFormKey.currentState!.validate()) return;
+
+    setState(() => _isSavingPassword = true);
+    try {
+      final storage = SecureStorage();
+      final dioClient = DioClient(storage);
+      final authRepository = AuthRepository(dioClient.dio);
+
+      await authRepository.changePassword(
+        oldPassword: _oldPasswordController.text,
+        newPassword: _newPasswordController.text,
+      );
+
       if (mounted) {
-        setState(() => _isSaving = false);
+        _oldPasswordController.clear();
+        _newPasswordController.clear();
+        _confirmPasswordController.clear();
+        _showSuccess('Пароль изменён');
       }
+    } catch (e) {
+      if (mounted) _showError('Ошибка: $e');
+    } finally {
+      if (mounted) setState(() => _isSavingPassword = false);
     }
   }
 
-  Future<void> _logout() async {
-    final storage = SecureStorage();
-    await storage.clearTokens();
-    if (mounted) {
-      context.go('/login');
+  void _showSuccess(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: const Color(0xFF2E7D32),
+      ),
+    );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red.shade800,
+      ),
+    );
+  }
+
+  String _formatDate(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return '—';
+    try {
+      final dt = DateTime.parse(isoDate).toLocal();
+      final months = [
+        'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+        'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+      ];
+      return '${dt.day} ${months[dt.month - 1]} ${dt.year}, '
+          '${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return isoDate;
     }
   }
 
-  /// Navigation destinations for the desktop sidebar.
-  List<NavDestination> _buildNavDestinations() {
-    final isAdmin = _user?.roles?.contains('admin') ?? false;
-    final destinations = <NavDestination>[
-      NavDestination(
-        icon: const Icon(PhosphorIconsFill.house, size: 20),
-        label: 'Главная',
-        path: '/',
-        isActive: false,
-      ),
-      NavDestination(
-        icon: const Icon(PhosphorIconsFill.chartLine, size: 20),
-        label: 'Трейдинг',
-        path: '/trading',
-      ),
-      NavDestination(
-        icon: const Icon(PhosphorIconsFill.musicNotes, size: 20),
-        label: 'Музыка',
-        path: '/music',
-      ),
-      NavDestination(
-        icon: const Icon(PhosphorIconsFill.videoCamera, size: 20),
-        label: 'Видео',
-        path: '/video',
-      ),
-    ];
-
-    if (isAdmin) {
-      destinations.insert(
-        1,
-        NavDestination(
-          icon: const Icon(PhosphorIconsFill.robot, size: 20),
-          label: 'Агенты',
-          path: '/admin/agents',
-        ),
-      );
-      destinations.insert(
-        2,
-        NavDestination(
-          icon: const Icon(PhosphorIconsFill.coin, size: 20),
-          label: 'DeepSeek',
-          path: '/admin/deepseek-balance',
-        ),
-      );
-      destinations.insert(
-        3,
-        NavDestination(
-          icon: const Icon(PhosphorIconsFill.brain, size: 20),
-          label: 'Мозг',
-          path: '/admin/brain',
-        ),
-      );
-    }
-
-    return destinations;
-  }
-
-  Widget _buildDrawer(BuildContext context, ThemeProvider themeProvider, bool isDark) {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
     final textColor = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
     final subColor =
         isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
-    final surface =
-        isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
 
-    return Drawer(
-      width: MediaQuery.of(context).size.width,
-      child: Container(
-        color: isDark
-            ? AppTheme.bgColor.withValues(alpha: 0.98)
-            : AppTheme.lightBgColor.withValues(alpha: 0.98),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Profile section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-                decoration: BoxDecoration(
-                  color: surface.withValues(alpha: 0.5),
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : Colors.black.withValues(alpha: 0.06),
-                    ),
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: ResponsiveLayout(
+          builder: (context, screenSize, width) {
+            final isDesktop = screenSize == ScreenSize.desktop;
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Sidebar (desktop) / Drawer (mobile) ──
+                if (isDesktop)
+                  _buildDesktopSidebar(surface, textColor, subColor, isDark)
+                else
+                  _buildMobileDrawer(surface, textColor, subColor, isDark),
+
+                // ── Main content ──
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildHeader(surface, textColor, subColor, isDark),
+                      Expanded(
+                        child: _isLoading
+                            ? const Center(
+                                child: CircularProgressIndicator())
+                            : SingleChildScrollView(
+                                padding: const EdgeInsets.all(24),
+                                child: Center(
+                                  child: Container(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 520),
+                                    child: _buildProfileForm(
+                                        textColor, subColor, isDark),
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Column(
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Desktop sidebar with settings sections.
+  Widget _buildDesktopSidebar(
+      Color surface, Color textColor, Color subColor, bool isDark) {
+    return Container(
+      width: 220,
+      decoration: BoxDecoration(
+        color: surface.withValues(alpha: 0.95),
+        border: Border(
+          right: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.06),
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.accentColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Настройки',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Divider(
+            height: 1,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.06),
+          ),
+          const SizedBox(height: 8),
+          // Settings nav items
+          _SidebarItem(
+            icon: PhosphorIconsFill.user,
+            label: 'Профиль',
+            isSelected: _selectedSection == SettingsSection.profile,
+            isDark: isDark,
+            onTap: () => setState(() => _selectedSection = SettingsSection.profile),
+          ),
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+
+  /// Mobile drawer with settings sections.
+  Widget _buildMobileDrawer(
+      Color surface, Color textColor, Color subColor, bool isDark) {
+    return const SizedBox.shrink();
+  }
+
+  /// Header with title and home button.
+  Widget _buildHeader(
+      Color surface, Color textColor, Color subColor, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: surface.withValues(alpha: 0.5),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.06),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Mobile: hamburger menu button
+          IconButton(
+            icon: Icon(
+              PhosphorIconsFill.list,
+              color: textColor,
+              size: 22,
+            ),
+            tooltip: 'Меню настроек',
+            onPressed: () => _showMobileDrawer(context, isDark, surface, textColor, subColor),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Настройки',
+            style: TextStyle(
+              color: textColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          // Section indicator on mobile
+          Text(
+            _sectionLabel(),
+            style: TextStyle(
+              color: subColor,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 12),
+          IconButton(
+            icon: const Icon(PhosphorIconsFill.house, size: 22),
+            tooltip: 'На главную',
+            onPressed: () => context.go('/'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMobileDrawer(BuildContext context, bool isDark, Color surface,
+      Color textColor, Color subColor) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : Colors.black.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
                   children: [
-                    // Avatar placeholder
                     Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppTheme.accentColor, Color(0xFF9B7CFF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.accentColor,
                         shape: BoxShape.circle,
                       ),
-                      child: Center(
-                        child: Text(
-                          _user?.username != null
-                              ? _user!.username[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(width: 10),
                     Text(
-                      _user?.username ?? 'Пользователь',
+                      'Настройки',
                       style: TextStyle(
                         color: textColor,
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _user?.email ?? '',
-                      style: TextStyle(
-                        color: subColor,
-                        fontSize: 14,
-                      ),
-                    ),
                   ],
                 ),
               ),
-
-              // Menu items
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Divider(
-                        height: 1,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    _DrawerMenuItem(
-                      icon: Icons.person_outline,
-                      title: 'Профиль',
-                      isDark: isDark,
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        context.go('/settings');
-                      },
-                    ),
-                    _DrawerMenuItem(
-                      icon: Icons.info_outline,
-                      title: 'О приложении',
-                      isDark: isDark,
-                      onTap: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 12),
+              Divider(
+                height: 1,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.08),
               ),
-
-              // Bottom pinned: theme toggle
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                decoration: BoxDecoration(
-                  color: surface.withValues(alpha: 0.5),
-                  border: Border(
-                    top: BorderSide(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _logout();
-                        },
-                        icon: const Icon(
-                          Icons.logout,
-                          color: Color(0xFFE53935),
-                          size: 20,
-                        ),
-                        label: const Text(
-                          'Выйти',
-                          style: TextStyle(
-                            color: Color(0xFFE53935),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Тема',
-                      style: TextStyle(
-                        color: subColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _ThemeSegmentedControl(
-                      current: themeProvider.mode,
-                      onChanged: (mode) {
-                        themeProvider.setMode(mode);
-                        Navigator.of(context).pop();
-                      },
-                      isDark: isDark,
-                    ),
-                  ],
-                ),
+              _ModalItem(
+                icon: PhosphorIconsFill.user,
+                label: 'Профиль',
+                isSelected: _selectedSection == SettingsSection.profile,
+                isDark: isDark,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => _selectedSection = SettingsSection.profile);
+                },
               ),
             ],
           ),
@@ -364,155 +419,345 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  String _sectionLabel() {
+    switch (_selectedSection) {
+      case SettingsSection.profile:
+        return 'Профиль';
+    }
+  }
 
-    return AdaptiveScaffold(
-      key: _scaffoldKey,
-      title: 'Настройки',
-      currentPath: '/settings',
-      navDestinations: _buildNavDestinations(),
-      drawer: _buildDrawer(context, themeProvider, isDark),
-      onLogout: _logout,
-      actions: [
-        IconButton(
-          icon: const Icon(PhosphorIconsFill.house, size: 22),
-          tooltip: 'На главную',
-          onPressed: () => context.go('/'),
+  /// Profile form content (right side).
+  Widget _buildProfileForm(Color textColor, Color subColor, bool isDark) {
+    final theme = Theme.of(context);
+    final inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.15)
+            : Colors.black.withValues(alpha: 0.12),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Section: Login ──
+        Text(
+          'Логин',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
         ),
-      ],
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: ResponsiveLayout.horizontalPadding(context)
-                  .copyWith(top: 32, bottom: 32),
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 600),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Avatar
-                        Center(
-                          child: Container(
-                            width: 88,
-                            height: 88,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppTheme.accentColor,
-                                  Color(0xFF9B7CFF)
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                _user?.username != null
-                                    ? _user!.username[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 36,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _user?.email ?? '',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isDark
-                                ? AppTheme.textSecondary
-                                : AppTheme.lightTextSecondary,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Username
-                        TextFormField(
-                          controller: _usernameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Имя пользователя',
-                            prefixIcon: Icon(Icons.person_outline),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Введите имя пользователя';
-                            }
-                            if (value.trim().length < 2) {
-                              return 'Минимум 2 символа';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Bio
-                        TextFormField(
-                          controller: _bioController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            labelText: 'О себе',
-                            prefixIcon: Icon(Icons.info_outline),
-                            alignLabelWithHint: true,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Save button
-                        ElevatedButton(
-                          onPressed: _isSaving ? null : _save,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _isSaving
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'Сохранить',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                        ),
-                      ],
+        const SizedBox(height: 16),
+        Form(
+          key: _loginFormKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _loginController,
+                decoration: InputDecoration(
+                  labelText: 'Имя пользователя',
+                  prefixIcon: const Icon(PhosphorIconsFill.user, size: 20),
+                  border: inputBorder,
+                ),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _saveLogin(),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Введите имя пользователя';
+                  }
+                  if (value.trim().length < 2) {
+                    return 'Минимум 2 символа';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: _isSavingLogin ? null : _saveLogin,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
+                  child: _isSavingLogin
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Сохранить'),
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 36),
+        Divider(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.08),
+        ),
+        const SizedBox(height: 24),
+
+        // ── Section: Password ──
+        Text(
+          'Пароль',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Form(
+          key: _passwordFormKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _oldPasswordController,
+                obscureText: _obscureOld,
+                decoration: InputDecoration(
+                  labelText: 'Текущий пароль',
+                  prefixIcon: const Icon(PhosphorIconsFill.lock, size: 20),
+                  border: inputBorder,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureOld
+                          ? PhosphorIconsFill.eye
+                          : PhosphorIconsFill.eyeSlash,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureOld = !_obscureOld),
+                  ),
+                ),
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Введите текущий пароль';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _newPasswordController,
+                obscureText: _obscureNew,
+                decoration: InputDecoration(
+                  labelText: 'Новый пароль',
+                  prefixIcon: const Icon(PhosphorIconsFill.lockOpen, size: 20),
+                  border: inputBorder,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureNew
+                          ? PhosphorIconsFill.eye
+                          : PhosphorIconsFill.eyeSlash,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureNew = !_obscureNew),
+                  ),
+                ),
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Введите новый пароль';
+                  }
+                  if (value.length < 6) {
+                    return 'Минимум 6 символов';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscureConfirm,
+                decoration: InputDecoration(
+                  labelText: 'Подтвердите новый пароль',
+                  prefixIcon:
+                      const Icon(PhosphorIconsFill.checkCircle, size: 20),
+                  border: inputBorder,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureConfirm
+                          ? PhosphorIconsFill.eye
+                          : PhosphorIconsFill.eyeSlash,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
+                ),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _savePassword(),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Подтвердите новый пароль';
+                  }
+                  if (value != _newPasswordController.text) {
+                    return 'Пароли не совпадают';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: _isSavingPassword ? null : _savePassword,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _isSavingPassword
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Изменить пароль'),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 36),
+        Divider(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.08),
+        ),
+        const SizedBox(height: 24),
+
+        // ── Section: Account info (read-only) ──
+        Text(
+          'Информация об аккаунте',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _InfoRow(label: 'Email', value: _user?.email ?? '—'),
+        const SizedBox(height: 12),
+        _InfoRow(
+          label: 'Дата регистрации',
+          value: _formatDate(_user?.createdAt),
+        ),
+      ],
     );
   }
 }
 
-/// Menu item for the mobile drawer.
-class _DrawerMenuItem extends StatelessWidget {
+/// A sidebar menu item for settings sections.
+class _SidebarItem extends StatelessWidget {
   final IconData icon;
-  final String title;
+  final String label;
+  final bool isSelected;
   final bool isDark;
   final VoidCallback onTap;
 
-  const _DrawerMenuItem({
+  const _SidebarItem({
     required this.icon,
-    required this.title,
+    required this.label,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppTheme.accentColor.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected
+                      ? AppTheme.accentColor
+                      : (isDark
+                          ? AppTheme.textPrimary.withValues(alpha: 0.7)
+                          : AppTheme.lightTextPrimary.withValues(alpha: 0.7)),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected
+                        ? AppTheme.accentColor
+                        : (isDark
+                            ? AppTheme.textPrimary
+                            : AppTheme.lightTextPrimary),
+                    fontSize: 15,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+                if (isSelected) ...[
+                  const Spacer(),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.accentColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Modal bottom sheet item for mobile.
+class _ModalItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _ModalItem({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
     required this.isDark,
     required this.onTap,
   });
@@ -522,121 +767,73 @@ class _DrawerMenuItem extends StatelessWidget {
     return ListTile(
       leading: Icon(
         icon,
-        color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
         size: 22,
+        color: isSelected
+            ? AppTheme.accentColor
+            : (isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary),
       ),
       title: Text(
-        title,
+        label,
         style: TextStyle(
-          color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
-          fontSize: 16,
+          color: isSelected
+              ? AppTheme.accentColor
+              : (isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary),
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
         ),
       ),
+      trailing: isSelected
+          ? Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: AppTheme.accentColor,
+                shape: BoxShape.circle,
+              ),
+            )
+          : null,
       onTap: onTap,
     );
   }
 }
 
-/// Theme mode segmented control for the drawer.
-class _ThemeSegmentedControl extends StatelessWidget {
-  final ThemeModePreference current;
-  final ValueChanged<ThemeModePreference> onChanged;
-  final bool isDark;
-
-  const _ThemeSegmentedControl({
-    required this.current,
-    required this.onChanged,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _ThemeToggleButton(
-          icon: Icons.dark_mode,
-          label: 'Тёмная',
-          selected: current == ThemeModePreference.dark,
-          isDark: isDark,
-          onTap: () => onChanged(ThemeModePreference.dark),
-        ),
-        const SizedBox(width: 8),
-        _ThemeToggleButton(
-          icon: Icons.phone_android,
-          label: 'Системная',
-          selected: current == ThemeModePreference.system,
-          isDark: isDark,
-          onTap: () => onChanged(ThemeModePreference.system),
-        ),
-        const SizedBox(width: 8),
-        _ThemeToggleButton(
-          icon: Icons.light_mode,
-          label: 'Светлая',
-          selected: current == ThemeModePreference.light,
-          isDark: isDark,
-          onTap: () => onChanged(ThemeModePreference.light),
-        ),
-      ],
-    );
-  }
-}
-
-class _ThemeToggleButton extends StatelessWidget {
-  final IconData icon;
+/// Read-only info row (email, registration date).
+class _InfoRow extends StatelessWidget {
   final String label;
-  final bool selected;
-  final bool isDark;
-  final VoidCallback onTap;
+  final String value;
 
-  const _ThemeToggleButton({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.isDark,
-    required this.onTap,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isDark
-        ? (selected ? AppTheme.accentColor.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.06))
-        : (selected ? AppTheme.accentColor.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.05));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(8),
-            border: selected
-                ? Border.all(color: AppTheme.accentColor, width: 1)
-                : null,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary,
+              fontSize: 14,
+            ),
           ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: selected
-                    ? AppTheme.accentColor
-                    : (isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: selected
-                      ? AppTheme.accentColor
-                      : (isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary),
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ],
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

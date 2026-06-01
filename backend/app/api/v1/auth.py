@@ -12,10 +12,13 @@ from fastapi import APIRouter, Depends
 
 from app.schemas.auth import (
     LoginRequest,
+    PasswordChange,
     TokenResponse,
     UserCreate,
 )
 from app.services.auth_service import AuthService
+from app.core.dependencies import get_current_user
+from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -64,3 +67,19 @@ async def refresh(
 ) -> TokenResponse:
     """Issue new tokens using a valid refresh token."""
     return await service.refresh_token(refresh_token)
+
+
+@router.post(
+    "/change-password",
+    summary="Change current user password",
+)
+async def change_password(
+    data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    service: AuthService = Depends(),
+) -> dict:
+    """Change the password for the currently authenticated user.
+
+    Requires the current password for verification.
+    """
+    return await service.change_password(data, current_user)

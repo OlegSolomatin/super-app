@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `feat` Страница /settings: сайдбар с пунктом «Профиль», смена логина/пароля (с подтверждением), email и дата регистрации (read-only), бэкенд POST /auth/change-password | Hermes
 - `feat` Страница /settings: сайдбар + хедер с кнопкой на главную | Hermes
 - `feat` Страница /settings (профиль, username/bio) + пункт «Настройки» в сайдбаре и бургер-меню | Hermes
 - `feat` Login: Enter на поле пароля отправляет форму, Enter на username → переход на поле пароля | Hermes

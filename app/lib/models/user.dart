@@ -13,6 +13,9 @@ class User {
 
   final String? bio;
 
+  @JsonKey(name: 'created_at')
+  final String? createdAt;
+
   @JsonKey(name: 'roles', fromJson: _parseRoles, toJson: _rolesToJson)
   final List<String>? roles;
 
@@ -22,6 +25,7 @@ class User {
     required this.username,
     this.avatarUrl,
     this.bio,
+    this.createdAt,
     this.roles,
   });
 
