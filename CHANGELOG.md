@@ -9,6 +9,10 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `docs` Создан README.md (полное руководство по запуску). Обновлён ATOM.md (актуальные порты, структура, команды). | Hermes
+- `feat` Кнопка выхода закреплена вне скролла сайдбара (тема + выход внизу, всегда видны). | Hermes
+- `feat` Кнопка выхода в сайдбаре десктопа (внизу) + низ бургер-меню мобилы. Clean build v27 для сброса SW кэша. | Hermes
+- `feat` Кнопка выхода: сайдбар десктопа + низ бургер-меню. onLogout в AdaptiveScaffold. | Hermes
 - `feat` Fix agents page scrolling + keyboard shortcuts (Esc, Ctrl+1/2/3/L) | Hermes
 - `feat` Guest view for unauthenticated users + auth PopupMenuButton | Hermes
 - `feat` Auto redirect HTTP→HTTPS via X-Forwarded-Proto header — pfumiko.ru всегда форсирует HTTPS | Hermes
