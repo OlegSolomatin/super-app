@@ -313,6 +313,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         ),
       ),
       body: ConstrainedContent(
+        maxWidth: 720,
         child: Column(
         children: [
           _buildProgressBar(theme, isDark),
@@ -1306,15 +1307,15 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           'Выберите временной интервал свечей для анализа',
           style: theme.textTheme.bodyMedium,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.6,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 2.6,
           ),
           itemCount: timeframes.length,
           itemBuilder: (context, index) {
@@ -1327,11 +1328,12 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                   color: isSelected
                       ? AppTheme.accentColor
                       : theme.cardTheme.color,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isSelected
                         ? AppTheme.accentColor
                         : Colors.transparent,
+                    width: 1.5,
                   ),
                 ),
                 child: Center(
@@ -1343,7 +1345,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                           : theme.textTheme.bodyLarge?.color,
                       fontWeight:
                           isSelected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 16,
+                      fontSize: 14,
                     ),
                   ),
                 ),

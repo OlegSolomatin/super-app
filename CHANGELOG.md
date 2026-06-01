@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `fix` wizard: сузил до 720px; таймфрейм плитки компактнее (aspect 2.6, spacing 8, font 14) | Hermes
 - `fix` починил layout пары — Expanded внутри SingleChildScrollView, build +35 | Hermes
 - `fix` SL/TP поля в API схеме + мастере трейдинга + БД; очищены старые error-runs | Hermes
 - `feat` Настройки API: добавление/удаление Telegram ботов; трейдинг: уведомления о сделках с выбором бота; бэкенд: POST /auth/change-password + TelegramBot CRUD + уведомления в engine | Hermes
