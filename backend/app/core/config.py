@@ -38,5 +38,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
     DEBUG: bool = True
 
+    # --- API Keys ---
+    DEEPSEEK_API_KEY: str = ""
+
 
 settings = Settings()

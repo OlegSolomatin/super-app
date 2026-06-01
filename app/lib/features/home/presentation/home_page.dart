@@ -83,15 +83,16 @@ class _HomePageState extends State<HomePage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AdaptiveScaffold(
-      key: _scaffoldKey,
-      title: 'Super App',
-      currentPath: '/',
-      navDestinations: _buildNavDestinations(),
-      drawer: _buildDrawer(context, themeProvider, isDark),
-      actions: _user == null && !_isLoading
-          ? [_buildAuthActions(context)]
-          : null,
-      body: Stack(
+        key: _scaffoldKey,
+        title: 'Super App',
+        currentPath: '/',
+        navDestinations: _buildNavDestinations(),
+        drawer: _buildDrawer(context, themeProvider, isDark),
+        onLogout: _logout,
+        actions: _user == null && !_isLoading
+            ? [_buildAuthActions(context)]
+            : null,
+        body: Stack(
         children: [
           _buildBackgroundPattern(isDark),
           _isLoading
@@ -413,17 +414,6 @@ class _HomePageState extends State<HomePage> {
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    // Logout — first, red
-                    _DrawerMenuItem(
-                      icon: Icons.logout,
-                      title: 'Выйти',
-                      color: const Color(0xFFE53935),
-                      isDark: isDark,
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        _logout();
-                      },
-                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Divider(
@@ -470,6 +460,39 @@ class _HomePageState extends State<HomePage> {
                 ),
                 child: Column(
                   children: [
+                    // Logout button
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _logout();
+                        },
+                        icon: const Icon(
+                          Icons.logout,
+                          color: Color(0xFFE53935),
+                          size: 20,
+                        ),
+                        label: const Text(
+                          'Выйти',
+                          style: TextStyle(
+                            color: Color(0xFFE53935),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       'Тема',
                       style: TextStyle(

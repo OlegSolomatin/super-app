@@ -31,6 +31,7 @@ class AdaptiveScaffold extends StatelessWidget {
   final List<NavDestination>? navDestinations;
   final String? currentPath;
   final Widget? profileHeader; // custom profile widget for desktop sidebar
+  final VoidCallback? onLogout; // logout action for desktop sidebar
 
   const AdaptiveScaffold({
     super.key,
@@ -42,6 +43,7 @@ class AdaptiveScaffold extends StatelessWidget {
     this.navDestinations,
     this.currentPath,
     this.profileHeader,
+    this.onLogout,
   });
 
   @override
@@ -151,33 +153,43 @@ class AdaptiveScaffold extends StatelessWidget {
                     padding: EdgeInsets.symmetric(
                       horizontal: screenSize == ScreenSize.tablet ? 4 : 12,
                     ),
-                    itemCount: nav.length + 2, // + обводка и настройки
+                    itemCount: nav.length,
                     itemBuilder: (context, index) {
-                      if (index < nav.length) {
-                        final dest = nav[index];
-                        final active = dest.path == currentPath;
-                        return _NavItem(
-                          icon: dest.icon,
-                          label: dest.label,
-                          isActive: active,
-                          isCompact: screenSize == ScreenSize.tablet,
-                          onTap: () {
-                            if (dest.path != currentPath) {
-                              context.go(dest.path);
-                            }
-                          },
-                        );
-                      }
-                      if (index == nav.length) {
-                        // spacer
-                        return const SizedBox.shrink();
-                      }
-                      // Settings / theme
-                      return Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: screenSize == ScreenSize.tablet ? 0 : 8,
-                          vertical: 4,
-                        ),
+                      final dest = nav[index];
+                      final active = dest.path == currentPath;
+                      return _NavItem(
+                        icon: dest.icon,
+                        label: dest.label,
+                        isActive: active,
+                        isCompact: screenSize == ScreenSize.tablet,
+                        onTap: () {
+                          if (dest.path != currentPath) {
+                            context.go(dest.path);
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+                // Bottom pinned row: divider + theme + logout
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenSize == ScreenSize.tablet ? 0 : 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      // Theme toggle
+                      Expanded(
                         child: _NavItem(
                           icon: const Icon(
                             PhosphorIconsFill.sun,
@@ -188,8 +200,30 @@ class AdaptiveScaffold extends StatelessWidget {
                           isCompact: screenSize == ScreenSize.tablet,
                           onTap: () => _showThemeSheet(context),
                         ),
-                      );
-                    },
+                      ),
+                      // Divider vertical
+                      if (screenSize != ScreenSize.tablet)
+                        Container(
+                          width: 1,
+                          height: 24,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.black.withValues(alpha: 0.12),
+                        ),
+                      // Logout
+                      Expanded(
+                        child: _NavItem(
+                          icon: const Icon(
+                            PhosphorIconsFill.signOut,
+                            size: 20,
+                          ),
+                          label: 'Выйти',
+                          isActive: false,
+                          isCompact: screenSize == ScreenSize.tablet,
+                          onTap: () => onLogout?.call(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

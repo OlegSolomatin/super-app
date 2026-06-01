@@ -25,6 +25,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.dependencies import require_admin
 from app.models.notification import Notification
@@ -280,7 +281,7 @@ async def get_deepseek_balance(
     if DEEPSEEK_BALANCE_CACHE["data"] and now - DEEPSEEK_BALANCE_CACHE["updated"] < 60:
         return DEEPSEEK_BALANCE_CACHE["data"]
 
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    api_key = settings.DEEPSEEK_API_KEY
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
