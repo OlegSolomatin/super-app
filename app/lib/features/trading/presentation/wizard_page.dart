@@ -763,60 +763,26 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           onChanged: (_) => _loadPairs(refresh: true),
         ),
         const SizedBox(height: 16),
-        Expanded(
-          child: _loadingPairs && _pairs.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : _pairs.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Пары не найдены',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    )
-                  : NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification is ScrollEndNotification &&
-                            notification.metrics.pixels >=
-                                notification.metrics.maxScrollExtent - 100 &&
-                            _hasMorePairs &&
-                            !_loadingPairs) {
-                          _pairPage++;
-                          _loadPairs();
-                        }
-                        return false;
-                      },
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _pairs.length +
-                            (_hasMorePairs ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == _pairs.length) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2),
-                                ),
-                              ),
-                            );
-                          }
-                          final pair = _pairs[index];
-                          final isSelected =
-                              _selectedPair?.symbol == pair.symbol;
-                          return _PairTile(
-                            pair: pair,
-                            isSelected: isSelected,
-                            onTap: () =>
-                                setState(() => _selectedPair = pair),
-                          );
-                        },
-                      ),
-                    ),
-        ),
+        if (_loadingPairs && _pairs.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_pairs.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: Text('Пары не найдены')),
+          )
+        else
+          ...List.generate(_pairs.length, (index) {
+            final pair = _pairs[index];
+            final isSelected = _selectedPair?.symbol == pair.symbol;
+            return _PairTile(
+              pair: pair,
+              isSelected: isSelected,
+              onTap: () => setState(() => _selectedPair = pair),
+            );
+          }),
       ],
     );
   }
