@@ -403,6 +403,20 @@ class _TradingPageState extends State<TradingPage>
                 ),
               ],
             ),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                _coinIconSmall(run.coinIconUrl, run.baseCoin, isDark),
+                const SizedBox(width: 6),
+                Text(
+                  run.pairDisplay,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 13,
+                    color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -458,10 +472,24 @@ class _TradingPageState extends State<TradingPage>
                             ? const Color(0xFFF59E0B)
                             : const Color(0xFF4CAF50),
                   ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Row(
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    _coinIconSmall(run.coinIconUrl, run.baseCoin, isDark),
+                    const SizedBox(width: 6),
+                    Text(
+                      run.pairDisplay,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 13,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
                 children: [
                   Text(
                     '${run.progressPercent!.toStringAsFixed(1)}%',
@@ -530,6 +558,48 @@ class _TradingPageState extends State<TradingPage>
           style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
         ),
       ],
+    );
+  }
+
+  Widget _coinIconSmall(String? iconUrl, String baseCoin, bool isDark) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        width: 20,
+        height: 20,
+        child: iconUrl != null
+            ? Image.network(
+                iconUrl,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => _coinLetterBox(baseCoin, isDark),
+                loadingBuilder: (_, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return _coinLetterBox(baseCoin, isDark);
+                },
+              )
+            : _coinLetterBox(baseCoin, isDark),
+      ),
+    );
+  }
+
+  Widget _coinLetterBox(String baseCoin, bool isDark) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Center(
+        child: Text(
+          baseCoin.isNotEmpty ? baseCoin.substring(0, 1).toUpperCase() : '?',
+          style: const TextStyle(
+            color: Colors.white70,
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+          ),
+        ),
+      ),
     );
   }
 
@@ -684,6 +754,20 @@ class _TradingPageState extends State<TradingPage>
                             : const Color(0xFFE53935),
                       ),
                     ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  _coinIconSmall(run.coinIconUrl, run.baseCoin, isDark),
+                  const SizedBox(width: 6),
+                  Text(
+                    run.pairDisplay,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 13,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),

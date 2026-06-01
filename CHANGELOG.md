@@ -9,6 +9,8 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `feat` иконки пар на карточках запусков + модель TradingRun: pairDisplay/baseCoin/coinIconUrl | Hermes
+- `feat` шаг периода: пресеты 1н/2н/1м/3м/6м/1г + раздельные пикеры начала и конца | Hermes
 - `fix` wizard: сузил до 720px; таймфрейм плитки компактнее (aspect 2.6, spacing 8, font 14) | Hermes
 - `fix` починил layout пары — Expanded внутри SingleChildScrollView, build +35 | Hermes
 - `fix` SL/TP поля в API схеме + мастере трейдинга + БД; очищены старые error-runs | Hermes

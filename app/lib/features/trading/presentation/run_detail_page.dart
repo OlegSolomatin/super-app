@@ -233,7 +233,52 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
               style: theme.textTheme.titleLarge?.copyWith(fontSize: 16),
             ),
             const SizedBox(height: 12),
-            ...config.entries.map((entry) => Padding(
+            // Pair row with icon
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: Text(
+                      'Пара',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: _run!.coinIconUrl != null
+                          ? Image.network(
+                              _run!.coinIconUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => _coinLetterBox(_run!.baseCoin, isDark),
+                              loadingBuilder: (_, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return _coinLetterBox(_run!.baseCoin, isDark);
+                              },
+                            )
+                          : _coinLetterBox(_run!.baseCoin, isDark),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _run!.pairDisplay,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...config.entries
+                .where((e) => e.key != 'pair' && e.key != 'strategy')
+                .map((entry) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,6 +462,27 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
           color: Colors.grey,
         );
     }
+  }
+
+  Widget _coinLetterBox(String baseCoin, bool isDark) {
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Center(
+        child: Text(
+          baseCoin.isNotEmpty ? baseCoin.substring(0, 1).toUpperCase() : '?',
+          style: const TextStyle(
+            color: Colors.white70,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -93,6 +93,43 @@ class TradingRun {
     return '${hours}ч ${minutes}м';
   }
 
+  /// Human-readable pair name from config
+  String get pairDisplay => (config['pair'] as String?) ?? '—';
+
+  /// Base coin extracted from pair symbol (e.g. BTC from BTCUSDT)
+  String get baseCoin {
+    final pair = config['pair'] as String? ?? '';
+    return pair.replaceAll('USDT', '').replaceAll('BUSD', '');
+  }
+
+  /// Icon URL for the pair
+  String? get coinIconUrl {
+    final base = baseCoin.toLowerCase();
+    const iconMap = {
+      'btc': 'bitcoin-btc', 'eth': 'ethereum-eth', 'bnb': 'binance-coin-bnb',
+      'sol': 'solana-sol', 'xrp': 'xrp-xrp', 'ada': 'cardano-ada',
+      'doge': 'dogecoin-doge', 'avax': 'avalanche-avax', 'dot': 'polkadot-dot',
+      'matic': 'polygon-matic', 'ltc': 'litecoin-ltc', 'link': 'chainlink-link',
+      'uni': 'uniswap-uni', 'atom': 'cosmos-atom', 'etc': 'ethereum-classic-etc',
+      'fil': 'filecoin-fil', 'trx': 'tron-trx', 'xlm': 'stellar-xlm',
+      'vet': 'vechain-vet', 'algo': 'algorand-algo', 'near': 'near-protocol-near',
+      'ftm': 'fantom-ftm', 'sand': 'the-sandbox-sand', 'mana': 'decentraland-mana',
+      'axs': 'axie-infinity-axs', 'ape': 'apecoin-ape', 'shib': 'shiba-inu-shib',
+      'cro': 'crypto-com-cro', 'eos': 'eos-eos', 'icx': 'icon-icx',
+      'zec': 'zcash-zec', 'xmr': 'monero-xmr', 'dash': 'dash-dash',
+      'zil': 'zilliqa-zil', 'ksm': 'kusama-ksm', 'comp': 'compound-comp',
+      'yfi': 'yearn-finance-yfi', 'aave': 'aave-aave', 'mkr': 'maker-mkr',
+      'bat': 'basic-attention-token-bat', 'enj': 'enjin-coin-enj',
+      'chz': 'chiliz-chz', 'one': 'harmony-one', 'ankr': 'ankr-ankr',
+      'iost': 'iost-iost', 'waves': 'waves-waves', 'ont': 'ontology-ont',
+      'iota': 'miota-iota', 'nano': 'nano-nano', 'lsk': 'lisk-lsk',
+    };
+    final name = iconMap[base];
+    return name != null
+        ? 'https://cryptologos.cc/logos/$name-logo.png?v=040'
+        : null;
+  }
+
   String get statusLabel {
     switch (status) {
       case 'running':
