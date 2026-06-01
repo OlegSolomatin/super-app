@@ -62,6 +62,9 @@ class TradingConfig(BaseModel):
     exchange: Optional[str] = Field(
         default=None, description="Exchange name for real mode"
     )
+    notification_bot_id: Optional[str] = Field(
+        default=None, description="Telegram bot ID for notifications"
+    )
 
 
 # ---------- responses ----------
@@ -138,6 +141,7 @@ class TradingRunResponse(BaseModel):
                     "period_end": cfg.period_end,
                     "duration_days": cfg.duration_days,
                     "exchange": cfg.exchange,
+                    "notification_bot_id": str(cfg.notification_bot_id) if cfg.notification_bot_id is not None else None,
                 }
         # Include result data
         res = getattr(data, "result", None)

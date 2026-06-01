@@ -59,6 +59,7 @@ class Trade:
     exit_time: Optional[datetime] = None
     quantity: float = 0.0
     pnl: float = 0.0
+    exit_reason: Optional[str] = None
 
 
 @dataclass
@@ -93,6 +94,9 @@ class TradingConfig:
     exchange: Optional[str] = None
     stop_loss_percent: float = 2.0
     take_profit_percent: float = 5.0
+    notification_bot_id: Optional[str] = None
+    notification_bot_token: Optional[str] = None
+    notification_chat_id: Optional[str] = None
 
 
 @dataclass

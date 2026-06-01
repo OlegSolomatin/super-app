@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `feat` Настройки API: добавление/удаление Telegram ботов; трейдинг: уведомления о сделках с выбором бота; бэкенд: POST /auth/change-password + TelegramBot CRUD + уведомления в engine | Hermes
 - `feat` Страница /settings: сайдбар с пунктом «Профиль», смена логина/пароля (с подтверждением), email и дата регистрации (read-only), бэкенд POST /auth/change-password | Hermes
 - `feat` Страница /settings: сайдбар + хедер с кнопкой на главную | Hermes
 - `feat` Страница /settings (профиль, username/bio) + пункт «Настройки» в сайдбаре и бургер-меню | Hermes

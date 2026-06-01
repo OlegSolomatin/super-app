@@ -98,12 +98,21 @@ class TradingConfig(Base):
     period_end = Column(DateTime(timezone=True), nullable=True)
     duration_days = Column(Integer, nullable=True)
     exchange = Column(String(50), nullable=True)
+    notification_bot_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("telegram_bots.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
     run = relationship("TradingRun", back_populates="config")
+    notification_bot = relationship(
+        "TelegramBot", foreign_keys=[notification_bot_id]
+    )
 
     def __repr__(self) -> str:
         return (

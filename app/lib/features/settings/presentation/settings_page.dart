@@ -11,9 +11,10 @@ import 'package:app/features/auth/data/auth_repository.dart';
 import 'package:app/features/home/data/user_repository.dart';
 import 'package:app/models/user.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/features/settings/data/settings_repository.dart';
 
 /// Settings sections available in the sidebar.
-enum SettingsSection { profile }
+enum SettingsSection { profile, api }
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -41,6 +42,15 @@ class _SettingsPageState extends State<SettingsPage> {
   User? _user;
   SettingsSection _selectedSection = SettingsSection.profile;
 
+  // Bot management
+  List<TelegramBotData> _bots = [];
+  bool _isLoadingBots = false;
+  final _botNameCtrl = TextEditingController();
+  final _botTokenCtrl = TextEditingController();
+  final _botChatIdCtrl = TextEditingController();
+  final _botFormKey = GlobalKey<FormState>();
+  bool _obscureBotToken = true;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +63,9 @@ class _SettingsPageState extends State<SettingsPage> {
     _oldPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _botNameCtrl.dispose();
+    _botTokenCtrl.dispose();
+    _botChatIdCtrl.dispose();
     super.dispose();
   }
 
@@ -129,6 +142,70 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _loadBots() async {
+    if (_isLoadingBots) return;
+    setState(() => _isLoadingBots = true);
+    try {
+      final storage = SecureStorage();
+      final dioClient = DioClient(storage);
+      final repository = SettingsRepository(dioClient.dio);
+      final bots = await repository.getBots();
+      if (mounted) {
+        setState(() {
+          _bots = bots;
+          _isLoadingBots = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingBots = false);
+        _showError('Не удалось загрузить ботов: $e');
+      }
+    }
+  }
+
+  Future<void> _addBot() async {
+    if (!_botFormKey.currentState!.validate()) return;
+
+    setState(() => _isLoadingBots = true);
+    try {
+      final storage = SecureStorage();
+      final dioClient = DioClient(storage);
+      final repository = SettingsRepository(dioClient.dio);
+
+      await repository.createBot(
+        name: _botNameCtrl.text.trim(),
+        botToken: _botTokenCtrl.text.trim(),
+        chatId: _botChatIdCtrl.text.trim(),
+      );
+
+      _botNameCtrl.clear();
+      _botTokenCtrl.clear();
+      _botChatIdCtrl.clear();
+      await _loadBots();
+      if (mounted) _showSuccess('Бот добавлен');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingBots = false);
+        _showError('Ошибка: $e');
+      }
+    }
+  }
+
+  Future<void> _deleteBot(String id) async {
+    try {
+      final storage = SecureStorage();
+      final dioClient = DioClient(storage);
+      final repository = SettingsRepository(dioClient.dio);
+
+      await repository.deleteBot(id);
+      await _loadBots();
+      if (mounted) _showSuccess('Бот удалён');
+    } catch (e) {
+      if (mounted) _showError('Ошибка: $e');
+    }
+  }
+
   void _showSuccess(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -202,8 +279,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                   child: Container(
                                     constraints:
                                         const BoxConstraints(maxWidth: 520),
-                                    child: _buildProfileForm(
-                                        textColor, subColor, isDark),
+                                    child: _selectedSection == SettingsSection.api
+                                        ? _buildApiForm(textColor, subColor, isDark)
+                                        : _buildProfileForm(
+                                            textColor, subColor, isDark),
                                   ),
                                 ),
                               ),
@@ -277,6 +356,16 @@ class _SettingsPageState extends State<SettingsPage> {
             isSelected: _selectedSection == SettingsSection.profile,
             isDark: isDark,
             onTap: () => setState(() => _selectedSection = SettingsSection.profile),
+          ),
+          _SidebarItem(
+            icon: PhosphorIconsFill.robot,
+            label: 'API',
+            isSelected: _selectedSection == SettingsSection.api,
+            isDark: isDark,
+            onTap: () {
+              setState(() => _selectedSection = SettingsSection.api);
+              _loadBots();
+            },
           ),
           const Spacer(),
         ],
@@ -412,6 +501,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   setState(() => _selectedSection = SettingsSection.profile);
                 },
               ),
+              _ModalItem(
+                icon: PhosphorIconsFill.robot,
+                label: 'API',
+                isSelected: _selectedSection == SettingsSection.api,
+                isDark: isDark,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => _selectedSection = SettingsSection.api);
+                  _loadBots();
+                },
+              ),
             ],
           ),
         ),
@@ -423,7 +523,239 @@ class _SettingsPageState extends State<SettingsPage> {
     switch (_selectedSection) {
       case SettingsSection.profile:
         return 'Профиль';
+      case SettingsSection.api:
+        return 'API';
     }
+  }
+
+  /// API / Telegram bots form content (right side).
+  Widget _buildApiForm(Color textColor, Color subColor, bool isDark) {
+    final theme = Theme.of(context);
+    final inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.15)
+            : Colors.black.withValues(alpha: 0.12),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Section: Telegram боты ──
+        Text(
+          'Telegram боты',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Bot list
+        if (_isLoadingBots && _bots.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_bots.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                'Нет добавленных ботов',
+                style: TextStyle(color: subColor),
+              ),
+            ),
+          )
+        else
+          ...List.generate(_bots.length, (index) {
+            final bot = _bots[index];
+            final maskedToken = bot.botToken.length > 5
+                ? '${bot.botToken.substring(0, 5)}...'
+                : '${bot.botToken}...';
+            return Padding(
+              padding: EdgeInsets.only(bottom: index < _bots.length - 1 ? 12 : 0),
+              child: Card(
+                elevation: 0,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.03),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      const Text('🤖', style: TextStyle(fontSize: 24)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              bot.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Токен: $maskedToken',
+                              style: TextStyle(
+                                color: subColor,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Chat ID: ${bot.chatId}',
+                              style: TextStyle(
+                                color: subColor,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          PhosphorIconsFill.trash,
+                          color: Colors.red.shade400,
+                          size: 20,
+                        ),
+                        tooltip: 'Удалить бота',
+                        onPressed: () => _deleteBot(bot.id),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 24),
+
+        // ── Add bot form ──
+        Text(
+          'Добавить бота',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Form(
+          key: _botFormKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _botNameCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Имя бота',
+                  prefixIcon: const Icon(PhosphorIconsFill.tag, size: 20),
+                  border: inputBorder,
+                ),
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Введите имя бота';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _botTokenCtrl,
+                obscureText: _obscureBotToken,
+                decoration: InputDecoration(
+                  labelText: 'Токен бота',
+                  prefixIcon: const Icon(PhosphorIconsFill.key, size: 20),
+                  border: inputBorder,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureBotToken
+                          ? PhosphorIconsFill.eye
+                          : PhosphorIconsFill.eyeSlash,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureBotToken = !_obscureBotToken),
+                  ),
+                ),
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Введите токен бота';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _botChatIdCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Chat ID',
+                  prefixIcon: const Icon(PhosphorIconsFill.chat, size: 20),
+                  border: inputBorder,
+                ),
+                textInputAction: TextInputAction.done,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Введите Chat ID';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: _isLoadingBots ? null : _addBot,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _isLoadingBots
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Добавить бота'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   /// Profile form content (right side).

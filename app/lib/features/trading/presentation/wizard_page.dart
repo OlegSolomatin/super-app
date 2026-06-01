@@ -7,6 +7,9 @@ import 'package:app/features/trading/data/models/strategy_info.dart';
 import 'package:app/features/trading/data/models/exchange_info.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/core/secure_storage.dart';
+import 'package:app/core/dio_client.dart';
+import 'package:app/features/settings/data/settings_repository.dart';
 
 enum RunMode { historical, virtual, real }
 
@@ -58,6 +61,12 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   // Step 8
   DateTimeRange? _dateRange;
   int? _duration;
+
+  // Notification
+  bool _notifyTrades = false;
+  String? _notificationBotId;
+  List<TelegramBotData> _bots = [];
+  bool _loadingBots = false;
 
   @override
   void initState() {
@@ -124,6 +133,25 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     }
   }
 
+  Future<void> _loadBots() async {
+    if (_loadingBots) return;
+    setState(() => _loadingBots = true);
+    try {
+      final storage = SecureStorage();
+      final dioClient = DioClient(storage);
+      final repository = SettingsRepository(dioClient.dio);
+      final bots = await repository.getBots();
+      if (mounted) {
+        setState(() {
+          _bots = bots;
+          _loadingBots = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingBots = false);
+    }
+  }
+
   void _onStepTapped(int step) {
     if (step <= _currentStep + 1 &&
         (_runMode != null || step == 0) &&
@@ -148,6 +176,9 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       }
       if (_currentStep == 1 && _runMode == RunMode.real && _exchanges.isEmpty) {
         _loadExchanges();
+      }
+      if (_currentStep == 7) {
+        _loadBots();
       }
       setState(() => _currentStep++);
     }
@@ -220,6 +251,9 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       }
       if (_runMode == RunMode.virtual && _duration != null) {
         config['duration_days'] = _duration;
+      }
+      if (_notifyTrades && _notificationBotId != null) {
+        config['notification_bot_id'] = _notificationBotId;
       }
 
       await widget.repository.createRun(config);
@@ -1486,6 +1520,78 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             'Длительность',
             '$_duration дн.',
           ),
+        const SizedBox(height: 24),
+
+        // ── Notification settings ──
+        Text(
+          'Уведомления',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : null,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Уведомления о сделках'),
+          subtitle: Text(
+            'Получать уведомления о каждой сделке в Telegram',
+            style: theme.textTheme.bodySmall,
+          ),
+          value: _notifyTrades,
+          activeColor: AppTheme.accentColor,
+          onChanged: (v) {
+            setState(() => _notifyTrades = v);
+            if (v && _bots.isEmpty) {
+              _loadBots();
+            }
+          },
+        ),
+        if (_notifyTrades) ...[
+          const SizedBox(height: 8),
+          if (_loadingBots)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_bots.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Нет доступных Telegram ботов. Добавьте бота в настройках.',
+                style: TextStyle(
+                  color: Colors.orange.shade300,
+                  fontSize: 13,
+                ),
+              ),
+            )
+          else
+            DropdownButtonFormField<String>(
+              value: _notificationBotId,
+              decoration: InputDecoration(
+                labelText: 'Telegram бот',
+                prefixIcon: const Icon(PhosphorIconsFill.robot, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.15)
+                        : Colors.black.withValues(alpha: 0.12),
+                  ),
+                ),
+              ),
+              items: _bots.map((bot) {
+                return DropdownMenuItem(
+                  value: bot.id,
+                  child: Text(bot.name),
+                );
+              }).toList(),
+              onChanged: (v) => setState(() => _notificationBotId = v),
+              validator: (_notifyTrades && _notificationBotId == null)
+                  ? (v) => 'Выберите бота'
+                  : null,
+            ),
+        ],
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,

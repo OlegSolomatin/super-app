@@ -28,6 +28,7 @@ from app.services.trading.strategies import (
     HammerStrategy,
     InverseHammerStrategy,
 )
+from app.services.notification_service import send_telegram_notification
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,44 @@ class TradingEngine:
     def __init__(self, config: TradingConfig) -> None:
         self.config = config
         self.run = TradingRun(config=config)
+
+    async def _notify_trade_closed(self, trade: Trade, exit_reason: str) -> None:
+        """Fire-and-forget Telegram notification for a closed trade.
+
+        Only sends if the config has bot_token and chat_id resolved.
+        """
+        token = self.config.notification_bot_token
+        chat_id = self.config.notification_chat_id
+        if not token or not chat_id:
+            return
+
+        # Compute pnl percent
+        pnl_pct = (
+            (trade.pnl / (trade.entry_price * trade.quantity)) * 100
+            if trade.entry_price and trade.quantity > 0
+            else 0.0
+        )
+        pnl_sign = "+" if trade.pnl >= 0 else ""
+        status_emoji = "✅" if trade.pnl >= 0 else "❌"
+        reason_map = {
+            "stop_loss": "🛑 стоп-лосс",
+            "take_profit": "🎯 тейк-профит",
+            "signal": "📈 сигнал стратегии",
+        }
+        reason_label = reason_map.get(exit_reason, exit_reason)
+
+        message = (
+            f"{status_emoji} <b>Сделка закрыта</b>\n"
+            f"Пара: {self.config.pair}\n"
+            f"Сторона: {trade.side}\n"
+            f"Вход: {trade.entry_price}\n"
+            f"Выход: {trade.exit_price or '—'}\n"
+            f"PnL: {pnl_sign}{trade.pnl:.2f} ({pnl_sign}{pnl_pct:.2f}%)\n"
+            f"Статус: {reason_label}\n"
+            f"Стратегия: {self.config.strategy}"
+        )
+
+        asyncio.create_task(send_telegram_notification(token, chat_id, message))
 
     async def run_history(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
         """Run strategy against historical data — instant execution."""
@@ -304,12 +343,16 @@ class TradingEngine:
                         open_trade.exit_price = exit_price
                         open_trade.exit_time = latest.timestamp
                         open_trade.pnl = trade_pnl
+                        open_trade.exit_reason = exit_reason
                         trades.append(open_trade)
                         balance += trade_pnl
                         peak_balance = max(peak_balance, balance)
                         dd = (peak_balance - balance) / peak_balance * 100 if peak_balance > 0 else 0
                         max_drawdown = max(max_drawdown, dd)
                         open_trade = None
+
+                        # Send notification (fire-and-forget)
+                        await self._notify_trade_closed(trades[-1], exit_reason)
 
                         if on_progress:
                             metrics = Metrics(
@@ -356,8 +399,13 @@ class TradingEngine:
                 open_trade.exit_price = last_price
                 open_trade.exit_time = datetime.now(timezone.utc)
                 open_trade.pnl = trade_pnl
+                open_trade.exit_reason = "cancel"
                 trades.append(open_trade)
                 balance += trade_pnl
+
+                # Send notification (fire-and-forget)
+                await self._notify_trade_closed(open_trade, "cancel")
+                open_trade = None
 
         # Compute final metrics
         win_trades = sum(1 for t in trades if t.pnl and t.pnl > 0)
@@ -463,8 +511,12 @@ class TradingEngine:
                     open_trade.exit_price = exit_price
                     open_trade.exit_time = current.timestamp
                     open_trade.pnl = pnl
+                    open_trade.exit_reason = exit_reason
                     trades.append(open_trade)
                     open_trade = None
+
+                    # Send notification (fire-and-forget)
+                    await self._notify_trade_closed(trades[-1], exit_reason)
 
                     # Track drawdown
                     if balance > peak_balance:
@@ -502,7 +554,11 @@ class TradingEngine:
             open_trade.exit_price = last_price
             open_trade.exit_time = candles[-1].timestamp
             open_trade.pnl = pnl
+            open_trade.exit_reason = "force_close"
             trades.append(open_trade)
+
+            # Send notification (fire-and-forget)
+            await self._notify_trade_closed(open_trade, "force_close")
 
             if balance > peak_balance:
                 peak_balance = balance

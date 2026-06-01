@@ -101,6 +101,26 @@ class TradingScheduler:
         """
         async with async_session_factory() as session:
             try:
+                # ── Resolve Telegram notification bot if configured ──
+                if config.notification_bot_id:
+                    try:
+                        from app.models.telegram_bot import TelegramBot
+                        from sqlalchemy import select
+
+                        from uuid import UUID
+                        bot_id = UUID(config.notification_bot_id) if isinstance(config.notification_bot_id, str) else config.notification_bot_id
+                        stmt = select(TelegramBot).where(TelegramBot.id == bot_id)
+                        result = await session.execute(stmt)
+                        bot = result.scalar_one_or_none()
+                        if bot:
+                            config.notification_bot_token = bot.bot_token
+                            config.notification_chat_id = bot.chat_id
+                            logger.info("Run %d: notification bot '%s' resolved", run_id, bot.name)
+                        else:
+                            logger.warning("Run %d: notification_bot_id %s not found", run_id, config.notification_bot_id)
+                    except Exception as e:
+                        logger.warning("Run %d: failed to resolve notification bot: %s", run_id, e)
+
                 engine = TradingEngine(config)
 
                 if config.mode.value == "virtual":

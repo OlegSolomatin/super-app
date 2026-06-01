@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -343,6 +344,11 @@ async def start_run(
         period_end=config.period_end,
         duration_days=config.duration_days,
         exchange=config.exchange,
+        notification_bot_id=(
+            UUID(config.notification_bot_id)
+            if config.notification_bot_id
+            else None
+        ),
     )
     session.add(db_config)
 
@@ -374,6 +380,7 @@ async def start_run(
         period_end=config.period_end,
         duration_days=config.duration_days,
         exchange=config.exchange,
+        notification_bot_id=str(config.notification_bot_id) if config.notification_bot_id else None,
     )
 
     # Schedule the run (fire-and-forget via async task)
