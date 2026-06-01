@@ -171,7 +171,28 @@ class AdaptiveScaffold extends StatelessWidget {
                     },
                   ),
                 ),
-                // Bottom pinned row: divider + theme + logout
+                // Настройки (pinned above theme/logout)
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenSize == ScreenSize.tablet ? 0 : 8,
+                    vertical: 2,
+                  ),
+                  child: _NavItem(
+                    icon: const Icon(
+                      PhosphorIconsFill.gearSix,
+                      size: 20,
+                    ),
+                    label: 'Настройки',
+                    isActive: false,
+                    isCompact: screenSize == ScreenSize.tablet,
+                    onTap: () {
+                      // Navigate using GoRouter from context
+                      final router = GoRouter.of(context);
+                      router.go('/settings');
+                    },
+                  ),
+                ),
+                // Bottom pinned row: theme + logout
                 Container(
                   decoration: BoxDecoration(
                     border: Border(

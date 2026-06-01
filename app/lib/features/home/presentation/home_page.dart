@@ -433,7 +433,10 @@ class _HomePageState extends State<HomePage> {
                       icon: Icons.settings_outlined,
                       title: 'Настройки',
                       isDark: isDark,
-                      onTap: () => Navigator.of(context).pop(),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        context.go('/settings');
+                      },
                     ),
                     _DrawerMenuItem(
                       icon: Icons.info_outline,
