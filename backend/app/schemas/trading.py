@@ -65,6 +65,12 @@ class TradingConfig(BaseModel):
     notification_bot_id: Optional[str] = Field(
         default=None, description="Telegram bot ID for notifications"
     )
+    stop_loss_percent: Optional[float] = Field(
+        default=None, ge=0, le=100, description="Stop loss percent"
+    )
+    take_profit_percent: Optional[float] = Field(
+        default=None, ge=0, le=1000, description="Take profit percent"
+    )
 
 
 # ---------- responses ----------
@@ -140,8 +146,10 @@ class TradingRunResponse(BaseModel):
                     "period_start": cfg.period_start,
                     "period_end": cfg.period_end,
                     "duration_days": cfg.duration_days,
-                    "exchange": cfg.exchange,
-                    "notification_bot_id": str(cfg.notification_bot_id) if cfg.notification_bot_id is not None else None,
+                    'exchange': cfg.exchange,
+                    'notification_bot_id': str(cfg.notification_bot_id) if cfg.notification_bot_id is not None else None,
+                    'stop_loss_percent': cfg.stop_loss_percent if cfg.stop_loss_percent is not None else None,
+                    'take_profit_percent': cfg.take_profit_percent if cfg.take_profit_percent is not None else None,
                 }
         # Include result data
         res = getattr(data, "result", None)

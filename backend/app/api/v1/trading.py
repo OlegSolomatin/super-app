@@ -349,6 +349,8 @@ async def start_run(
             if config.notification_bot_id
             else None
         ),
+        stop_loss_percent=config.stop_loss_percent or 2.0,
+        take_profit_percent=config.take_profit_percent or 5.0,
     )
     session.add(db_config)
 
@@ -381,6 +383,8 @@ async def start_run(
         duration_days=config.duration_days,
         exchange=config.exchange,
         notification_bot_id=str(config.notification_bot_id) if config.notification_bot_id else None,
+        stop_loss_percent=config.stop_loss_percent or 2.0,
+        take_profit_percent=config.take_profit_percent or 5.0,
     )
 
     # Schedule the run (fire-and-forget via async task)

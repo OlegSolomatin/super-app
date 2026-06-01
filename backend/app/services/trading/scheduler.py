@@ -263,6 +263,8 @@ class TradingScheduler:
             db_run.config.period_end = config.period_end
             db_run.config.duration_days = config.duration_days
             db_run.config.exchange = config.exchange
+            db_run.config.stop_loss_percent = config.stop_loss_percent
+            db_run.config.take_profit_percent = config.take_profit_percent
 
         # Save result
         if db_run.result is None:

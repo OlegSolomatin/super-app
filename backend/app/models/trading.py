@@ -104,6 +104,8 @@ class TradingConfig(Base):
         nullable=True,
         index=True,
     )
+    stop_loss_percent = Column(Float, nullable=True, default=2.0)
+    take_profit_percent = Column(Float, nullable=True, default=5.0)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

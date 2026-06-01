@@ -48,6 +48,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
   // Step 4
   double _leverage = 1;
+  double _stopLossPercent = 2.0;
+  double _takeProfitPercent = 5.0;
 
   // Step 5
   double _balance = 1000;
@@ -255,6 +257,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       if (_notifyTrades && _notificationBotId != null) {
         config['notification_bot_id'] = _notificationBotId;
       }
+      config['stop_loss_percent'] = _stopLossPercent;
+      config['take_profit_percent'] = _takeProfitPercent;
 
       await widget.repository.createRun(config);
 
@@ -1130,6 +1134,92 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                   setState(() => _balance = v.toDouble()),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 24),
+        // ── Stop Loss ──
+        Text(
+          'Стоп-лосс',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Сделка закроется, если цена упадёт на ${_stopLossPercent.toStringAsFixed(1)}%',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(PhosphorIconsFill.trendDown, size: 18, color: Color(0xFFE53935)),
+            Expanded(
+              child: Slider(
+                value: _stopLossPercent,
+                min: 0.5,
+                max: 10,
+                divisions: 19,
+                activeColor: const Color(0xFFE53935),
+                inactiveColor: theme.textTheme.bodyMedium?.color
+                    ?.withValues(alpha: 0.2),
+                onChanged: (v) => setState(() => _stopLossPercent = v),
+              ),
+            ),
+            SizedBox(
+              width: 48,
+              child: Text(
+                '${_stopLossPercent.toStringAsFixed(1)}%',
+                style: const TextStyle(
+                  color: Color(0xFFE53935),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        // ── Take Profit ──
+        Text(
+          'Тейк-профит',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Сделка закроется, если цена вырастет на ${_takeProfitPercent.toStringAsFixed(1)}%',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(PhosphorIconsFill.trendUp, size: 18, color: Color(0xFF4CAF50)),
+            Expanded(
+              child: Slider(
+                value: _takeProfitPercent,
+                min: 1.0,
+                max: 50,
+                divisions: 49,
+                activeColor: const Color(0xFF4CAF50),
+                inactiveColor: theme.textTheme.bodyMedium?.color
+                    ?.withValues(alpha: 0.2),
+                onChanged: (v) => setState(() => _takeProfitPercent = v),
+              ),
+            ),
+            SizedBox(
+              width: 48,
+              child: Text(
+                '${_takeProfitPercent.toStringAsFixed(1)}%',
+                style: const TextStyle(
+                  color: Color(0xFF4CAF50),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
