@@ -107,7 +107,7 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
           ),
         ),
       ),
-      body: ConstrainedContent(child: _buildBody()),
+      body: _buildBody(),
     );
   }
 

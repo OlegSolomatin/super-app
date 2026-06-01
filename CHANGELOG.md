@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `feat` Fix agents page scrolling + keyboard shortcuts (Esc, Ctrl+1/2/3/L) | Hermes
 - `feat` Guest view for unauthenticated users + auth PopupMenuButton | Hermes
 - `feat` Auto redirect HTTP→HTTPS via X-Forwarded-Proto header — pfumiko.ru всегда форсирует HTTPS | Hermes
 - `fix` Proxy: HTTP/1.0 + proxy /auth/* routes — fixes login timeout through super-app proxy | Hermes
