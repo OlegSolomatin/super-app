@@ -147,6 +147,7 @@ class _LoginPageState extends State<LoginPage> {
                           controller: _usernameController,
                           keyboardType: TextInputType.text,
                           textCapitalization: TextCapitalization.none,
+                          textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
                             labelText: 'Имя пользователя',
                             prefixIcon: Icon(Icons.person_outline),
@@ -160,11 +161,15 @@ class _LoginPageState extends State<LoginPage> {
                             }
                             return null;
                           },
+                          onFieldSubmitted: (_) {
+                            FocusScope.of(context).nextFocus();
+                          },
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
+                          textInputAction: TextInputAction.done,
                           decoration: InputDecoration(
                             labelText: 'Пароль',
                             prefixIcon: const Icon(Icons.lock_outlined),
@@ -189,6 +194,7 @@ class _LoginPageState extends State<LoginPage> {
                             }
                             return null;
                           },
+                          onFieldSubmitted: (_) => _login(),
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton(
