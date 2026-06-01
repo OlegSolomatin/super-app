@@ -9,6 +9,7 @@
 - `docs` — документация
 - `infra` — инфраструктура
 ---
+- `feat` Страница /settings: сайдбар + хедер с кнопкой на главную | Hermes
 - `feat` Страница /settings (профиль, username/bio) + пункт «Настройки» в сайдбаре и бургер-меню | Hermes
 - `feat` Login: Enter на поле пароля отправляет форму, Enter на username → переход на поле пароля | Hermes
 - `infra` Cache-Control: год→1 час (статику); добавлен scripts/purge_cloudflare_cache.sh для сброса Cloudflare edge кэша | Hermes
