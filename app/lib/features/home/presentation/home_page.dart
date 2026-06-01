@@ -88,14 +88,19 @@ class _HomePageState extends State<HomePage> {
       currentPath: '/',
       navDestinations: _buildNavDestinations(),
       drawer: _buildDrawer(context, themeProvider, isDark),
+      actions: _user == null && !_isLoading
+          ? [_buildAuthActions(context)]
+          : null,
       body: Stack(
         children: [
           _buildBackgroundPattern(isDark),
           _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: _loadUser,
-                  child: SingleChildScrollView(
+              : _user == null
+                  ? _buildGuestView(context, themeProvider, isDark)
+                  : RefreshIndicator(
+                      onRefresh: _loadUser,
+                      child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: ResponsiveLayout.horizontalPadding(context).copyWith(top: 20, bottom: 20),
                     child: Column(
@@ -133,6 +138,137 @@ class _HomePageState extends State<HomePage> {
                 ),
         ],
       ),
+    );
+  }
+
+  /// Guest view — shown instead of dashboard tiles for unauthenticated users.
+  Widget _buildGuestView(
+      BuildContext context, ThemeProvider themeProvider, bool isDark) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              PhosphorIconsFill.lockKey,
+              size: 56,
+              color: isDark
+                  ? AppTheme.textSecondary.withValues(alpha: 0.5)
+                  : AppTheme.lightTextSecondary.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Для того чтобы открыть контент\nавторизируйтесь или зарегистрируйтесь',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 17,
+                color: isDark
+                    ? AppTheme.textSecondary
+                    : AppTheme.lightTextSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildGuestButton(
+                  context,
+                  label: 'Войти',
+                  isPrimary: true,
+                  onTap: () => context.go('/login'),
+                ),
+                const SizedBox(width: 16),
+                _buildGuestButton(
+                  context,
+                  label: 'Регистрация',
+                  isPrimary: false,
+                  onTap: () => context.go('/register'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuestButton(
+    BuildContext context, {
+    required String label,
+    required bool isPrimary,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (isPrimary) {
+      return ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.accentColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 15)),
+      );
+    }
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: isDark
+            ? AppTheme.textPrimary
+            : AppTheme.lightTextPrimary,
+        side: BorderSide(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.2)
+              : Colors.black.withValues(alpha: 0.15),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 15)),
+    );
+  }
+
+  /// PopupMenuButton for unauthenticated users — shown in header/appbar.
+  Widget _buildAuthActions(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: Icon(
+        PhosphorIconsFill.userCircle,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? AppTheme.textPrimary
+            : AppTheme.lightTextPrimary,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onSelected: (value) {
+        if (value == 'login') context.go('/login');
+        if (value == 'register') context.go('/register');
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: 'login',
+          child: ListTile(
+            leading: Icon(PhosphorIconsFill.signIn),
+            title: Text('Войти'),
+            contentPadding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'register',
+          child: ListTile(
+            leading: Icon(PhosphorIconsFill.userPlus),
+            title: Text('Регистрация'),
+            contentPadding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+      ],
     );
   }
 
