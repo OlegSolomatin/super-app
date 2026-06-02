@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:app/core/theme_provider.dart';
+import 'package:app/core/section_theme.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
+import 'package:app/shared/widgets/adaptive_scaffold.dart';
+import 'package:app/shared/widgets/pf_card.dart';
+import 'package:app/shared/widgets/pf_button.dart';
 import 'package:app/core/theme.dart';
 import 'package:app/features/trading/data/models/trading_pair.dart';
 import 'package:app/features/trading/data/models/strategy_info.dart';
@@ -78,6 +88,11 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ThemeProvider>().setSection(SectionTheme.trading);
+      }
+    });
     _loadStrategies();
   }
 
@@ -298,54 +313,32 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Настройка стратегии'),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        foregroundColor: theme.appBarTheme.foregroundColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: const PhosphorIcon(PhosphorIconsFill.caretLeft),
-          onPressed: () {
-            if (_currentStep > 0) {
-              _prevStep();
-            } else {
-              context.go('/trading');
-            }
-          },
-        ),
-      ),
+    return AdaptiveScaffold(
+      title: 'Настройка стратегии',
+      currentPath: '/trading/wizard',
       body: ConstrainedContent(
         maxWidth: 720,
         child: Column(
         children: [
-          _buildProgressBar(theme, isDark),
+          _buildProgressBar(),
           Expanded(
-            child: _buildStepContent(theme, isDark),
+            child: _buildStepContent(),
           ),
-          _buildNavigation(theme, isDark),
+          _buildNavigation(),
         ],
       ),
       ),
     );
   }
 
-  Widget _buildProgressBar(ThemeData theme, bool isDark) {
+  Widget _buildProgressBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: PfSpacing.md, horizontal: PfSpacing.sm),
+      margin: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
-        border: Border(
-          bottom: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.06),
-          ),
-        ),
+        color: PfColors.card,
+        borderRadius: PfRadius.borderRadiusLg,
+        border: Border.all(color: PfColors.border),
       ),
       child: Row(
         children: List.generate(9, (index) {
@@ -354,58 +347,58 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           return Expanded(
             child: GestureDetector(
               onTap: () => _onStepTapped(index),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isDone
-                          ? const Color(0xFF4CAF50)
-                          : isActive
-                              ? AppTheme.accentColor
-                              : isDark
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : Colors.black.withValues(alpha: 0.1),
-                    ),
-                    child: Center(
-                      child: isDone
-                          ? const Icon(Icons.check,
-                              size: 14, color: Colors.white)
-                          : Text(
-                              '${index + 1}',
-                              style: TextStyle(
-                                color: isActive
-                                    ? Colors.white
-                                    : isDark
-                                        ? Colors.white54
-                                        : Colors.black54,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Step dot
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDone
+                            ? PfColors.success
+                            : isActive
+                                ? Theme.of(context).colorScheme.primary
+                                : PfColors.muted,
+                      ),
+                      child: Center(
+                        child: isDone
+                            ? const PhosphorIcon(
+                                PhosphorIconsFill.check,
+                                size: 14,
+                                color: Color(0xFF181A20),
+                              )
+                            : Text(
+                                '${index + 1}',
+                                style: PfTypography.caption.copyWith(
+                                  color: isActive
+                                      ? const Color(0xFF181A20)
+                                      : PfColors.mutedForeground,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _stepShortLabels[index],
-                    style: TextStyle(
-                      color: isActive
-                          ? AppTheme.accentColor
-                          : isDark
-                              ? Colors.white54
-                              : Colors.black54,
-                      fontSize: 8,
-                      fontWeight:
-                          isActive ? FontWeight.w600 : FontWeight.w400,
+                    const SizedBox(height: 4),
+                    // Step label (compact)
+                    Text(
+                      _stepShortLabels[index],
+                      style: PfTypography.caption.copyWith(
+                        color: isActive
+                            ? Theme.of(context).colorScheme.primary
+                            : PfColors.mutedForeground,
+                        fontSize: isActive ? 10 : 9,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -419,10 +412,13 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     'Макс.', 'TF', 'Период', 'Старт',
   ];
 
-  Widget _buildStepContent(ThemeData theme, bool isDark) {
+  Widget _buildStepContent() {
     if (_loadingStep) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1893,66 +1889,43 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
   // ─── Navigation ──────────────────────────────────────────────────
 
-  Widget _buildNavigation(ThemeData theme, bool isDark) {
+  Widget _buildNavigation() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(PfSpacing.md),
+      margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
-        border: Border(
-          top: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.06),
-          ),
+        color: PfColors.card,
+        borderRadius: PfRadius.borderRadiusXl,
+        border: const Border(
+          top: BorderSide(color: PfColors.border),
         ),
       ),
       child: Row(
         children: [
           if (_currentStep > 0)
             Expanded(
-              child: OutlinedButton.icon(
+              child: PfButton(
+                variant: 'outline',
+                size: 'lg',
+                label: 'Назад',
+                icon: PhosphorIconsFill.caretLeft,
                 onPressed: _prevStep,
-                icon: const PhosphorIcon(
-                  PhosphorIconsFill.caretLeft,
-                  size: 18,
-                ),
-                label: const Text('Назад'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.accentColor,
-                  side: const BorderSide(color: AppTheme.accentColor),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  minimumSize: const Size(0, 50),
-                ),
               ),
             ),
-          if (_currentStep > 0) const SizedBox(width: 16),
+          if (_currentStep > 0) const SizedBox(width: PfSpacing.md),
           Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _currentStep < 8
-                  ? (_canProceed ? _nextStep : null)
-                  : (_canProceed ? _submitRun : null),
-              icon: PhosphorIcon(
-                _currentStep < 8
-                    ? PhosphorIconsFill.caretRight
-                    : PhosphorIconsFill.rocket,
-                size: 18,
-              ),
-              label: Text(
-                _currentStep < 8 ? 'Далее' : 'Запустить',
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _canProceed
-                    ? AppTheme.accentColor
-                    : theme.textTheme.bodyMedium?.color
-                        ?.withValues(alpha: 0.3),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(0, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
+            child: PfButton(
+              variant: 'primary',
+              size: 'lg',
+              label: _currentStep < 8 ? 'Далее' : 'Запустить',
+              icon: _currentStep < 8
+                  ? PhosphorIconsFill.caretRight
+                  : PhosphorIconsFill.rocket,
+              iconEnd: true,
+              expanded: true,
+              onPressed: _canProceed
+                  ? (_currentStep < 8 ? _nextStep : _submitRun)
+                  : null,
             ),
           ),
         ],
@@ -1986,11 +1959,11 @@ class _PairTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.accentColor.withValues(alpha: 0.15)
-              : theme.cardTheme.color,
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
+              : PfColors.card,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? AppTheme.accentColor : Colors.transparent,
+            color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
             width: 2,
           ),
         ),
@@ -2023,7 +1996,7 @@ class _PairTile extends StatelessWidget {
                     '${pair.base}/${pair.quote}',
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontSize: 15,
-                      color: isSelected ? AppTheme.accentColor : null,
+                      color: isSelected ? Theme.of(context).colorScheme.primary : null,
                     ),
                   ),
                   Text(
@@ -2034,10 +2007,10 @@ class _PairTile extends StatelessWidget {
               ),
             ),
             if (isSelected)
-              const PhosphorIcon(
+              PhosphorIcon(
                 PhosphorIconsFill.check,
                 size: 20,
-                color: AppTheme.accentColor,
+                color: theme.colorScheme.primary,
               ),
           ],
         ),
@@ -2051,7 +2024,7 @@ class _PairTile extends StatelessWidget {
       height: 36,
       decoration: BoxDecoration(
         color: isSelected
-            ? AppTheme.accentColor.withValues(alpha: 0.2)
+            ? theme.colorScheme.primary.withValues(alpha: 0.2)
             : Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -2059,7 +2032,9 @@ class _PairTile extends StatelessWidget {
         child: Text(
           pair.base.substring(0, 1),
           style: TextStyle(
-            color: isSelected ? AppTheme.accentColor : Colors.white70,
+            color: isSelected
+                ? theme.colorScheme.primary
+                : Colors.white70,
             fontWeight: FontWeight.bold,
             fontSize: 16,
           ),

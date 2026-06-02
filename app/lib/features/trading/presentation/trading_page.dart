@@ -1,12 +1,21 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:app/core/theme.dart';
+import 'package:provider/provider.dart';
+import 'package:app/core/theme_provider.dart';
+import 'package:app/core/section_theme.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
+import 'package:app/shared/widgets/adaptive_scaffold.dart';
+import 'package:app/shared/widgets/pf_card.dart';
+import 'package:app/shared/widgets/pf_badge.dart';
+import 'package:app/shared/widgets/pf_button.dart';
+import 'package:app/shared/widgets/pf_divider.dart';
 import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
-import 'package:app/shared/widgets/responsive_layout.dart';
 
 class TradingPage extends StatefulWidget {
   final TradingRepository repository;
@@ -31,37 +40,20 @@ class _TradingPageState extends State<TradingPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ThemeProvider>().setSection(SectionTheme.trading);
+      }
+    });
     _cleanupStaleRuns();
     _loadActiveRuns();
     _loadHistoryRuns();
-    // Poll active runs every 2 seconds
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _pollActiveRuns();
     });
-  }
-
-  Future<void> _cleanupStaleRuns() async {
-    try {
-      await widget.repository.cleanupStaleRuns();
-    } catch (_) {}
-  }
-
-  /// Quick poll — no loading spinner, just update list.
-  Future<void> _pollActiveRuns() async {
-    try {
-      final result = await widget.repository.getRuns(status: 'running');
-      if (!mounted) return;
-      final hadActive = _activeRuns.isNotEmpty;
-      setState(() {
-        _activeRuns = result.items;
-      });
-      // If active runs just finished — reload history
-      if (hadActive && result.items.isEmpty) {
-        _loadHistoryRuns();
-      }
-    } catch (_) {
-      // Silently retry on next tick
-    }
   }
 
   @override
@@ -71,16 +63,29 @@ class _TradingPageState extends State<TradingPage>
     super.dispose();
   }
 
+  Future<void> _cleanupStaleRuns() async {
+    try {
+      await widget.repository.cleanupStaleRuns();
+    } catch (_) {}
+  }
+
+  Future<void> _pollActiveRuns() async {
+    try {
+      final result = await widget.repository.getRuns(status: 'running');
+      if (!mounted) return;
+      final hadActive = _activeRuns.isNotEmpty;
+      setState(() => _activeRuns = result.items);
+      if (hadActive && result.items.isEmpty) {
+        _loadHistoryRuns();
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadActiveRuns() async {
     setState(() => _loadingActive = true);
     try {
       final result = await widget.repository.getRuns(status: 'running');
-      if (mounted) {
-        setState(() {
-          _activeRuns = result.items;
-          _loadingActive = false;
-        });
-      }
+      if (mounted) setState(() { _activeRuns = result.items; _loadingActive = false; });
     } catch (_) {
       if (mounted) setState(() => _loadingActive = false);
     }
@@ -98,12 +103,7 @@ class _TradingPageState extends State<TradingPage>
         final bDate = b.createdAt ?? DateTime(2000);
         return bDate.compareTo(aDate);
       });
-      if (mounted) {
-        setState(() {
-          _historyRuns = all;
-          _loadingHistory = false;
-        });
-      }
+      if (mounted) setState(() { _historyRuns = all; _loadingHistory = false; });
     } catch (_) {
       if (mounted) setState(() => _loadingHistory = false);
     }
@@ -111,915 +111,327 @@ class _TradingPageState extends State<TradingPage>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const PhosphorIcon(PhosphorIconsFill.caretLeft),
-          onPressed: () => context.go('/'),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PhosphorIcon(
-              PhosphorIconsFill.chartLine,
-              color: theme.appBarTheme.foregroundColor,
-              size: 22,
-            ),
-            const SizedBox(width: 8),
-            const Text('Торговля'),
-          ],
-        ),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        foregroundColor: theme.appBarTheme.foregroundColor,
-        elevation: 0,
-        actions: [
-          Builder(
-            builder: (context) => IconButton(
-              icon: PhosphorIcon(
-                PhosphorIconsFill.list,
-                color: theme.appBarTheme.foregroundColor,
-              ),
-              onPressed: () => Scaffold.of(context).openEndDrawer(),
-            ),
-          ),
-        ],
-      ),
-      endDrawer: _buildDrawer(context),
-      body: ConstrainedContent(
-        child: Column(
+    return AdaptiveScaffold(
+      title: 'Трейдинг',
+      currentPath: '/trading',
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
-          // Strategy button
+          // ── Header + New Strategy button ──────────────
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: () => context.go('/trading/wizard'),
-                icon: const PhosphorIcon(
-                  PhosphorIconsFill.rocket,
-                  size: 22,
-                ),
-                label: const Text(
-                  'Стратегия',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
+            padding: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Торговые стратегии',
+                    style: PfTypography.displayMd.copyWith(color: PfColors.foreground),
                   ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                PfButton(
+                  variant: 'primary',
+                  size: 'md',
+                  label: 'Стратегия',
+                  icon: PhosphorIconsFill.rocket,
+                  onPressed: () => context.go('/trading/wizard'),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Tab bar
-          Container(
-            color: isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: AppTheme.accentColor,
-              unselectedLabelColor:
-                  isDark ? Colors.white54 : AppTheme.lightTextSecondary,
-              indicatorColor: AppTheme.accentColor,
-              tabs: const [
-                Tab(text: 'Запущенные'),
-                Tab(text: 'История'),
               ],
             ),
           ),
+          const SizedBox(height: PfSpacing.lg),
+
+          // ── Pill Tabs ─────────────────────────────────
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: PfColors.surface,
+              borderRadius: PfRadius.borderRadiusPill,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _PillTab(
+                  label: 'Запущенные',
+                  count: _activeRuns.length,
+                  isActive: _tabController.index == 0,
+                  onTap: () => _tabController.animateTo(0),
+                ),
+                const SizedBox(width: 2),
+                _PillTab(
+                  label: 'История',
+                  count: _historyRuns.length,
+                  isActive: _tabController.index == 1,
+                  onTap: () => _tabController.animateTo(1),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: PfSpacing.md),
+
+          // ── Tab Content ───────────────────────────────
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildActiveTab(),
-                _buildHistoryTab(),
-              ],
-            ),
-          ),
-        ],
-      ),
-      ),
-    );
-  }
-
-  Widget _buildDrawer(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Drawer(
-      backgroundColor:
-          isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(
-              color: AppTheme.accentColor,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                const PhosphorIcon(
-                  PhosphorIconsFill.chartLine,
-                  size: 40,
-                  color: Colors.white,
+                _buildRunsList(
+                  runs: _activeRuns,
+                  loading: _loadingActive,
+                  emptyIcon: PhosphorIconsFill.rocket,
+                  emptyText: 'Нет активных стратегий',
+                  emptySubtext: 'Запустите новую стратегию, чтобы увидеть результаты',
+                  repository: widget.repository,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Торговля',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                      ),
+                _buildRunsList(
+                  runs: _historyRuns,
+                  loading: _loadingHistory,
+                  emptyIcon: PhosphorIconsFill.clockCounterClockwise,
+                  emptyText: 'История пуста',
+                  emptySubtext: 'Завершённые стратегии появятся здесь',
+                  repository: widget.repository,
                 ),
               ],
             ),
-          ),
-          ListTile(
-            leading: const PhosphorIcon(PhosphorIconsFill.rocket),
-            title: const Text('Новая стратегия'),
-            onTap: () {
-              Navigator.pop(context);
-              context.go('/trading/wizard');
-            },
-          ),
-          ListTile(
-            leading: const PhosphorIcon(PhosphorIconsFill.clock),
-            title: const Text('Активные'),
-            onTap: () {
-              Navigator.pop(context);
-              _tabController.animateTo(0);
-            },
-          ),
-          ListTile(
-            leading: const PhosphorIcon(PhosphorIconsFill.clockCounterClockwise),
-            title: const Text('История'),
-            onTap: () {
-              Navigator.pop(context);
-              _tabController.animateTo(1);
-            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActiveTab() {
-    if (_loadingActive) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_activeRuns.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _loadActiveRuns,
-        child: ListView(
-          children: [
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.3,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    PhosphorIcon(
-                      PhosphorIconsFill.rocket,
-                      size: 56,
-                      color: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.color
-                          ?.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Нет активных стратегий',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.color
-                                ?.withValues(alpha: 0.5),
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Запустите новую стратегию, нажав\nкнопку "Стратегия"',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.color
-                                ?.withValues(alpha: 0.3),
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadActiveRuns,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _activeRuns.length,
-        itemBuilder: (context, index) {
-          final run = _activeRuns[index];
-          return _buildActiveRunCard(run);
-        },
-      ),
-    );
-  }
-
-  Widget _buildActiveRunCard(TradingRun run) {
-    final theme = Theme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      color: isDark ? AppTheme.cardColor : AppTheme.lightCardColor,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                PhosphorIcon(
-                  PhosphorIconsFill.rocket,
-                  size: 18,
-                  color: AppTheme.accentColor,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    run.strategyName ?? 'Стратегия',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _modeColor(run.mode).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      PhosphorIcon(
-                        _modeIcon(run.mode),
-                        size: 14,
-                        color: _modeColor(run.mode),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _modeLabel(run.mode),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _modeColor(run.mode),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                _coinIconSmall(run.coinIconUrl, run.baseCoin, isDark),
-                const SizedBox(width: 6),
-                Text(
-                  run.pairDisplay,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontSize: 13,
-                    color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _infoChip(
-                  icon: PhosphorIconsFill.wallet,
-                  label: '\$${run.startingBalance?.toStringAsFixed(0) ?? '—'}',
-                  theme: theme,
-                ),
-                const SizedBox(width: 12),
-                _infoChip(
-                  icon: PhosphorIconsFill.arrowsLeftRight,
-                  label: '${run.totalTrades ?? 0} сделок',
-                  theme: theme,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                if (run.endsAt != null)
-                  _infoChip(
-                    icon: PhosphorIconsFill.clock,
-                    label: _timeRemaining(run.endsAt!),
-                    theme: theme,
-                  ),
-                if (run.endsAt != null) const Spacer(),
-                if (run.pnl != null)
-                  Text(
-                    '+${run.pnl!.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: run.pnl! >= 0
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFFE53935),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // ── Progress bar for virtual live runs ──
-            if (run.mode == 'virtual' && run.progressPercent != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: run.progressPercent! / 100.0,
-                  minHeight: 6,
-                  backgroundColor: theme.colorScheme.surfaceVariant,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    run.progressPercent! < 50
-                        ? AppTheme.accentColor
-                        : run.progressPercent! < 90
-                            ? const Color(0xFFF59E0B)
-                            : const Color(0xFF4CAF50),
-                  ),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    _coinIconSmall(run.coinIconUrl, run.baseCoin, isDark),
-                    const SizedBox(width: 6),
-                    Text(
-                      run.pairDisplay,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontSize: 13,
-                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                children: [
-                  Text(
-                    '${run.progressPercent!.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (run.timeRemainingLabel != null)
-                    Text(
-                      'Осталось ${run.timeRemainingLabel}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _confirmStopRun(run),
-                icon: const PhosphorIcon(
-                  PhosphorIconsFill.stop,
-                  size: 16,
-                ),
-                label: const Text(
-                  'Остановить',
-                  style: TextStyle(fontSize: 13),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFE53935),
-                  side: const BorderSide(color: Color(0xFFE53935)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _infoChip({
-    required IconData icon,
-    required String label,
-    required ThemeData theme,
+  Widget _buildRunsList({
+    required List<TradingRun> runs,
+    required bool loading,
+    required PhosphorIconData emptyIcon,
+    required String emptyText,
+    required String emptySubtext,
+    required TradingRepository repository,
   }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        PhosphorIcon(
-          icon,
-          size: 14,
-          color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  Widget _coinIconSmall(String? iconUrl, String baseCoin, bool isDark) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: SizedBox(
-        width: 20,
-        height: 20,
-        child: iconUrl != null
-            ? Image.network(
-                iconUrl,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => _coinLetterBox(baseCoin, isDark),
-                loadingBuilder: (_, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return _coinLetterBox(baseCoin, isDark);
-                },
-              )
-            : _coinLetterBox(baseCoin, isDark),
-      ),
-    );
-  }
-
-  Widget _coinLetterBox(String baseCoin, bool isDark) {
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Center(
-        child: Text(
-          baseCoin.isNotEmpty ? baseCoin.substring(0, 1).toUpperCase() : '?',
-          style: const TextStyle(
-            color: Colors.white70,
-            fontWeight: FontWeight.bold,
-            fontSize: 11,
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _timeRemaining(DateTime endsAt) {
-    final remaining = endsAt.difference(DateTime.now());
-    if (remaining.isNegative) return 'Завершён';
-    if (remaining.inDays > 0) return '${remaining.inDays}д ${remaining.inHours % 24}ч';
-    if (remaining.inHours > 0) return '${remaining.inHours}ч ${remaining.inMinutes % 60}м';
-    return '${remaining.inMinutes}м';
-  }
-
-  Future<void> _confirmStopRun(TradingRun run) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).cardTheme.color,
-        title: const Text('Остановить запуск?'),
-        content: Text('Стратегия "${run.strategyName ?? run.id}" будет остановлена.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFE53935)),
-            child: const Text('Остановить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      try {
-        await widget.repository.deleteRun(run.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Запуск остановлен'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Color(0xFF4CAF50),
-          ),
-        );
-        _loadActiveRuns();
-        _loadHistoryRuns();
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFE53935),
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildHistoryTab() {
-    if (_loadingHistory) {
+    if (loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_historyRuns.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _loadHistoryRuns,
-        child: ListView(
-          children: [
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.3,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    PhosphorIcon(
-                      PhosphorIconsFill.clockCounterClockwise,
-                      size: 56,
-                      color: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.color
-                          ?.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'История пуста',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.color
-                                ?.withValues(alpha: 0.5),
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadHistoryRuns,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _historyRuns.length + 1, // +1 for summary header
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return _buildHistorySummary();
-          }
-          final run = _historyRuns[index - 1];
-          return _buildHistoryRunCard(run);
-        },
-      ),
-    );
-  }
-
-  /// Build a summary header card above the history list.
-  Widget _buildHistorySummary() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // Filter out error runs for stats
-    final valid = _historyRuns.where((r) => r.status != 'error').toList();
-    if (valid.isEmpty) return const SizedBox.shrink();
-
-    int totalTrades = 0;
-    int totalWins = 0;
-    double totalPnl = 0;
-    double totalBalance = 0;
-
-    for (final run in valid) {
-      if (run.totalTrades != null && run.totalTrades! > 0) {
-        totalTrades += run.totalTrades!;
-        if (run.successRate != null) {
-          // win_rate is 0-1, convert to count
-          totalWins += (run.successRate! * run.totalTrades!).round();
-        }
-      }
-      if (run.pnl != null) {
-        totalPnl += run.pnl!;
-      }
-      if (run.startingBalance != null) {
-        totalBalance += run.startingBalance!;
-      }
-    }
-
-    if (totalTrades == 0) return const SizedBox.shrink();
-
-    final overallWinRate = totalTrades > 0 ? totalWins / totalTrades : 0.0;
-    final overallPnlPct = totalBalance > 0 ? (totalPnl / totalBalance) * 100 : 0.0;
-    final isPositive = overallPnlPct >= 0;
-
-    return Card(
-      color: isDark ? AppTheme.cardColor : AppTheme.lightCardColor,
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: (isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935))
-              .withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    if (runs.isEmpty) {
+      return Center(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                PhosphorIcon(
-                  PhosphorIconsFill.chartBar,
-                  size: 20,
-                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Общая статистика',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '$totalTrades сделок',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
+            PhosphorIcon(
+              emptyIcon,
+              size: 48,
+              color: PfColors.mutedForeground.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    theme: theme,
-                    icon: isPositive ? PhosphorIconsFill.trendUp : PhosphorIconsFill.trendDown,
-                    iconColor: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
-                    label: 'ROI',
-                    value: '${isPositive ? '+' : ''}${overallPnlPct.toStringAsFixed(2)}%',
-                    valueColor: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
-                  ),
+            Text(
+              emptyText,
+              style: PfTypography.titleMd.copyWith(color: PfColors.mutedForeground),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              emptySubtext,
+              style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground.withValues(alpha: 0.6)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _tabController.index == 0
+          ? _loadActiveRuns()
+          : _loadHistoryRuns(),
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+        itemCount: runs.length,
+        separatorBuilder: (_, __) => const SizedBox(height: PfSpacing.sm),
+        itemBuilder: (context, index) {
+          final run = runs[index];
+          return _TradingRunCard(
+            run: run,
+            onTap: () => context.go('/trading/run/${run.id}'),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Pill Tab ──────────────────────────────────────────────────────────
+class _PillTab extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _PillTab({
+    required this.label,
+    required this.count,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? Theme.of(context).colorScheme.primary
+              : Colors.transparent,
+          borderRadius: PfRadius.borderRadiusPill,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: PfTypography.button.copyWith(
+                color: isActive
+                    ? const Color(0xFF181A20)
+                    : PfColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? const Color(0xFF181A20).withValues(alpha: 0.15)
+                    : PfColors.muted,
+                borderRadius: PfRadius.borderRadiusPill,
+              ),
+              child: Text(
+                '$count',
+                style: PfTypography.caption.copyWith(
+                  color: isActive
+                      ? const Color(0xFF181A20)
+                      : PfColors.mutedForeground,
+                  fontSize: 11,
                 ),
-                Expanded(
-                  child: _buildStatItem(
-                    theme: theme,
-                    icon: PhosphorIconsFill.target,
-                    iconColor: AppTheme.accentColor,
-                    label: 'WinRate',
-                    value: '${(overallWinRate * 100).toStringAsFixed(1)}%',
-                    valueColor: AppTheme.accentColor,
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    theme: theme,
-                    icon: PhosphorIconsFill.coins,
-                    iconColor: (theme.textTheme.bodyMedium?.color ?? Colors.grey).withValues(alpha: 0.7),
-                    label: 'Всего PnL',
-                    value: '${isPositive ? '+' : ''}\$${totalPnl.toStringAsFixed(2)}',
-                    valueColor: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildStatItem({
-    required ThemeData theme,
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required String value,
-    required Color valueColor,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        PhosphorIcon(icon, size: 22, color: iconColor),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: valueColor,
+// ─── Trading Run Card ─────────────────────────────────────────────────
+class _TradingRunCard extends StatelessWidget {
+  final TradingRun run;
+  final VoidCallback onTap;
+
+  const _TradingRunCard({required this.run, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = run.status == 'running' || run.status == 'pending';
+    final isError = run.status == 'error';
+    final isDone = run.status == 'done';
+    final pnl = run.pnl;
+
+    final statusBadge = isActive
+        ? const PfBadge(variant: 'success', label: 'Активна')
+        : isError
+            ? const PfBadge(variant: 'destructive', label: 'Ошибка')
+            : isDone
+                ? const PfBadge(variant: 'info', label: 'Завершена')
+                : const PfBadge(variant: 'default', label: 'Остановлена');
+
+    return PfCard(
+      variant: 'trading',
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row: strategy name + status
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  run.strategyName ?? run.config['strategy'] ?? 'Стратегия',
+                  style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
+                ),
+              ),
+              statusBadge,
+            ],
           ),
-        ),
-        const SizedBox(height: 4),
+          const SizedBox(height: PfSpacing.sm),
+          const PfDivider(),
+          const SizedBox(height: PfSpacing.sm),
+          // Info row
+          Row(
+            children: [
+              _InfoCell(
+                label: 'Пара',
+                value: run.config['pair'] ?? '—',
+                mono: true,
+              ),
+              const SizedBox(width: PfSpacing.lg),
+              _InfoCell(
+                label: 'Таймфрейм',
+                value: run.config['timeframe'] ?? '—',
+              ),
+              const Spacer(),
+              // PnL
+              if (pnl != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'PnL',
+                      style: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '\$${pnl.toStringAsFixed(2)}',
+                      style: PfTypography.number.copyWith(
+                        color: pnl >= 0 ? PfColors.success : PfColors.destructive,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Info Cell ────────────────────────────────────────────────────────
+class _InfoCell extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool mono;
+
+  const _InfoCell({
+    required this.label,
+    required this.value,
+    this.mono = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Text(
           label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
-            fontSize: 11,
-          ),
+          style: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: mono
+              ? PfTypography.number.copyWith(color: PfColors.foreground)
+              : PfTypography.bodyMd.copyWith(color: PfColors.foreground),
         ),
       ],
     );
-  }
-
-  Widget _buildHistoryRunCard(TradingRun run) {
-    final theme = Theme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      color: isDark ? AppTheme.cardColor : AppTheme.lightCardColor,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => context.go('/trading/runs/${run.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _statusIcon(run.status),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      run.strategyName ?? 'Стратегия',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                if (run.pnl != null)
-                  Text(
-                    '${run.pnl! >= 0 ? '+' : ''}${run.pnl!.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: run.pnl! >= 0
-                            ? const Color(0xFF4CAF50)
-                            : const Color(0xFFE53935),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  _coinIconSmall(run.coinIconUrl, run.baseCoin, isDark),
-                  const SizedBox(width: 6),
-                  Text(
-                    run.pairDisplay,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontSize: 13,
-                      color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  if (run.finalBalance != null)
-                    _infoChip(
-                      icon: PhosphorIconsFill.wallet,
-                      label:
-                          '\$${run.finalBalance!.toStringAsFixed(0)}',
-                      theme: theme,
-                    ),
-                  if (run.finalBalance != null) const SizedBox(width: 12),
-                  if (run.totalTrades != null)
-                    _infoChip(
-                      icon: PhosphorIconsFill.arrowsLeftRight,
-                      label: '${run.totalTrades} сделок',
-                      theme: theme,
-                    ),
-                  if (run.totalTrades != null) const SizedBox(width: 12),
-                  if (run.successRate != null)
-                    _infoChip(
-                      icon: PhosphorIconsFill.checkCircle,
-                      label:
-                          '${run.successRate!.toStringAsFixed(1)}%',
-                      theme: theme,
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _statusIcon(String status) {
-    switch (status) {
-      case 'done':
-        return const PhosphorIcon(
-          PhosphorIconsFill.checkCircle,
-          size: 20,
-          color: Color(0xFF4CAF50),
-        );
-      case 'stopped':
-        return const PhosphorIcon(
-          PhosphorIconsFill.stopCircle,
-          size: 20,
-          color: Color(0xFFFF9800),
-        );
-      case 'error':
-        return const PhosphorIcon(
-          PhosphorIconsFill.xCircle,
-          size: 20,
-          color: Color(0xFFE53935),
-        );
-      default:
-        return const PhosphorIcon(
-          PhosphorIconsFill.question,
-          size: 20,
-          color: Colors.grey,
-        );
-    }
-  }
-
-  Color _modeColor(String mode) {
-    switch (mode) {
-      case 'history':
-        return const Color(0xFF4CAF50);
-      case 'virtual':
-        return const Color(0xFF2196F3);
-      case 'real':
-        return const Color(0xFFE53935);
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _modeIcon(String mode) {
-    switch (mode) {
-      case 'history':
-        return PhosphorIconsFill.scroll;
-      case 'virtual':
-        return PhosphorIconsFill.desktop;
-      case 'real':
-        return PhosphorIconsFill.coins;
-      default:
-        return PhosphorIconsFill.question;
-    }
-  }
-
-  String _modeLabel(String mode) {
-    switch (mode) {
-      case 'history':
-        return 'История';
-      case 'virtual':
-        return 'Виртуал';
-      case 'real':
-        return 'Реал';
-      default:
-        return mode;
-    }
   }
 }
