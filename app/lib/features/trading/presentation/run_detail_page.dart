@@ -390,38 +390,94 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
               ],
             ),
             const SizedBox(height: 8),
-            // ── Row 2: entry time ──
-            Row(
-              children: [
-                PhosphorIcon(
-                  PhosphorIconsFill.signIn,
-                  size: 12,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Вход: ${trade.entryDate} ${trade.entryTimeStr}',
-                  style: TextStyle(
-                    fontSize: 11,
+            // ── Row 2: pair (if available) ──
+            if (trade.pair != null) ...[
+              Row(
+                children: [
+                  PhosphorIcon(
+                    PhosphorIconsFill.swap,
+                    size: 12,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
-                ),
-                const SizedBox(width: 16),
-                PhosphorIcon(
-                  PhosphorIconsFill.signOut,
-                  size: 12,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Выход: ${trade.exitDateTimeStr}',
-                  style: TextStyle(
-                    fontSize: 11,
+                  const SizedBox(width: 4),
+                  Text(
+                    trade.pair!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  PhosphorIcon(
+                    PhosphorIconsFill.signIn,
+                    size: 12,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Вход: ${trade.entryDate} ${trade.entryTimeStr}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // ── Row 3: exit time (with pair) ──
+              Row(
+                children: [
+                  const SizedBox(width: 16),  // align with input row
+                  PhosphorIcon(
+                    PhosphorIconsFill.signOut,
+                    size: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Выход: ${trade.exitDateTimeStr}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // ── Row 2 (no pair): entry time ──
+              Row(
+                children: [
+                  PhosphorIcon(
+                    PhosphorIconsFill.signIn,
+                    size: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Вход: ${trade.entryDate} ${trade.entryTimeStr}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  PhosphorIcon(
+                    PhosphorIconsFill.signOut,
+                    size: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Выход: ${trade.exitDateTimeStr}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

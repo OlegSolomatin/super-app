@@ -1,5 +1,6 @@
 class TradingTrade {
   final String side;
+  final String? pair;
   final double entryPrice;
   final double? exitPrice;
   final DateTime entryTime;
@@ -10,6 +11,7 @@ class TradingTrade {
 
   const TradingTrade({
     required this.side,
+    this.pair,
     required this.entryPrice,
     this.exitPrice,
     required this.entryTime,
@@ -22,6 +24,7 @@ class TradingTrade {
   factory TradingTrade.fromJson(Map<String, dynamic> json) {
     return TradingTrade(
       side: json['side'] as String? ?? 'BUY',
+      pair: json['pair'] as String?,
       entryPrice: (json['entry_price'] as num?)?.toDouble() ?? 0.0,
       exitPrice: (json['exit_price'] as num?)?.toDouble(),
       entryTime: json['entry_time'] != null
@@ -38,6 +41,7 @@ class TradingTrade {
 
   Map<String, dynamic> toJson() => {
         'side': side,
+        'pair': pair,
         'entry_price': entryPrice,
         'exit_price': exitPrice,
         'entry_time': entryTime.toIso8601String(),
