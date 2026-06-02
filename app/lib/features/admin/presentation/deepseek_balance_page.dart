@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:app/core/theme.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/features/admin/data/admin_repository.dart';
 import 'package:app/features/admin/models/deepseek_balance.dart';
-import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
+import 'package:app/shared/widgets/adaptive_scaffold.dart';
+import 'package:app/shared/widgets/pf_card.dart';
 
 class DeepSeekBalancePage extends StatefulWidget {
   const DeepSeekBalancePage({super.key});
@@ -33,59 +36,29 @@ class _DeepSeekBalancePageState extends State<DeepSeekBalancePage> {
       final dioClient = DioClient(storage);
       final repo = AdminRepository(dioClient.dio);
       final balance = await repo.getDeepseekBalance();
-      if (mounted) {
-        setState(() {
-          _balance = balance;
-          _error = null;
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _balance = balance; _error = null; _isLoading = false; });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
-    final textColor =
-        isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
-    final subColor =
-        isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('DeepSeek API'),
-        backgroundColor: isDark
-            ? AppTheme.bgColor.withValues(alpha: 0.85)
-            : AppTheme.lightSurfaceColor.withValues(alpha: 0.85),
-        elevation: 0,
-        leading: IconButton(
-          icon: const PhosphorIcon(PhosphorIconsFill.caretLeft),
-          onPressed: () => context.go('/'),
-        ),
-      ),
+    return AdaptiveScaffold(
+      title: 'DeepSeek API',
+      currentPath: '/admin/deepseek',
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: PfColors.accentAdmin))
           : _error != null
               ? _buildError()
               : RefreshIndicator(
                   onRefresh: _loadBalance,
-                  child: SingleChildScrollView(
+                  child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
-                    child: ConstrainedContent(
-                      child: _balance != null
-                          ? _buildBalanceContent(isDark, textColor, subColor, surface)
-                          : const Center(child: Text('Нет данных')),
-                    ),
+                    padding: const EdgeInsets.all(PfSpacing.lg),
+                    children: [
+                      if (_balance != null) _buildBalanceContent(),
+                    ],
                   ),
                 ),
     );
@@ -94,39 +67,26 @@ class _DeepSeekBalancePageState extends State<DeepSeekBalancePage> {
   Widget _buildError() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(PfSpacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const PhosphorIcon(
-              PhosphorIconsFill.warning,
-              size: 56,
-              color: Color(0xFFE53935),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Не удалось получить баланс',
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _error ?? '',
-              style: TextStyle(
-                color: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.color
-                    ?.withValues(alpha: 0.6),
-                fontSize: 13,
+            const PhosphorIcon(PhosphorIconsFill.warning, size: 56, color: PfColors.destructive),
+            const SizedBox(height: PfSpacing.md),
+            Text('Не удалось получить баланс', style: PfTypography.titleMd.copyWith(color: PfColors.mutedForeground), textAlign: TextAlign.center),
+            const SizedBox(height: PfSpacing.xs),
+            Text(_error ?? '', style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground), textAlign: TextAlign.center),
+            const SizedBox(height: PfSpacing.lg),
+            PfCard(
+              onTap: _loadBalance,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const PhosphorIcon(PhosphorIconsFill.arrowsClockwise, size: 16, color: PfColors.accentAdmin),
+                  const SizedBox(width: PfSpacing.xs),
+                  Text('Повторить', style: PfTypography.button.copyWith(color: PfColors.accentAdmin)),
+                ],
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadBalance,
-              icon: const PhosphorIcon(PhosphorIconsFill.arrowsClockwise),
-              label: const Text('Повторить'),
             ),
           ],
         ),
@@ -134,123 +94,91 @@ class _DeepSeekBalancePageState extends State<DeepSeekBalancePage> {
     );
   }
 
-  Widget _buildBalanceContent(
-    bool isDark,
-    Color textColor,
-    Color subColor,
-    Color surface,
-  ) {
+  Widget _buildBalanceContent() {
     final balance = _balance!;
-    final mainInfo = balance.balanceInfos.isNotEmpty
-        ? balance.balanceInfos.first
-        : null;
+    final mainInfo = balance.balanceInfos.isNotEmpty ? balance.balanceInfos.first : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Status header
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: balance.isAvailable
-                  ? const Color(0xFF4CAF50).withValues(alpha: 0.3)
-                  : const Color(0xFFE53935).withValues(alpha: 0.3),
-            ),
-          ),
+        // Status header — stat-callout
+        PfCard(
+          padding: const EdgeInsets.all(PfSpacing.xl),
           child: Column(
             children: [
+              // Status circle icon
               Container(
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: balance.isAvailable
-                      ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
-                      : const Color(0xFFE53935).withValues(alpha: 0.15),
+                      ? PfColors.success.withValues(alpha: 0.15)
+                      : PfColors.destructive.withValues(alpha: 0.15),
                 ),
                 child: Center(
                   child: PhosphorIcon(
-                    balance.isAvailable
-                        ? PhosphorIconsFill.checkCircle
-                        : PhosphorIconsFill.xCircle,
+                    balance.isAvailable ? PhosphorIconsFill.checkCircle : PhosphorIconsFill.xCircle,
                     size: 32,
-                    color: balance.isAvailable
-                        ? const Color(0xFF4CAF50)
-                        : const Color(0xFFE53935),
+                    color: balance.isAvailable ? PfColors.success : PfColors.destructive,
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: PfSpacing.md),
               Text(
                 balance.isAvailable ? 'API доступен' : 'API недоступен',
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: PfTypography.titleLg.copyWith(color: PfColors.foreground),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: PfSpacing.lg),
 
-        // Balance cards
+        // Balance cards — stat-callout style
         if (mainInfo != null) ...[
           _BalanceCard(
             label: 'Общий баланс',
             amount: mainInfo.totalBalance,
             currency: mainInfo.currency,
-            color: const Color(0xFF7C5CFC),
-            isDark: isDark,
+            icon: PhosphorIconsFill.wallet,
+            color: PfColors.accentAdmin,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: PfSpacing.sm),
           _BalanceCard(
             label: 'Пополнено',
             amount: mainInfo.toppedUpBalance,
             currency: mainInfo.currency,
-            color: const Color(0xFF4FC3F7),
-            isDark: isDark,
+            icon: PhosphorIconsFill.arrowCircleUp,
+            color: PfColors.success,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: PfSpacing.sm),
           _BalanceCard(
             label: 'Бесплатный грант',
             amount: mainInfo.grantedBalance,
             currency: mainInfo.currency,
+            icon: PhosphorIconsFill.gift,
             color: const Color(0xFF81C784),
-            isDark: isDark,
           ),
         ],
 
-        const SizedBox(height: 24),
+        const SizedBox(height: PfSpacing.lg),
 
         // Usage hint
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(PfSpacing.md),
           decoration: BoxDecoration(
-            color: AppTheme.accentColor.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
+            color: PfColors.accentAdmin.withValues(alpha: 0.08),
+            borderRadius: PfRadius.borderRadiusMd,
           ),
           child: Row(
             children: [
-              const PhosphorIcon(
-                PhosphorIconsFill.info,
-                size: 20,
-                color: AppTheme.accentColor,
-              ),
-              const SizedBox(width: 12),
+              const PhosphorIcon(PhosphorIconsFill.info, size: 20, color: PfColors.accentAdmin),
+              const SizedBox(width: PfSpacing.sm),
               Expanded(
                 child: Text(
-                  'Баланс обновляется раз в минуту. '
-                  'Тяни вниз для принудительного обновления.',
-                  style: TextStyle(
-                    color: subColor,
-                    fontSize: 13,
-                  ),
+                  'Баланс обновляется раз в минуту. Тяни вниз для принудительного обновления.',
+                  style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground),
                 ),
               ),
             ],
@@ -261,75 +189,53 @@ class _DeepSeekBalancePageState extends State<DeepSeekBalancePage> {
   }
 }
 
-// ─── Balance Card ────────────────────────────────────────────────────────────
+// ─── Balance Card (stat-callout style) ─────────────────────────────────
 
 class _BalanceCard extends StatelessWidget {
   final String label;
   final double amount;
   final String currency;
+  final PhosphorIconData icon;
   final Color color;
-  final bool isDark;
 
   const _BalanceCard({
     required this.label,
     required this.amount,
     required this.currency,
+    required this.icon,
     required this.color,
-    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    final surface = isDark ? AppTheme.cardColor : AppTheme.lightCardColor;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withValues(alpha: 0.2),
-        ),
-      ),
+    return PfCard(
+      padding: const EdgeInsets.all(PfSpacing.lg),
       child: Row(
         children: [
+          // Icon container
           Container(
             width: 44,
             height: 44,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: PfRadius.borderRadiusMd,
             ),
             child: Center(
-              child: PhosphorIcon(
-                PhosphorIconsFill.coin,
-                size: 22,
-                color: color,
-              ),
+              child: PhosphorIcon(icon, size: 22, color: color),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: PfSpacing.md),
+          // Label + amount
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: isDark
-                        ? AppTheme.textSecondary
-                        : AppTheme.lightTextSecondary,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                Text(label, style: PfTypography.caption.copyWith(color: PfColors.mutedForeground)),
+                const SizedBox(height: PfSpacing.xs),
                 Text(
                   '\$${amount.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    color: isDark
-                        ? AppTheme.textPrimary
-                        : AppTheme.lightTextPrimary,
+                  style: PfTypography.number.copyWith(
+                    color: PfColors.foreground,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -337,16 +243,8 @@ class _BalanceCard extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            currency,
-            style: TextStyle(
-              color: isDark
-                  ? AppTheme.textSecondary
-                  : AppTheme.lightTextSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          // Currency
+          Text(currency, style: PfTypography.bodyMd.copyWith(color: PfColors.mutedForeground)),
         ],
       ),
     );

@@ -3,14 +3,18 @@ import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
-import 'package:app/core/theme.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
-import 'package:app/core/theme_provider.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
+import 'package:app/shared/widgets/pf_card.dart';
+import 'package:app/shared/widgets/pf_button.dart';
+import 'package:app/shared/widgets/pf_divider.dart';
 import 'package:app/features/auth/data/auth_repository.dart';
 import 'package:app/features/home/data/user_repository.dart';
 import 'package:app/models/user.dart';
-import 'package:app/shared/widgets/responsive_layout.dart';
 import 'package:app/features/settings/data/settings_repository.dart';
 
 /// Settings sections available in the sidebar.
@@ -243,22 +247,30 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
-    final textColor = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+    final surface = isDark ? PfColors.surface : PfColors.surfaceLight;
+    final textColor = isDark ? PfColors.foreground : PfColors.foregroundLight;
     final subColor =
-        isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+        isDark ? PfColors.mutedForeground : PfColors.mutedForegroundLight;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: PfColors.background,
+      appBar: AppBar(
+        title: Text('Настройки', style: PfTypography.titleMd.copyWith(color: PfColors.foreground)),
+        backgroundColor: PfColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const PhosphorIcon(PhosphorIconsFill.caretLeft, color: PfColors.foreground),
+          onPressed: () => context.go('/'),
+        ),
+      ),
       body: SafeArea(
-        child: ResponsiveLayout(
-          builder: (context, screenSize, width) {
-            final isDesktop = screenSize == ScreenSize.desktop;
-
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 768;
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Sidebar (desktop) / Drawer (mobile) ──
+                // ── Sidebar (desktop) / hidden on mobile ──
                 if (isDesktop)
                   _buildDesktopSidebar(surface, textColor, subColor, isDark)
                 else
@@ -324,7 +336,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(
-                    color: AppTheme.accentColor,
+                    color: PfColors.accentSettings,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -468,7 +480,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       width: 8,
                       height: 8,
                       decoration: const BoxDecoration(
-                        color: AppTheme.accentColor,
+                        color: PfColors.accentSettings,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -585,20 +597,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 : '${bot.botToken}...';
             return Padding(
               padding: EdgeInsets.only(bottom: index < _bots.length - 1 ? 12 : 0),
-              child: Card(
-                elevation: 0,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : Colors.black.withValues(alpha: 0.03),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.08),
-                  ),
-                ),
-                child: Padding(
+              child: PfCard(
+                  variant: 'default',
                   padding: const EdgeInsets.all(14),
                   child: Row(
                     children: [
@@ -647,12 +647,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
-              ),
-            );
+              );
           }),
 
         const SizedBox(height: 24),
-        const Divider(),
+        const PfDivider(),
         const SizedBox(height: 24),
 
         // ── Add bot form ──
@@ -730,25 +729,12 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerRight,
-                child: ElevatedButton(
+                child: PfButton(
+                  variant: 'primary',
+                  size: 'md',
+                  label: 'Добавить бота',
+                  isLoading: _isLoadingBots,
                   onPressed: _isLoadingBots ? null : _addBot,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: _isLoadingBots
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Добавить бота'),
                 ),
               ),
             ],
@@ -809,25 +795,12 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
-                child: ElevatedButton(
+                child: PfButton(
+                  variant: 'primary',
+                  size: 'md',
+                  label: 'Сохранить',
+                  isLoading: _isSavingLogin,
                   onPressed: _isSavingLogin ? null : _saveLogin,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: _isSavingLogin
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Сохранить'),
                 ),
               ),
             ],
@@ -835,11 +808,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
 
         const SizedBox(height: 36),
-        Divider(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.black.withValues(alpha: 0.08),
-        ),
+        const PfDivider(),
         const SizedBox(height: 24),
 
         // ── Section: Password ──
@@ -947,25 +916,12 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
-                child: ElevatedButton(
+                child: PfButton(
+                  variant: 'primary',
+                  size: 'md',
+                  label: 'Изменить пароль',
+                  isLoading: _isSavingPassword,
                   onPressed: _isSavingPassword ? null : _savePassword,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: _isSavingPassword
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Изменить пароль'),
                 ),
               ),
             ],
@@ -973,11 +929,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
 
         const SizedBox(height: 36),
-        Divider(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.black.withValues(alpha: 0.08),
-        ),
+        const PfDivider(),
         const SizedBox(height: 24),
 
         // ── Section: Account info (read-only) ──
@@ -1029,7 +981,7 @@ class _SidebarItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppTheme.accentColor.withValues(alpha: 0.15)
+                  ? PfColors.accentSettings.withValues(alpha: 0.15)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
             ),
@@ -1039,20 +991,20 @@ class _SidebarItem extends StatelessWidget {
                   icon,
                   size: 20,
                   color: isSelected
-                      ? AppTheme.accentColor
+                      ? PfColors.accentSettings
                       : (isDark
-                          ? AppTheme.textPrimary.withValues(alpha: 0.7)
-                          : AppTheme.lightTextPrimary.withValues(alpha: 0.7)),
+                          ? PfColors.foreground.withValues(alpha: 0.7)
+                          : PfColors.foregroundLight.withValues(alpha: 0.7)),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   label,
                   style: TextStyle(
                     color: isSelected
-                        ? AppTheme.accentColor
+                        ? PfColors.accentSettings
                         : (isDark
-                            ? AppTheme.textPrimary
-                            : AppTheme.lightTextPrimary),
+                            ? PfColors.foreground
+                            : PfColors.foregroundLight),
                     fontSize: 15,
                     fontWeight:
                         isSelected ? FontWeight.w600 : FontWeight.w400,
@@ -1064,7 +1016,7 @@ class _SidebarItem extends StatelessWidget {
                     width: 4,
                     height: 4,
                     decoration: const BoxDecoration(
-                      color: AppTheme.accentColor,
+                      color: PfColors.accentSettings,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -1101,15 +1053,15 @@ class _ModalItem extends StatelessWidget {
         icon,
         size: 22,
         color: isSelected
-            ? AppTheme.accentColor
-            : (isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary),
+            ? PfColors.accentSettings
+            : (isDark ? PfColors.foreground : PfColors.foregroundLight),
       ),
       title: Text(
         label,
         style: TextStyle(
           color: isSelected
-              ? AppTheme.accentColor
-              : (isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary),
+              ? PfColors.accentSettings
+              : (isDark ? PfColors.foreground : PfColors.foregroundLight),
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
         ),
       ),
@@ -1118,7 +1070,7 @@ class _ModalItem extends StatelessWidget {
               width: 6,
               height: 6,
               decoration: const BoxDecoration(
-                color: AppTheme.accentColor,
+                color: PfColors.accentSettings,
                 shape: BoxShape.circle,
               ),
             )
@@ -1152,7 +1104,7 @@ class _InfoRow extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary,
+              color: isDark ? PfColors.mutedForeground : PfColors.mutedForegroundLight,
               fontSize: 14,
             ),
           ),
@@ -1160,7 +1112,7 @@ class _InfoRow extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+              color: isDark ? PfColors.foreground : PfColors.foregroundLight,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),

@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/features/admin/data/admin_repository.dart';
 import 'package:app/features/admin/models/agent_status.dart';
-import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
+import 'package:app/shared/widgets/adaptive_scaffold.dart';
+import 'package:app/shared/widgets/pf_card.dart';
+import 'package:app/shared/widgets/pf_badge.dart';
+import 'package:app/shared/widgets/pf_divider.dart';
 
 const double _maxTokens = 100000.0;
 
@@ -45,77 +52,40 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
   }
 
   Future<void> _loadAgentStatuses() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    setState(() { _isLoading = true; _error = null; });
     try {
       final storage = SecureStorage();
       final dioClient = DioClient(storage);
       final repository = AdminRepository(dioClient.dio);
       final agents = await repository.getAgentStatuses();
-
       agents.sort((a, b) {
         final aPos = int.tryParse(a.position) ?? 0;
         final bPos = int.tryParse(b.position) ?? 0;
         return aPos.compareTo(bPos);
       });
-
       String? sessionTask;
       if (agents.isNotEmpty) {
         final working = agents.where((a) => a.isWorking).toList();
-        if (working.isNotEmpty) {
-          sessionTask = working.first.currentTask;
-        }
+        if (working.isNotEmpty) sessionTask = working.first.currentTask;
       }
-
-      if (mounted) {
-        setState(() {
-          _agents = agents;
-          _sessionTask = sessionTask;
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _agents = agents; _sessionTask = sessionTask; _isLoading = false; });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
-        ),
-        title: Text(
-          'Мониторинг агентов',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    return AdaptiveScaffold(
+      title: 'Мониторинг агентов',
+      currentPath: '/admin/agents',
       body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
     if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
-      );
+      return const Center(child: CircularProgressIndicator(color: PfColors.accentAdmin));
     }
 
     if (_error != null) {
@@ -123,26 +93,25 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              'Ошибка загрузки',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16),
+            const PhosphorIcon(PhosphorIconsFill.warning, size: 48, color: PfColors.destructive),
+            const SizedBox(height: PfSpacing.md),
+            Text('Ошибка загрузки', style: PfTypography.titleMd.copyWith(color: PfColors.mutedForeground)),
+            const SizedBox(height: PfSpacing.xs),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: PfSpacing.xl),
+              child: Text(_error!, style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground), textAlign: TextAlign.center),
             ),
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadAgentStatuses,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Повторить'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
+            const SizedBox(height: PfSpacing.lg),
+            PfCard(
+              variant: 'default',
+              onTap: _loadAgentStatuses,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const PhosphorIcon(PhosphorIconsFill.arrowsClockwise, size: 16, color: PfColors.accentAdmin),
+                  const SizedBox(width: PfSpacing.xs),
+                  Text('Повторить', style: PfTypography.button.copyWith(color: PfColors.accentAdmin)),
+                ],
               ),
             ),
           ],
@@ -154,36 +123,43 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
 
     return RefreshIndicator(
       onRefresh: _loadAgentStatuses,
-      color: Theme.of(context).colorScheme.primary,
+      color: PfColors.accentAdmin,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(PfSpacing.md),
         children: [
+          // Session task
           if (_sessionTask != null && _sessionTask!.isNotEmpty) ...[
             _buildSessionSection(),
-            const SizedBox(height: 16),
+            const SizedBox(height: PfSpacing.md),
           ],
-          ...agents.map((agent) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _AgentCard(
-                  agent: agent,
-                  pulseAnimation: _pulseAnimation,
+          // Agent count header
+          Padding(
+            padding: const EdgeInsets.only(bottom: PfSpacing.md),
+            child: Row(
+              children: [
+                Text(
+                  'Агенты',
+                  style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
                 ),
-              )),
+                const SizedBox(width: PfSpacing.sm),
+                PfBadge(variant: 'info', label: '${agents.length}'),
+              ],
+            ),
+          ),
+          // Agent cards
+          ...agents.map((agent) => Padding(
+            padding: const EdgeInsets.only(bottom: PfSpacing.sm),
+            child: _AgentCard(agent: agent, pulseAnimation: _pulseAnimation),
+          )),
         ],
       ),
     );
   }
 
   Widget _buildSessionSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
-      ),
+    return PfCard(
+      padding: const EdgeInsets.all(PfSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -197,23 +173,15 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
                   color: Color(0xFFFFD700),
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(
-                'Сессия',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              const SizedBox(width: PfSpacing.sm),
+              Text('Сессия', style: PfTypography.titleMd.copyWith(color: PfColors.foreground)),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: PfSpacing.sm),
           Text(
-            '⚡ $_sessionTask',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-              fontSize: 14,
+            _sessionTask!,
+            style: PfTypography.bodyMd.copyWith(
+              color: PfColors.mutedForeground,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -223,186 +191,151 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
   }
 }
 
+// ─── Agent Card ────────────────────────────────────────────────────────
+
 class _AgentCard extends StatelessWidget {
   final AgentStatus agent;
   final Animation<double> pulseAnimation;
 
-  const _AgentCard({
-    required this.agent,
-    required this.pulseAnimation,
-  });
+  const _AgentCard({required this.agent, required this.pulseAnimation});
 
   Color get _statusColor {
-    if (agent.isError) return Colors.redAccent;
+    if (agent.isError) return PfColors.destructive;
     if (agent.isWorking) return const Color(0xFFFFD700);
-    return const Color(0xFF4CAF50);
+    return PfColors.success;
+  }
+
+  String get _statusLabel {
+    if (agent.isError) return 'Ошибка';
+    if (agent.isWorking) return 'Работает';
+    return 'Ожидает';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.surface,
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Status indicator
-                agent.isWorking
-                    ? AnimatedBuilder(
-                        animation: pulseAnimation,
-                        builder: (context, child) => Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _statusColor
-                                .withValues(alpha: pulseAnimation.value),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _statusColor
-                                    .withValues(alpha: pulseAnimation.value * 0.5),
-                                blurRadius: 8,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : Container(
+    return PfCard(
+      variant: 'default',
+      padding: const EdgeInsets.all(PfSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: status dot + name + role + status badge
+          Row(
+            children: [
+              // Pulse/static status dot
+              agent.isWorking
+                  ? AnimatedBuilder(
+                      animation: pulseAnimation,
+                      builder: (context, child) => Container(
                         width: 12,
                         height: 12,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _statusColor,
+                          color: _statusColor.withValues(alpha: pulseAnimation.value),
                           boxShadow: [
                             BoxShadow(
-                              color: _statusColor.withValues(alpha: 0.4),
-                              blurRadius: 4,
-                              spreadRadius: 1,
+                              color: _statusColor.withValues(alpha: pulseAnimation.value * 0.5),
+                              blurRadius: 8,
+                              spreadRadius: 2,
                             ),
                           ],
                         ),
                       ),
-                const SizedBox(width: 12),
-                // Name and role
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        agent.name,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    )
+                  : Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _statusColor,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        agent.role,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+              const SizedBox(width: PfSpacing.sm),
+              // Name and role
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(agent.name, style: PfTypography.titleMd.copyWith(color: PfColors.foreground)),
+                    const SizedBox(height: 2),
+                    Text(agent.role, style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground)),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Model and provider
+              ),
+              PfBadge(
+                variant: agent.isError ? 'destructive' : (agent.isWorking ? 'warning' : 'success'),
+                label: _statusLabel,
+                size: 'sm',
+              ),
+            ],
+          ),
+          const SizedBox(height: PfSpacing.sm),
+          const PfDivider(),
+          const SizedBox(height: PfSpacing.sm),
+          // Model + Provider
+          Row(
+            children: [
+              const PhosphorIcon(PhosphorIconsFill.cpu, size: 14, color: PfColors.mutedForeground),
+              const SizedBox(width: PfSpacing.xs),
+              Text(
+                '${agent.model} · ${agent.provider}',
+                style: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+              ),
+            ],
+          ),
+          const SizedBox(height: PfSpacing.sm),
+          // Token progress
+          _buildTokenProgress(),
+          // Cost
+          if (agent.costUsd > 0) ...[
+            const SizedBox(height: PfSpacing.xs),
             Row(
               children: [
-                Icon(Icons.memory, size: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-                const SizedBox(width: 6),
+                const PhosphorIcon(PhosphorIconsFill.coin, size: 14, color: PfColors.mutedForeground),
+                const SizedBox(width: PfSpacing.xs),
                 Text(
-                  '${agent.model} · ${agent.provider}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                    fontSize: 12,
-                  ),
+                  '\$${agent.costUsd.toStringAsFixed(4)}',
+                  style: PfTypography.caption.copyWith(color: PfColors.success, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            // Token progress
-            _buildTokenProgress(context),
-            const SizedBox(height: 8),
-            // Cost row
-            if (agent.costUsd > 0)
-              Row(
+          ],
+          // Working task
+          if (agent.isWorking && agent.currentTask.isNotEmpty) ...[
+            const SizedBox(height: PfSpacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: PfSpacing.sm, vertical: PfSpacing.sm),
+              decoration: BoxDecoration(
+                color: PfColors.accentAdmin.withValues(alpha: 0.1),
+                borderRadius: PfRadius.borderRadiusMd,
+                border: Border.all(color: PfColors.accentAdmin.withValues(alpha: 0.2)),
+              ),
+              child: Row(
                 children: [
-                  Icon(Icons.attach_money, size: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-                  const SizedBox(width: 4),
-                  Text(
-                    '\$${agent.costUsd.toStringAsFixed(4)}',
-                    style: const TextStyle(
-                      color: Color(0xFF81C784),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                  const Text('⚡', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: PfSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      agent.currentTask,
+                      style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground, fontStyle: FontStyle.italic),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-            // Working task
-            if (agent.isWorking && agent.currentTask.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Text(
-                      '⚡',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Выполняет: ${agent.currentTask}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildTokenProgress(BuildContext context) {
+  Widget _buildTokenProgress() {
     final totalTokens = agent.tokensIn + agent.tokensOut;
     final progress = (totalTokens / _maxTokens).clamp(0.0, 1.0);
-    final inFraction =
-        totalTokens > 0 ? agent.tokensIn / totalTokens : 0.5;
-    final theme = Theme.of(context);
+    final inFraction = totalTokens > 0 ? agent.tokensIn / totalTokens : 0.5;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,32 +343,18 @@ class _AgentCard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Токены',
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                fontSize: 11,
-              ),
-            ),
-            Text(
-              '$totalTokens / ${_maxTokens.toInt()}',
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                fontSize: 11,
-              ),
-            ),
+            Text('Токены', style: PfTypography.caption.copyWith(color: PfColors.mutedForeground)),
+            Text('$totalTokens / ${_maxTokens.toInt()}', style: PfTypography.caption.copyWith(color: PfColors.mutedForeground)),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: PfSpacing.xs),
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: PfRadius.borderRadiusPill,
           child: SizedBox(
             height: 6,
             child: Stack(
               children: [
-                Container(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                ),
+                Container(color: PfColors.muted),
                 FractionallySizedBox(
                   alignment: Alignment.centerLeft,
                   widthFactor: progress,
@@ -443,15 +362,11 @@ class _AgentCard extends StatelessWidget {
                     children: [
                       Flexible(
                         flex: (inFraction * 100).round().clamp(1, 99),
-                        child: Container(
-                          color: theme.colorScheme.primary,
-                        ),
+                        child: Container(color: PfColors.accentAdmin),
                       ),
                       Flexible(
                         flex: ((1 - inFraction) * 100).round().clamp(1, 99),
-                        child: Container(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.7),
-                        ),
+                        child: Container(color: PfColors.accentAdmin.withValues(alpha: 0.7)),
                       ),
                     ],
                   ),
@@ -464,17 +379,8 @@ class _AgentCard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'IN: ${agent.tokensIn}',
-              style: TextStyle(color: theme.colorScheme.primary, fontSize: 10),
-            ),
-            Text(
-              'OUT: ${agent.tokensOut}',
-              style: TextStyle(
-                color: theme.colorScheme.primary.withValues(alpha: 0.7),
-                fontSize: 10,
-              ),
-            ),
+            Text('IN: ${agent.tokensIn}', style: PfTypography.caption.copyWith(color: PfColors.accentAdmin, fontSize: 10)),
+            Text('OUT: ${agent.tokensOut}', style: PfTypography.caption.copyWith(color: PfColors.accentAdmin.withValues(alpha: 0.7), fontSize: 10)),
           ],
         ),
       ],

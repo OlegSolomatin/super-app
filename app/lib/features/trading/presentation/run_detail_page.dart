@@ -81,8 +81,8 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
   Future<void> _loadTrades() async {
     setState(() => _loadingTrades = true);
     try {
-      final trades = await widget.repository.getTrades(widget.runId);
-      if (mounted) setState(() { _trades = trades; _loadingTrades = false; });
+      final trades = await widget.repository.getRunTrades(widget.runId);
+      if (mounted) setState(() { _trades = trades.items; _loadingTrades = false; });
     } catch (_) {
       if (mounted) setState(() => _loadingTrades = false);
     }
@@ -93,7 +93,7 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
     _scanTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (!mounted) return;
       try {
-        final progress = await widget.repository.getScanProgress(widget.runId);
+        final progress = await widget.repository.getRunScanProgress(widget.runId);
         if (mounted) setState(() => _scanProgress = progress);
       } catch (_) {}
     });
@@ -431,8 +431,8 @@ class _TradeCard extends StatelessWidget {
                 ),
               const SizedBox(width: 8),
               PfBadge(
-                variant: trade.type == 'long' || trade.type == 'buy' ? 'success' : 'destructive',
-                label: (trade.type ?? '—').toUpperCase(),
+                variant: trade.isBuy ? 'success' : 'destructive',
+                label: trade.side.toUpperCase(),
               ),
               const Spacer(),
               if (pnl != null)
@@ -454,9 +454,9 @@ class _TradeCard extends StatelessWidget {
               Expanded(
                 child: _StatCell(
                   label: 'Entry',
-                  value: trade.entryPrice != null ? '\$${trade.entryPrice!.toStringAsFixed(4)}' : '—',
+                  value: '\$${trade.entryPrice.toStringAsFixed(4)}',
                   mono: true,
-                  color: trade.entryPrice != null ? PfColors.foreground : PfColors.mutedForeground,
+                  color: PfColors.foreground,
                 ),
               ),
               Expanded(
@@ -470,19 +470,13 @@ class _TradeCard extends StatelessWidget {
               Expanded(
                 child: _StatCell(
                   label: 'Кол-во',
-                  value: trade.amount != null ? trade.amount!.toStringAsFixed(6) : '—',
+                  value: trade.quantity.toStringAsFixed(6),
                   mono: true,
                 ),
               ),
             ],
           ),
-          if (trade.exitReason != null && trade.exitReason!.isNotEmpty) ...[
-            const SizedBox(height: PfSpacing.xs),
-            Text(
-              trade.exitReason!,
-              style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground),
-            ),
-          ],
+
         ],
       ),
     );

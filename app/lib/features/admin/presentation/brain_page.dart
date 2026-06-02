@@ -4,12 +4,18 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:app/core/theme.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/features/admin/data/admin_repository.dart';
 import 'package:app/features/admin/models/brain_model.dart';
-import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
+import 'package:app/shared/widgets/adaptive_scaffold.dart';
+import 'package:app/shared/widgets/pf_card.dart';
+import 'package:app/shared/widgets/pf_badge.dart';
+import 'package:app/shared/widgets/pf_divider.dart';
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
@@ -151,8 +157,8 @@ class _BrainPageState extends State<BrainPage>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? AppTheme.cardColor
-            : AppTheme.lightCardColor,
+            ? PfColors.card
+            : PfColors.cardLight,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -233,51 +239,52 @@ class _BrainPageState extends State<BrainPage>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('🧠 Второй мозг'),
-        backgroundColor:
-            isDark ? AppTheme.bgColor.withValues(alpha: 0.85) : surface.withValues(alpha: 0.85),
-        elevation: 0,
-        leading: IconButton(
-          icon: const PhosphorIcon(PhosphorIconsFill.caretLeft),
-          onPressed: () => context.go('/'),
-        ),
-        bottom: TabBar(
-          controller: _tabCtrl,
-          indicatorColor: AppTheme.accentColor,
-          labelColor: AppTheme.accentColor,
-          unselectedLabelColor:
-              isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary,
-          tabs: const [
-            Tab(icon: PhosphorIcon(PhosphorIconsFill.shareNetwork, size: 20), text: 'Граф'),
-            Tab(icon: PhosphorIcon(PhosphorIconsFill.listDashes, size: 20), text: 'Лента'),
-          ],
-        ),
+    return AdaptiveScaffold(
+      title: 'Второй мозг',
+      currentPath: '/brain',
+      body: Column(
+        children: [
+          // Pill tabs
+          Container(
+            margin: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.md, PfSpacing.lg, 0),
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: PfColors.surface,
+              borderRadius: PfRadius.borderRadiusPill,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _PillTabBrain(label: 'Граф', icon: PhosphorIconsFill.shareNetwork, tabIndex: 0, tabCtrl: _tabCtrl),
+                const SizedBox(width: 2),
+                _PillTabBrain(label: 'Лента', icon: PhosphorIconsFill.listDashes, tabIndex: 1, tabCtrl: _tabCtrl),
+              ],
+            ),
+          ),
+          const SizedBox(height: PfSpacing.md),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildError()
+                    : _graph == null
+                        ? const Center(child: Text('Нет данных'))
+                        : TabBarView(
+                            controller: _tabCtrl,
+                            children: [
+                              _BrainGraphView(
+                                graph: _graph!,
+                                onNodeTap: _showStatusDialog,
+                              ),
+                              _BrainTimelineView(
+                                graph: _graph!,
+                                onNodeTap: _showStatusDialog,
+                              ),
+                            ],
+                          ),
+          ),
+        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildError()
-              : _graph == null
-                  ? const Center(child: Text('Нет данных'))
-                  : TabBarView(
-                      controller: _tabCtrl,
-                      children: [
-                        _BrainGraphView(
-                          graph: _graph!,
-                          onNodeTap: _showStatusDialog,
-                        ),
-                        _BrainTimelineView(
-                          graph: _graph!,
-                          onNodeTap: _showStatusDialog,
-                        ),
-                      ],
-                    ),
     );
   }
 
@@ -317,6 +324,52 @@ class _BrainPageState extends State<BrainPage>
               onPressed: _loadGraph,
               icon: const PhosphorIcon(PhosphorIconsFill.arrowsClockwise),
               label: const Text('Повторить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Pill Tab for Brain ───────────────────────────────────────────────
+
+class _PillTabBrain extends StatelessWidget {
+  final String label;
+  final PhosphorIconData icon;
+  final int tabIndex;
+  final TabController tabCtrl;
+
+  const _PillTabBrain({
+    required this.label,
+    required this.icon,
+    required this.tabIndex,
+    required this.tabCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = tabCtrl.index == tabIndex;
+    return GestureDetector(
+      onTap: () => tabCtrl.animateTo(tabIndex),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? PfColors.accentAdmin : Colors.transparent,
+          borderRadius: PfRadius.borderRadiusPill,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhosphorIcon(icon, size: 16, color: isActive ? const Color(0xFF181A20) : PfColors.mutedForeground),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: PfTypography.button.copyWith(
+                color: isActive ? const Color(0xFF181A20) : PfColors.mutedForeground,
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -615,8 +668,8 @@ class _BrainGraphViewState extends State<_BrainGraphView>
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: isDark
-                                    ? AppTheme.textPrimary
-                                    : AppTheme.lightTextPrimary,
+                                    ? PfColors.foreground
+                                    : PfColors.foregroundLight,
                                 fontSize: fontSize,
                                 fontWeight: FontWeight.w500,
                                 decoration: implemented
@@ -653,12 +706,12 @@ class _BrainGraphViewState extends State<_BrainGraphView>
                 heroTag: 'brain_fit',
                 onPressed: _fitToScreen,
                 backgroundColor: isDark
-                    ? AppTheme.surfaceColor
-                    : AppTheme.lightSurfaceColor,
+                    ? PfColors.surface
+                    : PfColors.surfaceLight,
                 child: Icon(
                   PhosphorIconsFill.arrowsOut,
                   size: 16,
-                  color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+                  color: isDark ? PfColors.foreground : PfColors.foregroundLight,
                 ),
               ),
               const SizedBox(height: 8),
@@ -666,14 +719,14 @@ class _BrainGraphViewState extends State<_BrainGraphView>
                 heroTag: 'brain_play',
                 onPressed: _toggleSimulation,
                 backgroundColor: isDark
-                    ? AppTheme.surfaceColor
-                    : AppTheme.lightSurfaceColor,
+                    ? PfColors.surface
+                    : PfColors.surfaceLight,
                 child: Icon(
                   _animCtrl.isAnimating
                       ? PhosphorIconsFill.pause
                       : PhosphorIconsFill.play,
                   size: 16,
-                  color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+                  color: isDark ? PfColors.foreground : PfColors.foregroundLight,
                 ),
               ),
               const SizedBox(height: 8),
@@ -681,8 +734,8 @@ class _BrainGraphViewState extends State<_BrainGraphView>
                 '${nodes.length}·${edges.length}',
                 style: TextStyle(
                   color: isDark
-                      ? AppTheme.textSecondary
-                      : AppTheme.lightTextSecondary,
+                      ? PfColors.mutedForeground
+                      : PfColors.mutedForegroundLight,
                   fontSize: 9,
                 ),
               ),
@@ -752,7 +805,7 @@ class _GraphLegend extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(isCompact ? 6 : 10),
       decoration: BoxDecoration(
-        color: (isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor)
+        color: (isDark ? PfColors.surface : PfColors.surfaceLight)
             .withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
@@ -782,8 +835,8 @@ class _GraphLegend extends StatelessWidget {
                   style: TextStyle(
                     fontSize: isCompact ? 8 : 10,
                     color: isDark
-                        ? AppTheme.textSecondary
-                        : AppTheme.lightTextSecondary,
+                        ? PfColors.mutedForeground
+                        : PfColors.mutedForegroundLight,
                   )),
             ],
           ),
@@ -842,27 +895,27 @@ class _BrainTimelineViewState extends State<_BrainTimelineView> {
           child: TextField(
             onChanged: (v) => setState(() => _search = v),
             style: TextStyle(
-              color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+              color: isDark ? PfColors.foreground : PfColors.foregroundLight,
               fontSize: 14,
             ),
             decoration: InputDecoration(
               hintText: 'Поиск по названию, тегам, папке…',
               hintStyle: TextStyle(
                 color: isDark
-                    ? AppTheme.textSecondary
-                    : AppTheme.lightTextSecondary,
+                    ? PfColors.mutedForeground
+                    : PfColors.mutedForegroundLight,
               ),
               prefixIcon: PhosphorIcon(
                 PhosphorIconsFill.magnifyingGlass,
                 size: 18,
                 color: isDark
-                    ? AppTheme.textSecondary
-                    : AppTheme.lightTextSecondary,
+                    ? PfColors.mutedForeground
+                    : PfColors.mutedForegroundLight,
               ),
               filled: true,
               fillColor: isDark
-                  ? AppTheme.surfaceColor
-                  : AppTheme.lightSurfaceColor,
+                  ? PfColors.surface
+                  : PfColors.surfaceLight,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -882,8 +935,8 @@ class _BrainTimelineViewState extends State<_BrainTimelineView> {
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark
-                      ? AppTheme.textSecondary
-                      : AppTheme.lightTextSecondary,
+                      ? PfColors.mutedForeground
+                      : PfColors.mutedForegroundLight,
                 ),
               ),
             ],
@@ -923,11 +976,11 @@ class _TimelineItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = statusColor(node.status);
-    final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
+    final surface = isDark ? PfColors.surface : PfColors.surfaceLight;
     final textColor =
-        isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+        isDark ? PfColors.foreground : PfColors.foregroundLight;
     final subColor =
-        isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+        isDark ? PfColors.mutedForeground : PfColors.mutedForegroundLight;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),

@@ -31,6 +31,8 @@ class PfColors {
   static const Color backgroundLight = Color(0xFFF5F5F5);
   static const Color foregroundLight = Color(0xFF181A20);
   static const Color cardLight = Color(0xFFFFFFFF);
+  static const Color surfaceLight = Color(0xFFF0F0F0);
+  static const Color mutedForegroundLight = Color(0xFF6B7280);
   static const Color borderLight = Color(0xFFEAECEF);
 
   // ─── Section accent colors (skins) ───────────────────────────────────

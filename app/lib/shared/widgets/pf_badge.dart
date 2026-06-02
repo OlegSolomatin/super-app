@@ -15,11 +15,13 @@ import 'package:app/shared/tokens/pf_typography.dart';
 class PfBadge extends StatelessWidget {
   final String label;
   final String variant;
+  final String size;
 
   const PfBadge({
     super.key,
     required this.label,
     this.variant = 'default',
+    this.size = 'md',
   });
 
   @override
@@ -38,17 +40,22 @@ class PfBadge extends StatelessWidget {
         bgColor = PfColors.warning;
         fgColor = const Color(0xFF181A20);
       case 'info':
-        bgColor = Theme.of(context).colorScheme.primary.withValues(alpha: 0.15);
-        fgColor = Theme.of(context).colorScheme.primary;
+        bgColor = PfColors.accentAdmin.withValues(alpha: 0.15);
+        fgColor = PfColors.accentAdmin;
       default:
         bgColor = PfColors.muted;
         fgColor = PfColors.mutedForeground;
     }
 
+    final isSmall = size == 'sm';
+    final vPad = isSmall ? 1.0 : 2.0;
+    final hPad = isSmall ? 6.0 : 8.0;
+    final fSize = isSmall ? 10.0 : 12.0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: PfSpacing.xs,
-        vertical: 2,
+      padding: EdgeInsets.symmetric(
+        horizontal: hPad,
+        vertical: vPad,
       ),
       decoration: BoxDecoration(
         color: bgColor,
@@ -56,7 +63,7 @@ class PfBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: PfTypography.caption.copyWith(color: fgColor),
+        style: PfTypography.caption.copyWith(color: fgColor, fontSize: fSize),
       ),
     );
   }
