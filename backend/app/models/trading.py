@@ -174,6 +174,7 @@ class TradingTrade(Base):
         index=True,
     )
     side = Column(String(10), nullable=False)  # BUY / SELL
+    pair = Column(String(20), nullable=True)  # Which pair (for pair-scanner runs)
     entry_price = Column(Float, nullable=False)
     exit_price = Column(Float, nullable=True)
     entry_time = Column(DateTime(timezone=True), nullable=False)

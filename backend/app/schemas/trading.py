@@ -184,6 +184,7 @@ class TradeResponse(BaseModel):
     id: int
     run_id: int
     side: str  # BUY / SELL
+    pair: Optional[str] = None  # Which pair (for pair-scanner runs)
     entry_price: float
     exit_price: Optional[float] = None
     entry_time: datetime
@@ -213,8 +214,9 @@ class StrategyInfo(BaseModel):
 
     name: str
     description: str
-    type: str  # candle_pattern, indicator_based, ml
+    type: str  # candle_pattern, indicator_based, ml, pair_scanner
     nuances: Optional[str] = None  # Detailed info: SL, entry/exit, risk, etc.
+    is_pair_scanner: bool = False  # If True, scans all pairs (pair selector hidden)
 
 
 class ExchangeInfo(BaseModel):

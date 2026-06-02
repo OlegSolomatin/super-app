@@ -704,12 +704,163 @@ class _TradingPageState extends State<TradingPage>
       onRefresh: _loadHistoryRuns,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _historyRuns.length,
+        itemCount: _historyRuns.length + 1, // +1 for summary header
         itemBuilder: (context, index) {
-          final run = _historyRuns[index];
+          if (index == 0) {
+            return _buildHistorySummary();
+          }
+          final run = _historyRuns[index - 1];
           return _buildHistoryRunCard(run);
         },
       ),
+    );
+  }
+
+  /// Build a summary header card above the history list.
+  Widget _buildHistorySummary() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Filter out error runs for stats
+    final valid = _historyRuns.where((r) => r.status != 'error').toList();
+    if (valid.isEmpty) return const SizedBox.shrink();
+
+    int totalTrades = 0;
+    int totalWins = 0;
+    double totalPnl = 0;
+    double totalBalance = 0;
+
+    for (final run in valid) {
+      if (run.totalTrades != null && run.totalTrades! > 0) {
+        totalTrades += run.totalTrades!;
+        if (run.successRate != null) {
+          // win_rate is 0-1, convert to count
+          totalWins += (run.successRate! * run.totalTrades!).round();
+        }
+      }
+      if (run.pnl != null) {
+        totalPnl += run.pnl!;
+      }
+      if (run.startingBalance != null) {
+        totalBalance += run.startingBalance!;
+      }
+    }
+
+    if (totalTrades == 0) return const SizedBox.shrink();
+
+    final overallWinRate = totalTrades > 0 ? totalWins / totalTrades : 0.0;
+    final overallPnlPct = totalBalance > 0 ? (totalPnl / totalBalance) * 100 : 0.0;
+    final isPositive = overallPnlPct >= 0;
+
+    return Card(
+      color: isDark ? AppTheme.cardColor : AppTheme.lightCardColor,
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: (isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935))
+              .withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                PhosphorIcon(
+                  PhosphorIconsFill.chartBar,
+                  size: 20,
+                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Общая статистика',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$totalTrades сделок',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    theme: theme,
+                    icon: isPositive ? PhosphorIconsFill.trendUp : PhosphorIconsFill.trendDown,
+                    iconColor: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
+                    label: 'ROI',
+                    value: '${isPositive ? '+' : ''}${overallPnlPct.toStringAsFixed(2)}%',
+                    valueColor: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    theme: theme,
+                    icon: PhosphorIconsFill.target,
+                    iconColor: AppTheme.accentColor,
+                    label: 'WinRate',
+                    value: '${(overallWinRate * 100).toStringAsFixed(1)}%',
+                    valueColor: AppTheme.accentColor,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    theme: theme,
+                    icon: PhosphorIconsFill.coins,
+                    iconColor: (theme.textTheme.bodyMedium?.color ?? Colors.grey).withValues(alpha: 0.7),
+                    label: 'Всего PnL',
+                    value: '${isPositive ? '+' : ''}\$${totalPnl.toStringAsFixed(2)}',
+                    valueColor: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
+    required ThemeData theme,
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+    required Color valueColor,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PhosphorIcon(icon, size: 22, color: iconColor),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: valueColor,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
+            fontSize: 11,
+          ),
+        ),
+      ],
     );
   }
 

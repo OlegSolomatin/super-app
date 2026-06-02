@@ -173,18 +173,19 @@ class _DashboardTileState extends State<DashboardTile>
                                 horizontal: 14,
                                 vertical: 18,
                               ),
-                              child: Center(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Icon — guaranteed centered in its container
                                     _buildIcon(isAdmin, isDark),
                                     const SizedBox(height: 12),
-                                    // Title — always centered
+                                    // Title — always left-aligned
                                     Text(
                                       widget.data.title,
-                                      textAlign: TextAlign.center,
+                                      textAlign: TextAlign.start,
                                       style: TextStyle(
                                         color: isDark
                                             ? AppTheme.textPrimary
@@ -196,7 +197,7 @@ class _DashboardTileState extends State<DashboardTile>
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     const SizedBox(height: 2),
-                                    // Subtitle — always centered
+                                    // Subtitle — always left-aligned
                                     Text(
                                       widget.data.subtitle,
                                       style: TextStyle(
@@ -205,7 +206,7 @@ class _DashboardTileState extends State<DashboardTile>
                                             : AppTheme.lightTextSecondary,
                                         fontSize: 12,
                                       ),
-                                      textAlign: TextAlign.center,
+                                      textAlign: TextAlign.start,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),

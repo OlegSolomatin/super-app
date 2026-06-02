@@ -21,7 +21,7 @@ from app.models.trading import TradingResult as DBTradingResult
 from app.models.trading import TradingRun as DBTradingRun
 from app.models.trading import TradingTrade as DBTradingTrade
 from app.services.trading.data_loader import DataLoader
-from app.services.trading.engine import TradingEngine
+from app.services.trading.engine import ALL_PAIRS_SCANNER_STRATEGIES, TradingEngine
 from app.services.trading.exchange.binance import BinanceExchange
 from app.services.trading.exchange.bybit import BybitExchange
 from app.services.trading.exchange.mock import MockExchange
@@ -32,6 +32,7 @@ from app.services.trading.models import (
     TradingConfig,
     TradingRunStatus,
 )
+from app.services.trading.pair_list import ALL_PAIR_SYMBOLS
 
 logger = logging.getLogger(__name__)
 
@@ -148,24 +149,103 @@ class TradingScheduler:
                     period_start = config.period_start or (now - timedelta(days=config.duration_days or 30))
                     period_end = config.period_end or now
 
-                    loader = DataLoader(pair=config.pair, timeframe=config.timeframe, exchange_name=config.exchange or "binance")
-                    candles = await loader.load_history(period_start, period_end)
+                    # ── Pair-scanner strategies: iterate ALL pairs ──
+                    if config.strategy in ALL_PAIRS_SCANNER_STRATEGIES:
+                        if config.mode.value != "history":
+                            raise ValueError("Pair-scanner strategies only work in history mode")
 
-                    if not candles:
-                        raise ValueError(f"No candle data available for {config.pair} ({config.timeframe})")
+                        all_trades: List[Trade] = []
+                        total_pnl = 0.0
+                        logger.info(
+                            "Run %d: pair-scanner %s scanning %d pairs [%s]",
+                            run_id, config.strategy, len(ALL_PAIR_SYMBOLS), config.timeframe,
+                        )
 
-                    logger.info(
-                        "Run %d: loaded %d candles for %s [%s]",
-                        run_id,
-                        len(candles),
-                        config.pair,
-                        config.timeframe,
-                    )
+                        for idx, pair_symbol in enumerate(ALL_PAIR_SYMBOLS):
+                            try:
+                                loader = DataLoader(
+                                    pair=pair_symbol,
+                                    timeframe=config.timeframe,
+                                    exchange_name=config.exchange or "binance",
+                                )
+                                pair_candles = await loader.load_history(period_start, period_end)
 
-                    if config.mode.value == "real":
-                        trades, metrics = await engine.run_real(candles)
+                                if not pair_candles or len(pair_candles) < 20:
+                                    continue
+
+                                # Reuse engine with this pair
+                                pair_config = TradingConfig(
+                                    mode=config.mode,
+                                    pair=pair_symbol,
+                                    strategy=config.strategy,
+                                    leverage=config.leverage,
+                                    virtual_balance=config.virtual_balance,
+                                    max_trade_amount=config.max_trade_amount,
+                                    timeframe=config.timeframe,
+                                    exchange=config.exchange,
+                                    period_start=config.period_start,
+                                    period_end=config.period_end,
+                                    stop_loss_percent=config.stop_loss_percent or 1.0,
+                                    take_profit_percent=config.take_profit_percent or 5.0,
+                                    trend_filter_enabled=config.trend_filter_enabled,
+                                    trend_filter_period=config.trend_filter_period,
+                                )
+                                pair_engine = TradingEngine(pair_config)
+                                pair_trades, pair_metrics = await pair_engine.run_history(pair_candles)
+
+                                # Tag each trade with its pair
+                                for t in pair_trades:
+                                    t.pair = pair_symbol
+
+                                all_trades.extend(pair_trades)
+                                total_pnl += pair_metrics.profit_loss
+
+                                if (idx + 1) % 10 == 0:
+                                    logger.info(
+                                        "Run %d: scan progress %d/%d pairs, %d trades found, PnL=%.2f",
+                                        run_id, idx + 1, len(ALL_PAIR_SYMBOLS),
+                                        len(all_trades), total_pnl,
+                                    )
+
+                            except Exception as pair_err:
+                                logger.warning(
+                                    "Run %d: pair %s scan error: %s", run_id, pair_symbol, pair_err,
+                                )
+                                continue
+
+                        logger.info(
+                            "Run %d: scan completed %d pairs, %d trades found, PnL=%.2f",
+                            run_id, len(ALL_PAIR_SYMBOLS), len(all_trades), total_pnl,
+                        )
+                        trades = all_trades
+                        metrics = Metrics(
+                            total_trades=len(all_trades),
+                            win_trades=sum(1 for t in all_trades if t.pnl > 0),
+                            loss_trades=sum(1 for t in all_trades if t.pnl <= 0),
+                            win_rate=sum(1 for t in all_trades if t.pnl > 0) / len(all_trades) if all_trades else 0.0,
+                            profit_loss=total_pnl,
+                            final_balance=config.virtual_balance + total_pnl,
+                        )
                     else:
-                        trades, metrics = await engine.run_history(candles)
+                        # ── Single-pair strategy (standard) ──
+                        loader = DataLoader(pair=config.pair, timeframe=config.timeframe, exchange_name=config.exchange or "binance")
+                        candles = await loader.load_history(period_start, period_end)
+
+                        if not candles:
+                            raise ValueError(f"No candle data available for {config.pair} ({config.timeframe})")
+
+                        logger.info(
+                            "Run %d: loaded %d candles for %s [%s]",
+                            run_id,
+                            len(candles),
+                            config.pair,
+                            config.timeframe,
+                        )
+
+                        if config.mode.value == "real":
+                            trades, metrics = await engine.run_real(candles)
+                        else:
+                            trades, metrics = await engine.run_history(candles)
 
                 logger.info(
                     "Run %d: completed with %d trades, PnL=%.2f",
@@ -287,6 +367,7 @@ class TradingScheduler:
             db_trade = DBTradingTrade(
                 run_id=run_id,
                 side=trade.side,
+                pair=trade.pair,  # might be None for non-scanner runs
                 entry_price=trade.entry_price,
                 exit_price=trade.exit_price,
                 entry_time=trade.entry_time or datetime.now(timezone.utc),

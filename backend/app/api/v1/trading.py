@@ -55,58 +55,7 @@ router = APIRouter(prefix="/trading", tags=["trading"])
 # ---------------------------------------------------------------------------
 # Hardcoded pair list
 # ---------------------------------------------------------------------------
-COIN_ICON_NAMES: dict[str, str] = {
-    "BTC": "bitcoin-btc",
-    "ETH": "ethereum-eth",
-    "BNB": "binance-coin-bnb",
-    "SOL": "solana-sol",
-    "XRP": "xrp-xrp",
-    "ADA": "cardano-ada",
-    "DOGE": "dogecoin-doge",
-    "AVAX": "avalanche-avax",
-    "DOT": "polkadot-dot",
-    "MATIC": "polygon-matic",
-    "LTC": "litecoin-ltc",
-    "LINK": "chainlink-link",
-    "UNI": "uniswap-uni",
-    "ATOM": "cosmos-atom",
-    "ETC": "ethereum-classic-etc",
-    "FIL": "filecoin-fil",
-    "TRX": "tron-trx",
-    "XLM": "stellar-xlm",
-    "VET": "vechain-vet",
-    "ALGO": "algorand-algo",
-    "NEAR": "near-protocol-near",
-    "FTM": "fantom-ftm",
-    "SAND": "the-sandbox-sand",
-    "MANA": "decentraland-mana",
-    "AXS": "axie-infinity-axs",
-    "APE": "apecoin-ape",
-    "SHIB": "shiba-inu-shib",
-    "CRO": "crypto-com-cro",
-    "EOS": "eos-eos",
-    "ICX": "icon-icx",
-    "ZEC": "zcash-zec",
-    "XMR": "monero-xmr",
-    "DASH": "dash-dash",
-    "ZIL": "zilliqa-zil",
-    "KSM": "kusama-ksm",
-    "COMP": "compound-comp",
-    "YFI": "yearn-finance-yfi",
-    "AAVE": "aave-aave",
-    "MKR": "maker-mkr",
-    "BAT": "basic-attention-token-bat",
-    "ENJ": "enjin-coin-enj",
-    "CHZ": "chiliz-chz",
-    "ONE": "harmony-one",
-    "ANKR": "ankr-ankr",
-    "IOST": "iost-iost",
-    "WAVES": "waves-waves",
-    "ONT": "ontology-ont",
-    "IOTA": "miota-iota",
-    "NANO": "nano-nano",
-    "LSK": "lisk-lsk",
-}
+from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url
 
 HARDCODED_PAIRS = [
     PairInfo(symbol="BTCUSDT", base="BTC", quote="USDT", min_qty=0.001, tick_size=0.01),
@@ -165,12 +114,7 @@ def _get_pair_list() -> list[dict]:
     """Build pair list with icon_url populated."""
     items = []
     for p in HARDCODED_PAIRS:
-        coin_name = COIN_ICON_NAMES.get(p.base)
-        icon_url = (
-            f"https://cryptologos.cc/logos/{coin_name}-logo.png?v=040"
-            if coin_name
-            else None
-        )
+        icon_url = get_coin_icon_url(p.base)
         items.append({
             "symbol": p.symbol,
             "base": p.base,
@@ -186,6 +130,43 @@ def _get_pair_list() -> list[dict]:
 # ---------------------------------------------------------------------------
 HARDCODED_STRATEGIES = [
     StrategyInfo(
+        name="all_pairs_hammer",
+        description="🔍 Молот на всех парах — сканирует ВСЕ доступные USDT-пары и ищет паттерн Hammer на каждой. Только история, TF ≥ 30м.",
+        type="pair_scanner",
+        nuances=(
+            "🔍 **Сканирование всех пар**\n\n"
+            "📈 **Как работает:**\n"
+            "• Проходит по всем USDT-парам из списка биржи\n"
+            "• На каждой паре ищет паттерн Hammer (бычий разворот)\n"
+            "• Открывает сделки на всех парах, где найден паттерн\n\n"
+            "📊 **Рекомендуемый TF:** 30m+\n\n"
+            "⚠️ **Только исторический режим**\n"
+            "• Требует больше ресурсов ПК\n"
+            "• SL: −1% / TP: +5%"
+        ),
+        is_pair_scanner=True,
+    ),
+    StrategyInfo(
+        name="all_pairs_inverse_hammer",
+        description="🔍 Перевёрнутый Молот на всех парах — сканирует ВСЕ доступные USDT-пары и ищет паттерн Inverse Hammer на каждой. Только история, TF ≥ 30м.",
+        type="pair_scanner",
+        nuances=(
+            "🔍 **Сканирование всех пар**\n\n"
+            "📈 **Как работает:**\n"
+            "• Проходит по всем USDT-парам из списка биржи\n"
+            "• На каждой паре ищет паттерн Inverse Hammer (медвежий разворот)\n"
+            "• Открывает сделки на всех парах, где найден паттерн\n\n"
+            "📊 **Рекомендуемый TF:** 30m+\n\n"
+            "⚠️ **Только исторический режим**\n"
+            "• Требует больше ресурсов ПК\n"
+            "• SL: −1% / TP: +5%"
+        ),
+        is_pair_scanner=True,
+    ),
+    # ═══════════════════════════════════════════════════
+    # Свечные паттерны
+    # ═══════════════════════════════════════════════════
+    StrategyInfo(
         name="hammer",
         description="Молот — бычий разворотный паттерн. Маленькое тело, длинная нижняя тень. Трендовый фильтр (SMA200) отсекает ложные сигналы.",
         type="candle_pattern",
@@ -196,13 +177,12 @@ HARDCODED_STRATEGIES = [
             "• Верхняя тень малая (≤10% от диапазона)\n"
             "• Свеча находится после нисходящего тренда\n\n"
             "📉 **Условия выхода:**\n"
-            "• Стоп-лосс (SL): −2% от цены входа\n"
-            "• Тейк-профит (TP): +5% от цены входа\n"
+            "• SL: −2% от цены входа\n"
+            "• TP: +5% от цены входа\n"
             "• Либо по сигналу Inverse Hammer\n\n"
-            "⚙️ **Настройки по умолчанию:**\n"
-            "• SL: 2% | TP: 5% | Риск:Reward = 1:2.5\n"
-            "• Плечо: 1×–10×\n"
-            "• Рекомендуемый таймфрейм: 1h–4h"
+            "⚙️ **Настройки:** SL: 2% | TP: 5% | Риск:Reward = 1:2.5\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
         ),
     ),
     StrategyInfo(
@@ -216,13 +196,289 @@ HARDCODED_STRATEGIES = [
             "• Нижняя тень малая (≤10% от диапазона)\n"
             "• Свеча находится после восходящего тренда\n\n"
             "📉 **Условия выхода:**\n"
-            "• Стоп-лосс (SL): +2% от цены входа (для шорта)\n"
-            "• Тейк-профит (TP): −5% от цены входа\n"
+            "• SL: +2% от цены входа (для шорта)\n"
+            "• TP: −5% от цены входа\n"
             "• Либо по сигналу Hammer\n\n"
-            "⚙️ **Настройки по умолчанию:**\n"
-            "• SL: 2% | TP: 5% | Риск:Reward = 1:2.5\n"
-            "• Плечо: 1×–10×\n"
-            "• Рекомендуемый таймфрейм: 1h–4h"
+            "⚙️ **Настройки:** SL: 2% | TP: 5% | Риск:Reward = 1:2.5\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="engulfing",
+        description="Поглощение — бычий/медвежий разворотный паттерн. Тело текущей свечи полностью перекрывает тело предыдущей.",
+        type="candle_pattern",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Текущая свеча бычья (close > open)\n"
+            "• Тело текущей свечи полностью поглощает тело предыдущей\n"
+            "• Предыдущая свеча медвежья (close < open)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Текущая свеча медвежья\n"
+            "• Тело поглощает тело предыдущей бычьей свечи\n\n"
+            "⚙️ **Таймфрейм:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="doji",
+        description="Доджи — свеча с крошечным телом, сигнал неопределённости и потенциального разворота тренда.",
+        type="candle_pattern",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Доджи после 2+ медвежьих свеч подряд\n"
+            "• Тело доджи ≤5% от всего диапазона свечи\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Доджи после 2+ бычьих свеч подряд\n\n"
+            "⚙️ **Таймфрейм:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="three_soldiers",
+        description="Три солдата / Три вороны — паттерн из 3 свечей подтверждает сильный тренд.",
+        type="candle_pattern",
+        nuances=(
+            "📈 **Условия входа (BUY) — Три белых солдата:**\n"
+            "• 3 бычьих свечи подряд\n"
+            "• Каждая закрывается выше предыдущей\n\n"
+            "📉 **Условия входа (SELL) — Три чёрные вороны:**\n"
+            "• 3 медвежьих свечи подряд\n"
+            "• Каждая закрывается ниже предыдущей\n\n"
+            "⚙️ **Таймфрейм:** 1h–4h"
+        ),
+    ),
+    # ═══════════════════════════════════════════════════
+    # Трендовые стратегии
+    # ═══════════════════════════════════════════════════
+    StrategyInfo(
+        name="ma_crossover",
+        description="Пересечение скользящих средних — BUY при пересечении SMA50 выше SMA200, SELL при пересечении вниз.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• SMA(20) пересекает SMA(50) снизу вверх (золотое сечение)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• SMA(20) пересекает SMA(50) сверху вниз (смертельное сечение)\n\n"
+            "⚙️ **Параметры:** SMA20 × SMA50\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="triple_ma",
+        description="Три скользящие средние — вход по тренду при правильном порядке всех трёх MA.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• SMA(10) > SMA(30) > SMA(50) — восходящий тренд подтверждён\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• SMA(10) < SMA(30) < SMA(50) — нисходящий тренд\n\n"
+            "⚙️ **Параметры:** SMA10 × SMA30 × SMA50\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="macd_crossover",
+        description="MACD — пересечение MACD-линии с сигнальной. Классический трендовый индикатор.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• MACD-линия пересекает сигнальную снизу вверх\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• MACD-линия пересекает сигнальную сверху вниз\n\n"
+            "⚙️ **Параметры:** MACD(12, 26, 9)\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="parabolic_sar",
+        description="Parabolic SAR — точки под/над ценой определяют направление тренда. Переворотная стратегия.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• SAR под ценой — тренд вверх\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• SAR над ценой — тренд вниз\n\n"
+            "⚙️ **Параметры:** ускорение 0.02, макс 0.20\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="adx",
+        description="ADX — определяет силу тренда. Вход только при ADX > 25 в направлении сильного индекса (+DI или -DI).",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• ADX > 25 (сильный тренд)\n"
+            "• +DI > -DI (направление вверх)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• ADX > 25\n"
+            "• -DI > +DI (направление вниз)\n\n"
+            "⚙️ **Параметры:** ADX(14)\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
+        ),
+    ),
+    StrategyInfo(
+        name="supertrend",
+        description="Supertrend — ATR-основанный индикатор тренда с переворотом. Надёжен на сильных движениях.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Цена пересекает нижнюю полосу Supertrend вверх\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Цена пересекает верхнюю полосу Supertrend вниз\n\n"
+            "⚙️ **Параметры:** ATR(10), множитель 3\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
+        ),
+    ),
+    # ═══════════════════════════════════════════════════
+    # Осцилляторы / Разворотные
+    # ═══════════════════════════════════════════════════
+    StrategyInfo(
+        name="rsi_oversold",
+        description="RSI — вход на перекупленности/перепроданности. BUY при RSI < 30, SELL при RSI > 70.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• RSI(14) < 30 — перепроданность (подтверждённая)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• RSI(14) > 70 — перекупленность (подтверждённая)\n\n"
+            "⚙️ **Параметры:** RSI(14), пороги 30/70\n"
+
+            "📊 **Рекомендуемый TF:** 1h"
+        ),
+    ),
+    StrategyInfo(
+        name="stochastic",
+        description="Стохастик — %K и %D. BUY при %K < 20 и пересечении вверх, SELL при %K > 80 и пересечении вниз.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• %K < 20 (перепроданность)\n"
+            "• %K пересекает %D снизу вверх\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• %K > 80 (перекупленность)\n"
+            "• %K пересекает %D сверху вниз\n\n"
+            "⚙️ **Параметры:** %K(14), %D(3)\n"
+
+            "📊 **Рекомендуемый TF:** 1h"
+        ),
+    ),
+    # ═══════════════════════════════════════════════════
+    # Волатильность
+    # ═══════════════════════════════════════════════════
+    StrategyInfo(
+        name="bollinger_bands",
+        description="Полосы Боллинджера — BUY при касании нижней полосы, SELL при касании верхней полосы.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Цена касается или пересекает нижнюю полосу (ожидание отскока)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Цена касается или пересекает верхнюю полосу (ожидание отката)\n\n"
+            "⚙️ **Параметры:** BB(20, 2σ)\n"
+
+            "📊 **Рекомендуемый TF:** 4h–1d"
+        ),
+    ),
+    StrategyInfo(
+        name="keltner_channels",
+        description="Канал Кельтнера — EMA(20) ± ATR×2. BUY при пересечении верхней границы, SELL при нижней.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Цена пересекает верхнюю границу канала\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Цена пересекает нижнюю границу канала\n\n"
+            "⚙️ **Параметры:** EMA(20), ATR(14), множитель 2\n"
+
+            "📊 **Рекомендуемый TF:** 4h–1d"
+        ),
+    ),
+    StrategyInfo(
+        name="atr_breakout",
+        description="ATR Breakout — пробой на ATR×1.5 от предыдущего закрытия. Волатильный пробой с подтверждением объёмом.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Close > prev_close + ATR×1.5 (пробой вверх)\n"
+            "• Объём выше предыдущего\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Close < prev_close − ATR×1.5 (пробой вниз)\n"
+            "• Объём выше предыдущего\n\n"
+            "⚙️ **Параметры:** ATR(14), множитель 1.5\n"
+
+            "📊 **Рекомендуемый TF:** 4h–1d"
+        ),
+    ),
+    StrategyInfo(
+        name="donchian",
+        description="Дончиан — пробой 20-периодного максимума/минимума. Классический breakout-канал.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Close > highest high за 20 свечей (пробой вверх)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Close < lowest low за 20 свечей (пробой вниз)\n\n"
+            "⚙️ **Параметры:** период 20\n"
+
+            "📊 **Рекомендуемый TF:** 4h–1d"
+        ),
+    ),
+    # ═══════════════════════════════════════════════════
+    # Объёмные
+    # ═══════════════════════════════════════════════════
+    StrategyInfo(
+        name="vwap",
+        description="VWAP — вход при отклонении цены на 2% от среднеобъёмной цены. BUY ниже VWAP, SELL выше.",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• Close < VWAP × 0.98 (недооценка на 2%)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• Close > VWAP × 1.02 (переоценка на 2%)\n\n"
+            "⚙️ **Расчёт:** VWAP на всех доступных свечах\n"
+
+            "📊 **Рекомендуемый TF:** 1h"
+        ),
+    ),
+    StrategyInfo(
+        name="obv",
+        description="OBV — расхождение On-Balance Volume с ценой. BUY при росте OBV на падающей цене (накопление).",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• OBV растёт последние 5 свечей\n"
+            "• Цена падает (бычья дивергенция)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• OBV падает последние 5 свечей\n"
+            "• Цена растёт (медвежья дивергенция)\n\n"
+            "⚙️ **Период сравнения:** 5 свечей\n"
+
+            "📊 **Рекомендуемый TF:** 1h"
+        ),
+    ),
+    # ═══════════════════════════════════════════════════
+    # Комбинированные
+    # ═══════════════════════════════════════════════════
+    StrategyInfo(
+        name="rsi_ma_combo",
+        description="RSI + MA — комбинация осциллятора и тренда. BUY только при RSI < 35 в uptrend (close > SMA200).",
+        type="indicator_based",
+        nuances=(
+            "📈 **Условия входа (BUY):**\n"
+            "• RSI(14) < 35 (перепроданность)\n"
+            "• Close > SMA(200) (восходящий тренд)\n\n"
+            "📉 **Условия входа (SELL):**\n"
+            "• RSI(14) > 65 (перекупленность)\n"
+            "• Close < SMA(200) (нисходящий тренд)\n\n"
+            "⚙️ **Параметры:** RSI(14), SMA(200), пороги 35/65\n"
+
+            "📊 **Рекомендуемый TF:** 1h–4h"
         ),
     ),
 ]
@@ -334,7 +590,7 @@ async def start_run(
     # Create config snapshot
     db_config = DBTradingConfig(
         run_id=db_run.id,
-        pair=config.pair,
+        pair="ALL" if config.strategy in ("all_pairs_hammer", "all_pairs_inverse_hammer") else config.pair,
         strategy=config.strategy,
         leverage=config.leverage,
         virtual_balance=config.virtual_balance,
@@ -349,7 +605,7 @@ async def start_run(
             if config.notification_bot_id
             else None
         ),
-        stop_loss_percent=config.stop_loss_percent or 2.0,
+        stop_loss_percent=config.stop_loss_percent or 1.0,
         take_profit_percent=config.take_profit_percent or 5.0,
         trend_filter_enabled=config.trend_filter_enabled,
         trend_filter_period=config.trend_filter_period,
@@ -374,7 +630,7 @@ async def start_run(
     # Convert to domain config for the engine
     domain_config = DomainTradingConfig(
         mode=TradingRunMode(config.mode.value),
-        pair=config.pair,
+        pair="ALL" if config.strategy in ("all_pairs_hammer", "all_pairs_inverse_hammer") else config.pair,
         strategy=config.strategy,
         leverage=config.leverage,
         virtual_balance=config.virtual_balance,
@@ -385,7 +641,7 @@ async def start_run(
         duration_days=config.duration_days,
         exchange=config.exchange,
         notification_bot_id=str(config.notification_bot_id) if config.notification_bot_id else None,
-        stop_loss_percent=config.stop_loss_percent or 2.0,
+        stop_loss_percent=config.stop_loss_percent or 1.0,
         take_profit_percent=config.take_profit_percent or 5.0,
         trend_filter_enabled=config.trend_filter_enabled,
         trend_filter_period=config.trend_filter_period,

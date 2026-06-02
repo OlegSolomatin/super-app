@@ -27,6 +27,26 @@ from app.services.trading.strategies import (
     AbstractStrategy,
     HammerStrategy,
     InverseHammerStrategy,
+    AllPairsHammerStrategy,
+    AllPairsInverseHammerStrategy,
+    MaCrossoverStrategy,
+    TripleMaStrategy,
+    MacdCrossoverStrategy,
+    ParabolicSarStrategy,
+    AdxStrategy,
+    SupertrendStrategy,
+    RsiOversoldStrategy,
+    StochasticStrategy,
+    EngulfingStrategy,
+    DojiStrategy,
+    ThreeSoldiersStrategy,
+    BollingerBandsStrategy,
+    KeltnerChannels,
+    ATRBreakout,
+    Donchian,
+    VWAPStrategy,
+    OBVStrategy,
+    RSIMACombo,
 )
 from app.services.notification_service import send_telegram_notification
 
@@ -36,6 +56,32 @@ logger = logging.getLogger(__name__)
 STRATEGY_REGISTRY: dict[str, type[AbstractStrategy]] = {
     "hammer": HammerStrategy,
     "inverse_hammer": InverseHammerStrategy,
+    "all_pairs_hammer": AllPairsHammerStrategy,
+    "all_pairs_inverse_hammer": AllPairsInverseHammerStrategy,
+    "ma_crossover": MaCrossoverStrategy,
+    "triple_ma": TripleMaStrategy,
+    "macd_crossover": MacdCrossoverStrategy,
+    "parabolic_sar": ParabolicSarStrategy,
+    "adx": AdxStrategy,
+    "supertrend": SupertrendStrategy,
+    "rsi_oversold": RsiOversoldStrategy,
+    "stochastic": StochasticStrategy,
+    "engulfing": EngulfingStrategy,
+    "doji": DojiStrategy,
+    "three_soldiers": ThreeSoldiersStrategy,
+    "bollinger_bands": BollingerBandsStrategy,
+    "keltner_channels": KeltnerChannels,
+    "atr_breakout": ATRBreakout,
+    "donchian": Donchian,
+    "vwap": VWAPStrategy,
+    "obv": OBVStrategy,
+    "rsi_ma_combo": RSIMACombo,
+}
+
+# Strategies that scan ALL available pairs instead of one
+ALL_PAIRS_SCANNER_STRATEGIES: set[str] = {
+    "all_pairs_hammer",
+    "all_pairs_inverse_hammer",
 }
 
 

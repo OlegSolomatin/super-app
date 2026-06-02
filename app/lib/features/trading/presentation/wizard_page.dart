@@ -48,8 +48,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
   // Step 4
   double _leverage = 1;
-  double _stopLossPercent = 2.0;
-  double _takeProfitPercent = 5.0;
+  // Hardcoded in strategy: SL=2%, TP=5%
 
   // Step 5
   double _balance = 1000;
@@ -73,6 +72,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   // Trend filter
   bool _trendFilterEnabled = true;
   int _trendFilterPeriod = 200;
+
+  bool get _isPairScanner => _selectedStrategy?.isPairScanner ?? false;
 
   @override
   void initState() {
@@ -161,7 +162,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   void _onStepTapped(int step) {
     if (step <= _currentStep + 1 &&
         (_runMode != null || step == 0) &&
-        (_selectedPair != null ||
+        (_isPairScanner || _selectedPair != null ||
             _selectedExchange != null ||
             _runMode == null ||
             step <= 2) &&
@@ -201,9 +202,9 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       case 0:
         return _runMode != null;
       case 1:
-        return _runMode == RunMode.real
+        return _isPairScanner || (_runMode == RunMode.real
             ? _selectedExchange != null
-            : _selectedPair != null;
+            : _selectedPair != null);
       case 2:
         return _selectedStrategy != null;
       case 3:
@@ -245,7 +246,9 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         'timeframe': _timeframe,
       };
       if (_runMode != RunMode.real) {
-        config['pair'] = _selectedPair!.symbol;
+        if (!_isPairScanner) {
+          config['pair'] = _selectedPair!.symbol;
+        }
         config['virtual_balance'] = _balance;
         config['max_trade_amount'] = _maxTrade;
       } else {
@@ -261,8 +264,6 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       if (_notifyTrades && _notificationBotId != null) {
         config['notification_bot_id'] = _notificationBotId;
       }
-      config['stop_loss_percent'] = _stopLossPercent;
-      config['take_profit_percent'] = _takeProfitPercent;
       config['trend_filter_enabled'] = _trendFilterEnabled;
       config['trend_filter_period'] = _trendFilterPeriod;
 
@@ -734,6 +735,26 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     return switch (name) {
       'hammer' => 'Молот (Hammer)',
       'inverse_hammer' => 'Перевёрнутый Молот (Inverse Hammer)',
+      'engulfing' => 'Поглощение (Engulfing)',
+      'doji' => 'Доджи (Doji)',
+      'three_soldiers' => '3 Солдата / 3 Вороны',
+      'ma_crossover' => 'MA Кроссовер',
+      'triple_ma' => 'Тройная MA',
+      'macd_crossover' => 'MACD Кроссовер',
+      'parabolic_sar' => 'Parabolic SAR',
+      'adx' => 'ADX',
+      'supertrend' => 'Supertrend',
+      'rsi_oversold' => 'RSI Перекупленность',
+      'stochastic' => 'Стохастик',
+      'bollinger_bands' => 'Полосы Боллинджера',
+      'keltner_channels' => 'Канал Кельтнера',
+      'atr_breakout' => 'ATR Пробой',
+      'donchian' => 'Дончиан',
+      'vwap' => 'VWAP',
+      'obv' => 'OBV',
+      'rsi_ma_combo' => 'RSI + MA Комбо',
+      'all_pairs_hammer' => '🔍 Hammer на всех парах',
+      'all_pairs_inverse_hammer' => '🔍 Inverse Hammer на всех парах',
       _ => name[0].toUpperCase() + name.substring(1),
     };
   }
@@ -765,6 +786,67 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   // ─── Step 2: Pair ────────────────────────────────────────────────
 
   Widget _buildStep2Pair(ThemeData theme) {
+    // Pair-scanner: show static info instead of pair picker
+    if (_isPairScanner) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Торговая пара',
+            style: theme.textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Сканирование всех пар — пара выбирается автоматически',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.accentColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.accentColor.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                PhosphorIcon(
+                  PhosphorIconsFill.magnifyingGlass,
+                  size: 28,
+                  color: AppTheme.accentColor,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '🔍 Все пары (50 USDT-пар)',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontSize: 16,
+                          color: AppTheme.accentColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'BTC, ETH, SOL, XRP, ADA и ещё 45 пар',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -932,8 +1014,15 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             final isSelected =
                 _selectedStrategy?.name == strategy.name;
             return GestureDetector(
-              onTap: () =>
-                  setState(() => _selectedStrategy = strategy),
+              onTap: () {
+                setState(() {
+                  _selectedStrategy = strategy;
+                  // Pair-scanner only works with history mode
+                  if (strategy.isPairScanner && _runMode != RunMode.historical) {
+                    _runMode = RunMode.historical;
+                  }
+                });
+              },
               child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 12),
@@ -1000,7 +1089,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                             ),
                             child: Center(
                               child: Text(
-                                '!',
+                                '?',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -1193,92 +1282,6 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             );
           }).toList(),
         ),
-        const SizedBox(height: 24),
-        // ── Stop Loss ──
-        Text(
-          'Стоп-лосс',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Сделка закроется, если цена упадёт на ${_stopLossPercent.toStringAsFixed(1)}%',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            const Icon(PhosphorIconsFill.trendDown, size: 18, color: Color(0xFFE53935)),
-            Expanded(
-              child: Slider(
-                value: _stopLossPercent,
-                min: 0.5,
-                max: 10,
-                divisions: 19,
-                activeColor: const Color(0xFFE53935),
-                inactiveColor: theme.textTheme.bodyMedium?.color
-                    ?.withValues(alpha: 0.2),
-                onChanged: (v) => setState(() => _stopLossPercent = v),
-              ),
-            ),
-            SizedBox(
-              width: 48,
-              child: Text(
-                '${_stopLossPercent.toStringAsFixed(1)}%',
-                style: const TextStyle(
-                  color: Color(0xFFE53935),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        // ── Take Profit ──
-        Text(
-          'Тейк-профит',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Сделка закроется, если цена вырастет на ${_takeProfitPercent.toStringAsFixed(1)}%',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            const Icon(PhosphorIconsFill.trendUp, size: 18, color: Color(0xFF4CAF50)),
-            Expanded(
-              child: Slider(
-                value: _takeProfitPercent,
-                min: 1.0,
-                max: 50,
-                divisions: 49,
-                activeColor: const Color(0xFF4CAF50),
-                inactiveColor: theme.textTheme.bodyMedium?.color
-                    ?.withValues(alpha: 0.2),
-                onChanged: (v) => setState(() => _takeProfitPercent = v),
-              ),
-            ),
-            SizedBox(
-              width: 48,
-              child: Text(
-                '${_takeProfitPercent.toStringAsFixed(1)}%',
-                style: const TextStyle(
-                  color: Color(0xFF4CAF50),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -1381,10 +1384,14 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   // ─── Step 7: Timeframe ───────────────────────────────────────────
 
   Widget _buildStep7Timeframe(ThemeData theme) {
-    const timeframes = [
+    const allTimeframes = [
       '1m', '5m', '15m', '30m',
       '1h', '4h', '1d', '1w', '30d',
     ];
+    // For pair-scanner: only 30m+ timeframes
+    final timeframes = _isPairScanner
+        ? ['30m', '1h', '4h', '1d', '1w', '30d']
+        : allTimeframes;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1472,25 +1479,6 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   }
 
-  Future<DateTime?> _pickDate(ThemeData theme, DateTime initial) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2015),
-      lastDate: DateTime.now(),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary: AppTheme.accentColor,
-            surface: AppTheme.surfaceColor,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    return picked;
-  }
-
   Widget _buildStep8Period(ThemeData theme, bool isDark) {
     if (_runMode == RunMode.historical) {
       final start = _dateRange?.start;
@@ -1553,132 +1541,53 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
           const SizedBox(height: 20),
 
-          // ── Карточка с датами ──
-          Row(
-            children: [
-              // Дата начала
-              Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final picked = await _pickDate(
-                      theme,
-                      start ?? DateTime.now().subtract(const Duration(days: 7)),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        _dateRange = DateTimeRange(
-                          start: picked,
-                          end: end ?? DateTime.now(),
-                        );
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: theme.cardTheme.color,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            PhosphorIcon(
-                              PhosphorIconsFill.calendar,
-                              size: 16,
-                              color: AppTheme.accentColor,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Начало',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 12,
-                                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          start != null ? _displayDate(start) : '--.--.----',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
+          // ── Свой диапазон (DateRangePicker) ──
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final picked = await showDateRangePicker(
+                  context: context,
+                  initialDateRange: _dateRange ?? DateTimeRange(
+                    start: DateTime.now().subtract(const Duration(days: 7)),
+                    end: DateTime.now(),
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: PhosphorIcon(
-                  PhosphorIconsFill.arrowRight,
-                  size: 18,
-                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
-                ),
-              ),
-              // Дата окончания
-              Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final picked = await _pickDate(
-                      theme,
-                      end ?? DateTime.now(),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        _dateRange = DateTimeRange(
-                          start: start ?? DateTime.now().subtract(const Duration(days: 7)),
-                          end: picked,
-                        );
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: theme.cardTheme.color,
-                      borderRadius: BorderRadius.circular(10),
+                  firstDate: DateTime(2015),
+                  lastDate: DateTime.now(),
+                  builder: (context, child) => Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: ColorScheme.dark(
+                        primary: AppTheme.accentColor,
+                        surface: AppTheme.surfaceColor,
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            PhosphorIcon(
-                              PhosphorIconsFill.calendar,
-                              size: 16,
-                              color: AppTheme.accentColor,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Конец',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 12,
-                                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          end != null ? _displayDate(end) : '--.--.----',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: child!,
                   ),
+                );
+                if (picked != null && mounted) {
+                  setState(() => _dateRange = picked);
+                }
+              },
+              icon: const PhosphorIcon(
+                PhosphorIconsFill.calendar,
+                size: 18,
+              ),
+              label: const Text('Свой диапазон'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(
+                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.2) ?? Colors.grey.withValues(alpha: 0.2),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ],
+            ),
           ),
 
+          const SizedBox(height: 12),
+
+          // ── Выбранный диапазон ──
           if (start != null && end != null) ...[
             const SizedBox(height: 12),
             Container(

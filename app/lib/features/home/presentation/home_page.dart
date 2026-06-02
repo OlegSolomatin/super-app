@@ -577,6 +577,13 @@ class _HomePageState extends State<HomePage> {
 
     cards.addAll([
       DashboardTileData(
+        icon: PhosphorIconsFill.chartLine,
+        title: 'Трейдинг',
+        subtitle: 'Зарабатывайте на трейдинге',
+        color: const Color(0xFFFFD700),
+        onTap: () => context.go('/trading'),
+      ),
+      DashboardTileData(
         icon: PhosphorIconsFill.fileText,
         title: 'Посты',
         subtitle: 'Читайте и создавайте посты',
@@ -605,13 +612,6 @@ class _HomePageState extends State<HomePage> {
         title: 'Карты',
         subtitle: 'Исследуйте карты',
         color: const Color(0xFF4DB6AC),
-      ),
-      DashboardTileData(
-        icon: PhosphorIconsFill.chartLine,
-        title: 'Трейдинг',
-        subtitle: 'Зарабатывайте на трейдинге',
-        color: const Color(0xFFFFD700),
-        onTap: () => context.go('/trading'),
       ),
     ]);
 

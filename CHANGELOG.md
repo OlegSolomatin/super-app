@@ -8,6 +8,10 @@
 - `agent` — изменения в агентах/профилях
 - `docs` — документация
 - `infra` — инфраструктура
+
+[2026-06-01] feat Pair Scanner стратегии: all_pairs_hammer + all_pairs_inverse_hammer (сканирование всех 50 USDT-пар, только история, TF≥30м, гибридный DateRangePicker вместо отдельных DatePicker, is_pair_scanner флаг в API)
+  • backend: all_pairs_hammer.py, all_pairs_inverse_hammer.py, pair_list.py (общий модуль), engine.py + scheduler.py (multi-pair loop), migration d2f85384e8c5 (pair колонка в trades)
+  • frontend: strategy_info.dart (isPairScanner), wizard_page.dart (скрытие пары для сканера, авто-history, TF≥30м, гибридная дата)
 ---
 - `feat` трендовый фильтр (SMA) для Hammer/InverseHammer: бэкенд + DB + API + фронтенд (toggle+period) | Hermes
 - `feat` иконки пар на карточках запусков + модель TradingRun: pairDisplay/baseCoin/coinIconUrl | Hermes

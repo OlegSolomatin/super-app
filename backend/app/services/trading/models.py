@@ -60,6 +60,7 @@ class Trade:
     quantity: float = 0.0
     pnl: float = 0.0
     exit_reason: Optional[str] = None
+    pair: Optional[str] = None  # Which pair this trade belongs to
 
 
 @dataclass
@@ -92,7 +93,7 @@ class TradingConfig:
     period_end: Optional[datetime] = None
     duration_days: Optional[int] = None
     exchange: Optional[str] = None
-    stop_loss_percent: float = 2.0
+    stop_loss_percent: float = 1.0
     take_profit_percent: float = 5.0
     notification_bot_id: Optional[str] = None
     notification_bot_token: Optional[str] = None
