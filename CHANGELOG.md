@@ -1,8 +1,13 @@
 # Changelog
 
-## 2026-06-01 — Фаза 1: Базовые UI-компоненты
+## 2026-06-01 — Фаза 2: Редизайн навигации и главной
 
-- **Создан `PfCard`** — виджет карточки с hairline-бордером `--border`, variant: default/trading, опциональные header/footer
+- **Редизайн `adaptive_scaffold.dart`** — сайдбар в стиле Linear (deep dark `#010102`, active indicator слева, avatar+username в footer), топ-бар 64px с иконкой раздела, сайдбар использует SectionTheme для skin'ов
+- **Редизайн `dashboard_tile.dart`** — полный переезд с glassmorphism на flat + hairline: убран BackdropFilter/blur/shadows, плоский фон `--card`, 1px `--border`, иконка в flat-градиентном круге 48px
+- **Редизайн `home_page.dart`** — убран background radial gradient, убраны старые AppTheme константы, гостевая страница через PfButton, NavDestination с PhosphorIconData + SectionTheme, setSection при навигации
+- **Анализ:** `dart analyze` — 0 issues
+
+## 2026-06-01 — Фаза 1: Базовые UI-компоненты
 - **Создан `PfButton`** — универсальная кнопка: 7 variant'ов (primary/secondary/ghost/outline/destructive/link), 7 size'ов (sm/md/lg/pill/icon-sm/icon-md/icon-lg), поддержка иконок слева/справа, loading state, expanded режим
 - **Создан `PfBadge`** — badge с variant'ами: default/success/destructive/warning/info
 - **Создан `PfDivider` / `PfVerticalDivider`** — системные разделители через `--border` токен

@@ -1,12 +1,12 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:app/core/theme.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
 
 /// Data for a dashboard tile.
 class DashboardTileData {
-  final IconData icon;
+  final PhosphorIconData icon;
   final String title;
   final String subtitle;
   final Color color;
@@ -23,13 +23,13 @@ class DashboardTileData {
   });
 }
 
-/// Reusable dashboard tile with glassmorphism, animations, and guaranteed centering.
+/// Dashboard tile — flat + hairline, без glassmorphism.
 ///
-/// All layout (icon size, text spacing, centering) is handled internally.
-/// Just pass data and it works — no manual alignment needed for new tiles.
+/// Flat фон `--card`, hairline border `--border`, иконка в цветном круге.
+/// У highlight-плитки (admin) — чуть ярче border + тонкая подсветка.
 class DashboardTile extends StatefulWidget {
   final DashboardTileData data;
-  final int index; // for staggered animation
+  final int index;
 
   const DashboardTile({
     super.key,
@@ -46,8 +46,6 @@ class _DashboardTileState extends State<DashboardTile>
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
-  late final AnimationController _pulseCtrl;
-  late final Animation<double> _pulseAnim;
   bool _pressed = false;
 
   @override
@@ -59,22 +57,11 @@ class _DashboardTileState extends State<DashboardTile>
     );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.15),
+      begin: const Offset(0, 0.12),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
 
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    );
-    _pulseAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOutSine),
-    );
-    if (widget.data.isHighlighted) {
-      _pulseCtrl.repeat(reverse: true);
-    }
-
-    Future.delayed(Duration(milliseconds: 100 * widget.index), () {
+    Future.delayed(Duration(milliseconds: 80 * widget.index), () {
       if (mounted) _fadeCtrl.forward();
     });
   }
@@ -82,15 +69,13 @@ class _DashboardTileState extends State<DashboardTile>
   @override
   void dispose() {
     _fadeCtrl.dispose();
-    _pulseCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isAdmin = widget.data.isHighlighted;
-    final pulseVal = _pulseAnim.value;
+    final d = widget.data;
+    final isAdmin = d.isHighlighted;
 
     return FadeTransition(
       opacity: _fadeAnim,
@@ -100,127 +85,75 @@ class _DashboardTileState extends State<DashboardTile>
           onTapDown: (_) => setState(() => _pressed = true),
           onTapUp: (_) {
             setState(() => _pressed = false);
-            final tap = widget.data.onTap;
-            if (tap != null) {
-              tap();
-            } else {
-              _showComingSoon();
-            }
+            d.onTap?.call();
           },
           onTapCancel: () => setState(() => _pressed = false),
           child: AnimatedScale(
-            scale: _pressed ? 0.95 : 1.0,
-            duration: const Duration(milliseconds: 150),
+            scale: _pressed ? 0.96 : 1.0,
+            duration: const Duration(milliseconds: 120),
             curve: Curves.easeOutCubic,
-            child: AnimatedBuilder(
-              animation: _pulseCtrl,
-              builder: (context, child) {
-                return Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isAdmin
-                          ? AppTheme.accentColor
-                              .withValues(alpha: 0.25 + 0.35 * pulseVal)
-                          : isDark
-                              ? Colors.white.withValues(alpha: 0.06)
-                              : Colors.black.withValues(alpha: 0.06),
-                      width: isAdmin ? 1.5 : 1.0,
-                    ),
-                    boxShadow: [
-                      if (isAdmin)
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              decoration: BoxDecoration(
+                color: PfColors.card,
+                borderRadius: PfRadius.borderRadiusXxl,
+                border: Border.all(
+                  color: isAdmin
+                      ? d.color.withValues(alpha: 0.4)
+                      : PfColors.border,
+                  width: isAdmin ? 1.5 : 1,
+                ),
+                boxShadow: isAdmin
+                    ? [
                         BoxShadow(
-                          color: AppTheme.accentColor
-                              .withValues(alpha: 0.12 + 0.18 * pulseVal),
-                          blurRadius: 12 + 10 * pulseVal,
-                          spreadRadius: 1 * pulseVal,
-                        )
-                      else
-                        BoxShadow(
-                          color: isDark
-                              ? Colors.black.withValues(alpha: 0.3)
-                              : Colors.black.withValues(alpha: 0.06),
+                          color: d.color.withValues(alpha: 0.1),
                           blurRadius: 12,
-                          offset: const Offset(0, 4),
+                          spreadRadius: 1,
                         ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(15),
-                    child: Stack(
+                      ]
+                    : null,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: PfRadius.borderRadiusXxl,
+                  onTap: d.onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 18,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Background layer
-                        Positioned.fill(
-                          child: isDark
-                              ? _buildGlassBackground()
-                              : _buildLightBackground(),
-                        ),
-                        // Content layer
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              final tap = widget.data.onTap;
-                              if (tap != null) {
-                                tap();
-                              } else {
-                                _showComingSoon();
-                              }
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 18,
-                              ),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Icon — guaranteed centered in its container
-                                    _buildIcon(isAdmin, isDark),
-                                    const SizedBox(height: 12),
-                                    // Title — always left-aligned
-                                    Text(
-                                      widget.data.title,
-                                      textAlign: TextAlign.start,
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? AppTheme.textPrimary
-                                            : AppTheme.lightTextPrimary,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    // Subtitle — always left-aligned
-                                    Text(
-                                      widget.data.subtitle,
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? AppTheme.textSecondary
-                                            : AppTheme.lightTextSecondary,
-                                        fontSize: 12,
-                                      ),
-                                      textAlign: TextAlign.start,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                        // Icon circle — flat gradient, no glow
+                        _buildIcon(d.color, isAdmin),
+                        const SizedBox(height: 14),
+                        // Title
+                        Text(
+                          d.title,
+                          style: PfTypography.titleMd.copyWith(
+                            color: PfColors.foreground,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        // Subtitle
+                        Text(
+                          d.subtitle,
+                          style: PfTypography.caption.copyWith(
+                            color: PfColors.mutedForeground,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ),
         ),
@@ -228,38 +161,9 @@ class _DashboardTileState extends State<DashboardTile>
     );
   }
 
-  Widget _buildGlassBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            widget.data.color.withValues(alpha: 0.12),
-            Colors.transparent,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        color: Colors.white.withValues(alpha: 0.04),
-      ),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(color: Colors.transparent),
-      ),
-    );
-  }
-
-  Widget _buildLightBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.lightCardColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-    );
-  }
-
-  Widget _buildIcon(bool isAdmin, bool isDark) {
-    final iconSize = isAdmin ? 30.0 : 26.0;
-    final containerSize = isAdmin ? 56.0 : 52.0;
+  Widget _buildIcon(Color color, bool isAdmin) {
+    final iconSize = isAdmin ? 28.0 : 24.0;
+    final containerSize = isAdmin ? 48.0 : 44.0;
 
     return Container(
       width: containerSize,
@@ -268,45 +172,19 @@ class _DashboardTileState extends State<DashboardTile>
         shape: BoxShape.circle,
         gradient: LinearGradient(
           colors: [
-            widget.data.color.withValues(alpha: 0.25),
-            widget.data.color.withValues(alpha: 0.05),
+            color.withValues(alpha: 0.3),
+            color.withValues(alpha: 0.05),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: isDark
-            ? [
-                BoxShadow(
-                  color: widget.data.color.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
       ),
       child: Center(
-        child: ShaderMask(
-          shaderCallback: (bounds) => LinearGradient(
-            colors: [
-              widget.data.color,
-              widget.data.color.withValues(alpha: 0.6),
-            ],
-          ).createShader(bounds),
-          child: Icon(
-            widget.data.icon,
-            size: iconSize,
-            color: Colors.white,
-          ),
+        child: PhosphorIcon(
+          widget.data.icon,
+          size: iconSize,
+          color: color,
         ),
-      ),
-    );
-  }
-
-  void _showComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${widget.data.title} — скоро'),
-        behavior: SnackBarBehavior.floating,
       ),
     );
   }

@@ -2,26 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
-import 'package:app/core/theme.dart';
 import 'package:app/core/theme_provider.dart';
+import 'package:app/core/section_theme.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/shared/widgets/pf_divider.dart';
 
-/// Navigation destination for the sidebar.
+/// Navigation destination for sidebar.
 class NavDestination {
-  final Widget icon;
+  final PhosphorIconData icon;
   final String label;
   final String path;
   final bool isActive;
+  final SectionTheme section;
 
   const NavDestination({
     required this.icon,
     required this.label,
     required this.path,
     this.isActive = false,
+    this.section = SectionTheme.home,
   });
 }
 
 /// Adaptive scaffold: drawer on mobile, sidebar + top bar on desktop.
+///
+/// Sidebar: Linear deep dark (#010102), active indicator слева.
+/// Top bar: 64px, чистый, с заголовком и actions.
 class AdaptiveScaffold extends StatelessWidget {
   final String title;
   final Widget body;
@@ -30,8 +40,10 @@ class AdaptiveScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final List<NavDestination>? navDestinations;
   final String? currentPath;
-  final Widget? profileHeader; // custom profile widget for desktop sidebar
-  final VoidCallback? onLogout; // logout action for desktop sidebar
+  final Widget? profileHeader;
+  final String? username;
+  final String? userInitials;
+  final VoidCallback? onLogout;
 
   const AdaptiveScaffold({
     super.key,
@@ -43,6 +55,8 @@ class AdaptiveScaffold extends StatelessWidget {
     this.navDestinations,
     this.currentPath,
     this.profileHeader,
+    this.username,
+    this.userInitials,
     this.onLogout,
   });
 
@@ -58,233 +72,56 @@ class AdaptiveScaffold extends StatelessWidget {
     );
   }
 
+  // ─── Mobile Layout ──────────────────────────────────────────────────
   Widget _buildMobileLayout(BuildContext context) {
+    final section = context.watch<ThemeProvider>().section;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: PfColors.background,
       appBar: AppBar(
-        title: Text(title),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? AppTheme.bgColor.withValues(alpha: 0.85)
-            : AppTheme.lightSurfaceColor.withValues(alpha: 0.85),
+        title: Text(
+          title,
+          style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
+        ),
+        backgroundColor: PfColors.background,
         elevation: 0,
-        actions: [
-          if (drawer != null)
-            Builder(
-              builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () => Scaffold.of(ctx).openEndDrawer(),
-                tooltip: 'Меню',
-              ),
+        scrolledUnderElevation: 0,
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: PhosphorIcon(
+              PhosphorIconsFill.list,
+              color: PfColors.foreground,
+              size: 22,
             ),
-          if (actions != null) ...actions!,
-        ],
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
+          ),
+        ),
+        actions: actions,
       ),
-      endDrawer: drawer,
+      drawer: _buildSidebar(context, section, isCompact: false, isDrawer: true),
       body: body,
       floatingActionButton: floatingActionButton,
     );
   }
 
+  // ─── Desktop Layout ────────────────────────────────────────────────
   Widget _buildDesktopLayout(BuildContext context, ScreenSize screenSize) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
-    final textColor =
-        isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
-    final subColor =
-        isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
-
-    final nav = navDestinations ?? [];
+    final section = context.watch<ThemeProvider>().section;
+    final isTablet = screenSize == ScreenSize.tablet;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: PfColors.background,
       body: Row(
         children: [
           // ── Sidebar ──────────────────────────────────────
-          Container(
-            width: screenSize == ScreenSize.tablet ? 72 : 240,
-            decoration: BoxDecoration(
-              color: surface.withValues(alpha: 0.95),
-              border: Border(
-                right: BorderSide(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : Colors.black.withValues(alpha: 0.06),
-                ),
-              ),
-            ),
-            child: Column(
-              children: [
-                // Sidebar header
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: screenSize == ScreenSize.tablet ? 0 : 20,
-                    vertical: 20,
-                  ),
-                  child: profileHeader ??
-                    (screenSize == ScreenSize.tablet
-                      ? const Icon(
-                          Icons.rocket_launch,
-                          color: AppTheme.accentColor,
-                          size: 28,
-                        )
-                      : Row(
-                          children: [
-                            const Icon(
-                              Icons.rocket_launch,
-                              color: AppTheme.accentColor,
-                              size: 28,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              title,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        )),
-                ),
-                const SizedBox(height: 8),
-                // Navigation items
-                Expanded(
-                  child: ListView.builder(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenSize == ScreenSize.tablet ? 4 : 12,
-                    ),
-                    itemCount: nav.length,
-                    itemBuilder: (context, index) {
-                      final dest = nav[index];
-                      final active = dest.path == currentPath;
-                      return _NavItem(
-                        icon: dest.icon,
-                        label: dest.label,
-                        isActive: active,
-                        isCompact: screenSize == ScreenSize.tablet,
-                        onTap: () {
-                          if (dest.path != currentPath) {
-                            context.go(dest.path);
-                          }
-                        },
-                      );
-                    },
-                  ),
-                ),
-                // Настройки (pinned above theme/logout)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: screenSize == ScreenSize.tablet ? 0 : 8,
-                    vertical: 2,
-                  ),
-                  child: _NavItem(
-                    icon: const Icon(
-                      PhosphorIconsFill.gearSix,
-                      size: 20,
-                    ),
-                    label: 'Настройки',
-                    isActive: false,
-                    isCompact: screenSize == ScreenSize.tablet,
-                    onTap: () {
-                      // Navigate using GoRouter from context
-                      final router = GoRouter.of(context);
-                      router.go('/settings');
-                    },
-                  ),
-                ),
-                // Bottom pinned row: theme + logout
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.08),
-                      ),
-                    ),
-                  ),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: screenSize == ScreenSize.tablet ? 0 : 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    children: [
-                      // Theme toggle
-                      Expanded(
-                        child: _NavItem(
-                          icon: const Icon(
-                            PhosphorIconsFill.sun,
-                            size: 20,
-                          ),
-                          label: 'Тема',
-                          isActive: false,
-                          isCompact: screenSize == ScreenSize.tablet,
-                          onTap: () => _showThemeSheet(context),
-                        ),
-                      ),
-                      // Divider vertical
-                      if (screenSize != ScreenSize.tablet)
-                        Container(
-                          width: 1,
-                          height: 24,
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : Colors.black.withValues(alpha: 0.12),
-                        ),
-                      // Logout
-                      Expanded(
-                        child: _NavItem(
-                          icon: const Icon(
-                            PhosphorIconsFill.signOut,
-                            size: 20,
-                          ),
-                          label: 'Выйти',
-                          isActive: false,
-                          isCompact: screenSize == ScreenSize.tablet,
-                          onTap: () => onLogout?.call(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildSidebar(context, section, isCompact: isTablet, isDrawer: false),
+
           // ── Main content ──────────────────────────────────
           Expanded(
             child: Column(
               children: [
                 // Top bar
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: surface.withValues(alpha: 0.5),
-                    border: Border(
-                      bottom: BorderSide(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.black.withValues(alpha: 0.06),
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (actions != null) ...actions!,
-                    ],
-                  ),
-                ),
+                _buildTopBar(context, section),
                 // Body
                 Expanded(
                   child: Center(
@@ -302,48 +139,312 @@ class AdaptiveScaffold extends StatelessWidget {
     );
   }
 
+  // ─── Sidebar ────────────────────────────────────────────────────────
+  Widget _buildSidebar(
+    BuildContext context,
+    SectionTheme section, {
+    required bool isCompact,
+    required bool isDrawer,
+  }) {
+    final nav = navDestinations ?? [];
+    final sidebarWidth = isCompact ? 64.0 : 240.0;
+
+    Widget sidebar = Container(
+      width: isCompact ? 64 : 240,
+      color: PfColors.sidebar,
+      child: Column(
+        children: [
+          // Logo / Wordmark
+          Container(
+            height: 64,
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 0 : PfSpacing.lg,
+            ),
+            alignment: Alignment.center,
+            child: isCompact
+                ? PhosphorIcon(
+                    PhosphorIconsFill.rocketLaunch,
+                    color: section.accent,
+                    size: 24,
+                  )
+                : Row(
+                    children: [
+                      PhosphorIcon(
+                        PhosphorIconsFill.rocketLaunch,
+                        color: section.accent,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Super App',
+                        style: TextStyle(
+                          color: PfColors.sidebarForeground,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+
+          const PfDivider(color: PfColors.sidebarHairline),
+
+          // Navigation items
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.symmetric(
+                horizontal: isCompact ? 4 : PfSpacing.sm,
+                vertical: PfSpacing.xs,
+              ),
+              itemCount: nav.length,
+              itemBuilder: (context, index) {
+                final dest = nav[index];
+                final active = dest.path == currentPath;
+                return _SidebarItem(
+                  icon: dest.icon,
+                  label: dest.label,
+                  section: dest.section,
+                  isActive: active,
+                  isCompact: isCompact,
+                  onTap: () {
+                    if (dest.path != currentPath) {
+                      context.read<ThemeProvider>().setSection(dest.section);
+                      if (isDrawer) Navigator.of(context).pop();
+                      context.go(dest.path);
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+
+          // Bottom section: Settings + Theme + User
+          const PfDivider(color: PfColors.sidebarHairline),
+
+          if (!isCompact) _buildUserSection(context, section),
+          if (isCompact) _buildCompactUserSection(context),
+        ],
+      ),
+    );
+
+    if (isDrawer) {
+      return Drawer(
+        width: sidebarWidth,
+        child: sidebar,
+      );
+    }
+    return sidebar;
+  }
+
+  // ─── User Section (full sidebar) ───────────────────────────────────
+  Widget _buildUserSection(BuildContext context, SectionTheme section) {
+    return Padding(
+      padding: const EdgeInsets.all(PfSpacing.sm),
+      child: Column(
+        children: [
+          // Settings
+          _SidebarItem(
+            icon: PhosphorIconsFill.gearSix,
+            label: 'Настройки',
+            section: SectionTheme.settings,
+            isActive: false,
+            isCompact: false,
+            onTap: () {
+              context.read<ThemeProvider>().setSection(SectionTheme.settings);
+              context.go('/settings');
+            },
+          ),
+          const SizedBox(height: 4),
+          // User row: avatar + name + logout
+          Container(
+            padding: const EdgeInsets.all(PfSpacing.sm),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.03),
+              borderRadius: PfRadius.borderRadiusLg,
+            ),
+            child: Row(
+              children: [
+                // Avatar
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: section.accent.withValues(alpha: 0.2),
+                  child: Text(
+                    userInitials ?? '?',
+                    style: PfTypography.caption.copyWith(
+                      color: section.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    username ?? 'Пользователь',
+                    style: PfTypography.bodySm.copyWith(
+                      color: PfColors.sidebarForeground,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Theme toggle
+                GestureDetector(
+                  onTap: () => _showThemeSheet(context),
+                  child: PhosphorIcon(
+                    PhosphorIconsFill.sun,
+                    color: PfColors.mutedForeground,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Logout
+                GestureDetector(
+                  onTap: onLogout,
+                  child: PhosphorIcon(
+                    PhosphorIconsFill.signOut,
+                    color: PfColors.destructive,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── User Section (compact sidebar) ────────────────────────────────
+  Widget _buildCompactUserSection(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: PfSpacing.sm),
+      child: Column(
+        children: [
+          _SidebarItem(
+            icon: PhosphorIconsFill.gearSix,
+            label: '',
+            section: SectionTheme.settings,
+            isActive: false,
+            isCompact: true,
+            onTap: () {
+              context.read<ThemeProvider>().setSection(SectionTheme.settings);
+              context.go('/settings');
+            },
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: onLogout,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.03),
+                borderRadius: PfRadius.borderRadiusLg,
+              ),
+              child: PhosphorIcon(
+                PhosphorIconsFill.signOut,
+                color: PfColors.destructive,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Top Bar ────────────────────────────────────────────────────────
+  Widget _buildTopBar(BuildContext context, SectionTheme section) {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+      decoration: BoxDecoration(
+        color: PfColors.background,
+        border: const Border(
+          bottom: BorderSide(color: PfColors.border, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Section icon + title
+          PhosphorIcon(
+            section.icon,
+            color: section.accent,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
+          ),
+          const Spacer(),
+          if (actions != null) ...actions!,
+        ],
+      ),
+    );
+  }
+
+  // ─── Theme Sheet ────────────────────────────────────────────────────
   void _showThemeSheet(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor;
     final provider = context.read<ThemeProvider>();
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: surface,
+      backgroundColor: PfColors.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(PfSpacing.lg),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Тема оформления',
-                style: Theme.of(ctx).textTheme.titleLarge,
+              Container(
+                width: 32,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: PfColors.mutedForeground,
+                  borderRadius: PfRadius.borderRadiusPill,
+                ),
               ),
               const SizedBox(height: 20),
+              Text(
+                'Тема оформления',
+                style: PfTypography.titleLg.copyWith(color: PfColors.foreground),
+              ),
+              const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _ThemeOption(
-                    icon: '🌙',
+                    icon: PhosphorIconsFill.moon,
+                    section: SectionTheme.home,
                     label: 'Тёмная',
                     active: provider.mode == ThemeModePreference.dark,
-                    onTap: () { provider.setMode(ThemeModePreference.dark); Navigator.pop(ctx); },
+                    onTap: () {
+                      provider.setMode(ThemeModePreference.dark);
+                      Navigator.pop(ctx);
+                    },
                   ),
                   _ThemeOption(
-                    icon: '💻',
+                    icon: PhosphorIconsFill.desktop,
+                    section: SectionTheme.home,
                     label: 'Системная',
                     active: provider.mode == ThemeModePreference.system,
-                    onTap: () { provider.setMode(ThemeModePreference.system); Navigator.pop(ctx); },
+                    onTap: () {
+                      provider.setMode(ThemeModePreference.system);
+                      Navigator.pop(ctx);
+                    },
                   ),
                   _ThemeOption(
-                    icon: '☀️',
+                    icon: PhosphorIconsFill.sun,
+                    section: SectionTheme.home,
                     label: 'Светлая',
                     active: provider.mode == ThemeModePreference.light,
-                    onTap: () { provider.setMode(ThemeModePreference.light); Navigator.pop(ctx); },
+                    onTap: () {
+                      provider.setMode(ThemeModePreference.light);
+                      Navigator.pop(ctx);
+                    },
                   ),
                 ],
               ),
@@ -355,18 +456,19 @@ class AdaptiveScaffold extends StatelessWidget {
   }
 }
 
-// ─── Nav Item ─────────────────────────────────────────────────────────────────
-
-class _NavItem extends StatelessWidget {
-  final Widget icon;
+// ─── Sidebar Item ───────────────────────────────────────────────────────
+class _SidebarItem extends StatelessWidget {
+  final PhosphorIconData icon;
   final String label;
+  final SectionTheme section;
   final bool isActive;
   final bool isCompact;
   final VoidCallback onTap;
 
-  const _NavItem({
+  const _SidebarItem({
     required this.icon,
     required this.label,
+    required this.section,
     required this.isActive,
     required this.isCompact,
     required this.onTap,
@@ -374,91 +476,59 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final defaultTextColor =
-        isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: PfRadius.borderRadiusLg,
           onTap: onTap,
           child: Container(
             padding: isCompact
-                ? const EdgeInsets.symmetric(vertical: 12, horizontal: 0)
-                : const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                ? const EdgeInsets.symmetric(vertical: 12)
+                : const EdgeInsets.symmetric(
+                    vertical: 10,
+                    horizontal: PfSpacing.sm,
+                  ),
             decoration: BoxDecoration(
               color: isActive
-                  ? AppTheme.accentColor.withValues(alpha: 0.15)
+                  ? section.accent.withValues(alpha: 0.12)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: PfRadius.borderRadiusLg,
+              border: isActive
+                  ? const Border(
+                      left: BorderSide(
+                        color: Color(0xFF5E6AD2),
+                        width: 3,
+                      ),
+                    )
+                  : null,
             ),
             child: isCompact
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconTheme(
-                        data: IconThemeData(
-                          color: isActive
-                              ? AppTheme.accentColor
-                              : defaultTextColor.withValues(alpha: 0.7),
-                          size: 22,
-                        ),
-                        child: icon,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        label.length > 3 ? label.substring(0, 3) : label,
-                        style: TextStyle(
-                          color: isActive
-                              ? AppTheme.accentColor
-                              : defaultTextColor.withValues(alpha: 0.7),
-                          fontSize: 10,
-                          fontWeight:
-                              isActive ? FontWeight.w600 : FontWeight.w400,
-                        ),
-                      ),
-                    ],
+                ? Center(
+                    child: PhosphorIcon(
+                      icon,
+                      color: isActive ? section.accent : PfColors.mutedForeground,
+                      size: 22,
+                    ),
                   )
                 : Row(
                     children: [
-                      SizedBox(
-                        width: 24,
-                        child: IconTheme(
-                          data: IconThemeData(
-                            color: isActive
-                                ? AppTheme.accentColor
-                                : defaultTextColor.withValues(alpha: 0.7),
-                            size: 22,
-                          ),
-                          child: icon,
-                        ),
+                      const SizedBox(width: 4),
+                      PhosphorIcon(
+                        icon,
+                        color: isActive ? section.accent : PfColors.mutedForeground,
+                        size: 20,
                       ),
                       const SizedBox(width: 14),
                       Text(
                         label,
                         style: TextStyle(
-                          color: isActive
-                              ? AppTheme.accentColor
-                              : defaultTextColor,
-                          fontSize: 15,
-                          fontWeight:
-                              isActive ? FontWeight.w600 : FontWeight.w400,
+                          color: isActive ? PfColors.sidebarForeground : PfColors.mutedForeground,
+                          fontSize: 14,
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                         ),
                       ),
-                      if (isActive)
-                        const Spacer(),
-                      if (isActive)
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.accentColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
                     ],
                   ),
           ),
@@ -468,16 +538,17 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// ─── Theme Option (bottom sheet) ──────────────────────────────────────────────
-
+// ─── Theme Option ───────────────────────────────────────────────────────
 class _ThemeOption extends StatelessWidget {
-  final String icon;
+  final PhosphorIconData icon;
+  final SectionTheme section;
   final String label;
   final bool active;
   final VoidCallback onTap;
 
   const _ThemeOption({
     required this.icon,
+    required this.section,
     required this.label,
     required this.active,
     required this.onTap,
@@ -485,33 +556,35 @@ class _ThemeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface =
-        isDark ? AppTheme.cardColor : AppTheme.lightCardColor;
-
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         decoration: BoxDecoration(
-          color: active ? AppTheme.accentColor.withValues(alpha: 0.15) : surface,
-          borderRadius: BorderRadius.circular(14),
+          color: active
+              ? section.accent.withValues(alpha: 0.15)
+              : PfColors.surface,
+          borderRadius: PfRadius.borderRadiusXl,
           border: Border.all(
-            color: active ? AppTheme.accentColor : Colors.transparent,
-            width: 1.5,
+            color: active ? section.accent : PfColors.border,
+            width: active ? 1.5 : 1,
           ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(icon, style: const TextStyle(fontSize: 28)),
+            PhosphorIcon(
+              icon,
+              color: active ? section.accent : PfColors.foreground,
+              size: 28,
+            ),
             const SizedBox(height: 8),
             Text(
               label,
               style: TextStyle(
                 fontSize: 13,
-                color: active ? AppTheme.accentColor : null,
+                color: active ? section.accent : PfColors.mutedForeground,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
