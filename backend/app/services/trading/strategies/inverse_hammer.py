@@ -1,4 +1,4 @@
-"""Inverse Hammer candlestick pattern strategy.
+"""Inverse Hammer candlestick pattern strategy with trend filter.
 
 Logic:
     An Inverse Hammer is a single-candle bearish reversal pattern that
@@ -7,36 +7,61 @@ Logic:
       - Long upper shadow (wick) — at least 2x the body length
       - Little to no lower shadow
 
-    Signal: SELL when an inverse hammer pattern is confirmed.
-    The upper shadow rejection indicates strong selling pressure.
+    Trend filter (optional):
+      - Only signals SELL if price is below SMA(period)
+      - Prevents shorting into a strong uptrend
 
-    Entry:    After the inverse hammer candle closes, enter SHORT.
-    Stop:     Above the high of the inverse hammer candle.
-    Target:   Risk:Reward = 1:2 or next support level.
+    Signal: SELL when an inverse hammer pattern is confirmed
+            AND trend filter passes.
 """
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from app.services.trading.models import Candle, Signal
 from app.services.trading.strategies.base import AbstractStrategy
 
 
 class InverseHammerStrategy(AbstractStrategy):
-    """Inverse Hammer (bearish reversal) strategy.
+    """Inverse Hammer (bearish reversal) strategy with optional trend filter."""
 
-    Detects Inverse Hammer candlestick patterns and generates SELL signals.
-    """
-
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        trend_filter_enabled: bool = True,
+        trend_filter_period: int = 200,
+    ) -> None:
         super().__init__(name="inverse_hammer")
+        self.trend_filter_enabled = trend_filter_enabled
+        self.trend_filter_period = trend_filter_period
+
+    @staticmethod
+    def _compute_sma(candles: List[Candle], period: int) -> Optional[float]:
+        """Compute SMA for the last `period` candles."""
+        if len(candles) < period:
+            return None
+        total = sum(c.close for c in candles[-period:])
+        return total / period
+
+    def _check_trend_filter(self, candles: List[Candle]) -> bool:
+        """Return True if trend filter passes or is disabled.
+
+        For bearish signals: only SELL if price is BELOW SMA
+        (confirming we're in a downtrend, so selling rallies is safe).
+        """
+        if not self.trend_filter_enabled:
+            return True
+        sma = self._compute_sma(candles, self.trend_filter_period)
+        if sma is None:
+            return True  # Not enough data — allow trade
+        current_close = candles[-1].close
+        return current_close < sma
 
     async def analyze(self, candles: List[Candle]) -> List[Signal]:
         """Analyze candles for Inverse Hammer patterns.
 
         Returns a SELL signal if the latest candle matches the Inverse
-        Hammer criteria and the overall trend was up.
+        Hammer criteria, the prior trend was up, AND the trend filter passes.
         """
         signals: List[Signal] = []
 
@@ -49,6 +74,13 @@ class InverseHammerStrategy(AbstractStrategy):
 
         # Check prior uptrend: previous candle close > previous open (bullish)
         prior_up = prev.close > prev.open
+
+        if not prior_up:
+            return signals
+
+        # Trend filter: only SELL if price is below SMA
+        if not self._check_trend_filter(candles):
+            return signals
 
         # Inverse Hammer detection on current candle
         body = abs(current.close - current.open)
@@ -64,7 +96,6 @@ class InverseHammerStrategy(AbstractStrategy):
             and upper_shadow >= 2.0 * body
             and lower_shadow <= 0.3 * body
         ):
-            # Bearish reversal signal
             entry_price = current.close
             signals.append(
                 Signal(

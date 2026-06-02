@@ -1,4 +1,4 @@
-"""Hammer candlestick pattern strategy.
+"""Hammer candlestick pattern strategy with trend filter.
 
 Logic:
     A Hammer is a single-candle bullish reversal pattern that appears
@@ -7,36 +7,56 @@ Logic:
       - Long lower shadow (wick) — at least 2x the body length
       - Little to no upper shadow
 
-    Signal: BUY when a hammer pattern is confirmed.
-    The lower shadow rejection indicates strong buying pressure.
+    Trend filter (optional):
+      - Only signals BUY if price is above SMA(period)
+      - Prevents buying into a strong downtrend
 
-    Entry:    After the hammer candle closes, enter LONG.
-    Stop:     Below the low of the hammer candle.
-    Target:   Risk:Reward = 1:2 or next resistance level.
+    Signal: BUY when a hammer pattern is confirmed AND trend filter passes.
 """
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
-from app.services.trading.models import Candle, Signal
+from app.services.trading.models import Candle, Signal, TradingConfig
 from app.services.trading.strategies.base import AbstractStrategy
 
 
 class HammerStrategy(AbstractStrategy):
-    """Hammer (bullish reversal) strategy.
+    """Hammer (bullish reversal) strategy with optional trend filter."""
 
-    Detects Hammer candlestick patterns and generates BUY signals.
-    """
-
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        trend_filter_enabled: bool = True,
+        trend_filter_period: int = 200,
+    ) -> None:
         super().__init__(name="hammer")
+        self.trend_filter_enabled = trend_filter_enabled
+        self.trend_filter_period = trend_filter_period
+
+    @staticmethod
+    def _compute_sma(candles: List[Candle], period: int) -> Optional[float]:
+        """Compute SMA for the last `period` candles."""
+        if len(candles) < period:
+            return None
+        total = sum(c.close for c in candles[-period:])
+        return total / period
+
+    def _check_trend_filter(self, candles: List[Candle]) -> bool:
+        """Return True if trend filter passes or is disabled."""
+        if not self.trend_filter_enabled:
+            return True
+        sma = self._compute_sma(candles, self.trend_filter_period)
+        if sma is None:
+            return True  # Not enough data — allow trade
+        current_close = candles[-1].close
+        return current_close > sma
 
     async def analyze(self, candles: List[Candle]) -> List[Signal]:
         """Analyze candles for Hammer patterns.
 
         Returns a BUY signal if the latest candle matches the Hammer
-        criteria and the overall trend was down.
+        criteria, the prior trend was down, AND the trend filter passes.
         """
         signals: List[Signal] = []
 
@@ -48,8 +68,14 @@ class HammerStrategy(AbstractStrategy):
         current = candles[-1]
 
         # Check prior downtrend: previous candle close < previous open (bearish)
-        # and close price is lower than the close before it
         prior_down = prev.close < prev.open
+
+        if not prior_down:
+            return signals
+
+        # Trend filter: only BUY if price is above SMA
+        if not self._check_trend_filter(candles):
+            return signals
 
         # Hammer detection on current candle
         body = abs(current.close - current.open)
@@ -65,7 +91,6 @@ class HammerStrategy(AbstractStrategy):
             and lower_shadow >= 2.0 * body
             and upper_shadow <= 0.3 * body
         ):
-            # Bullish reversal signal
             entry_price = current.close
             signals.append(
                 Signal(

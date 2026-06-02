@@ -179,7 +179,10 @@ class TradingEngine:
         strategy_cls = STRATEGY_REGISTRY.get(self.config.strategy)
         if strategy_cls is None:
             raise ValueError(f"Unknown strategy: {self.config.strategy}")
-        strategy = strategy_cls()
+        strategy = strategy_cls(
+            trend_filter_enabled=self.config.trend_filter_enabled,
+            trend_filter_period=self.config.trend_filter_period,
+        )
 
         # 2. State
         open_trade: Optional[Trade] = None
@@ -442,7 +445,10 @@ class TradingEngine:
         strategy_cls = STRATEGY_REGISTRY.get(self.config.strategy)
         if strategy_cls is None:
             raise ValueError(f"Unknown strategy: {self.config.strategy}")
-        strategy = strategy_cls()
+        strategy = strategy_cls(
+            trend_filter_enabled=self.config.trend_filter_enabled,
+            trend_filter_period=self.config.trend_filter_period,
+        )
 
         # 2. State
         open_trade: Optional[Trade] = None

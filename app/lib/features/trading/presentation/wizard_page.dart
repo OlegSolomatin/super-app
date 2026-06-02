@@ -70,6 +70,10 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   List<TelegramBotData> _bots = [];
   bool _loadingBots = false;
 
+  // Trend filter
+  bool _trendFilterEnabled = true;
+  int _trendFilterPeriod = 200;
+
   @override
   void initState() {
     super.initState();
@@ -259,6 +263,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       }
       config['stop_loss_percent'] = _stopLossPercent;
       config['take_profit_percent'] = _takeProfitPercent;
+      config['trend_filter_enabled'] = _trendFilterEnabled;
+      config['trend_filter_period'] = _trendFilterPeriod;
 
       await widget.repository.createRun(config);
 
@@ -732,6 +738,30 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     };
   }
 
+  Widget _periodChip(int period, ThemeData theme) {
+    final isSelected = _trendFilterPeriod == period;
+    return GestureDetector(
+      onTap: () => setState(() => _trendFilterPeriod = period),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.accentColor
+              : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          'SMA$period',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            color: isSelected ? Colors.white : null,
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─── Step 2: Pair ────────────────────────────────────────────────
 
   Widget _buildStep2Pair(ThemeData theme) {
@@ -987,6 +1017,67 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
               ),
             );
           }),
+          const SizedBox(height: 24),
+          // ── Trend Filter ──
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.cardTheme.color,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    PhosphorIcon(
+                      PhosphorIconsFill.trendUp,
+                      size: 18,
+                      color: _trendFilterEnabled ? AppTheme.accentColor : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Трендовый фильтр',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      value: _trendFilterEnabled,
+                      activeColor: AppTheme.accentColor,
+                      onChanged: (v) => setState(() => _trendFilterEnabled = v),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Вход только при цене выше SMA. Отсекает ложные сигналы на сильном медвежьем рынке.',
+                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
+                ),
+                if (_trendFilterEnabled) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(
+                        'Период SMA:',
+                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
+                      ),
+                      const SizedBox(width: 12),
+                      _periodChip(50, theme),
+                      const SizedBox(width: 6),
+                      _periodChip(100, theme),
+                      const SizedBox(width: 6),
+                      _periodChip(200, theme),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -1747,6 +1838,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             'Длительность',
             '$_duration дн.',
           ),
+        const SizedBox(height: 12),
+        _summaryRow(theme, 'Тренд. фильтр', _trendFilterEnabled ? 'Вкл (SMA$_trendFilterPeriod)' : 'Выкл'),
         const SizedBox(height: 24),
 
         // ── Notification settings ──

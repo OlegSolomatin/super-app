@@ -71,6 +71,12 @@ class TradingConfig(BaseModel):
     take_profit_percent: Optional[float] = Field(
         default=None, ge=0, le=1000, description="Take profit percent"
     )
+    trend_filter_enabled: bool = Field(
+        default=True, description="Enable trend filter (price above SMA)"
+    )
+    trend_filter_period: int = Field(
+        default=200, ge=10, le=500, description="SMA period for trend filter"
+    )
 
 
 # ---------- responses ----------
@@ -150,6 +156,8 @@ class TradingRunResponse(BaseModel):
                     'notification_bot_id': str(cfg.notification_bot_id) if cfg.notification_bot_id is not None else None,
                     'stop_loss_percent': cfg.stop_loss_percent if cfg.stop_loss_percent is not None else None,
                     'take_profit_percent': cfg.take_profit_percent if cfg.take_profit_percent is not None else None,
+                    'trend_filter_enabled': cfg.trend_filter_enabled if cfg.trend_filter_enabled is not None else True,
+                    'trend_filter_period': cfg.trend_filter_period if cfg.trend_filter_period is not None else 200,
                 }
         # Include result data
         res = getattr(data, "result", None)

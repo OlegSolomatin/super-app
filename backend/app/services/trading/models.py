@@ -97,6 +97,8 @@ class TradingConfig:
     notification_bot_id: Optional[str] = None
     notification_bot_token: Optional[str] = None
     notification_chat_id: Optional[str] = None
+    trend_filter_enabled: bool = True
+    trend_filter_period: int = 200
 
 
 @dataclass

@@ -13,6 +13,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -22,6 +23,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -106,6 +108,8 @@ class TradingConfig(Base):
     )
     stop_loss_percent = Column(Float, nullable=True, default=2.0)
     take_profit_percent = Column(Float, nullable=True, default=5.0)
+    trend_filter_enabled = Column(Boolean, nullable=False, server_default=text('true'), default=True)
+    trend_filter_period = Column(Integer, nullable=False, server_default=text('200'), default=200)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
