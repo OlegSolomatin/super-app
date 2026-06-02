@@ -315,6 +315,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       title: 'Настройка стратегии',
+      showBackButton: true,
       currentPath: '/trading/wizard',
       body: ConstrainedContent(
         maxWidth: 720,
@@ -1750,27 +1751,38 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         // ── Notification settings ──
         Text(
           'Уведомления',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : null,
-          ),
+          style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
         ),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Уведомления о сделках'),
-          subtitle: Text(
-            'Получать уведомления о каждой сделке в Telegram',
-            style: theme.textTheme.bodySmall,
+        const SizedBox(height: PfSpacing.sm),
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Уведомления о сделках', style: PfTypography.bodyMd.copyWith(color: PfColors.foreground)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Получать уведомления о каждой сделке в Telegram',
+                      style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _notifyTrades,
+                activeColor: PfColors.accentTrading,
+                onChanged: (v) {
+                  setState(() => _notifyTrades = v);
+                  if (v && _bots.isEmpty) {
+                    _loadBots();
+                  }
+                },
+              ),
+            ],
           ),
-          value: _notifyTrades,
-          activeColor: AppTheme.accentColor,
-          onChanged: (v) {
-            setState(() => _notifyTrades = v);
-            if (v && _bots.isEmpty) {
-              _loadBots();
-            }
-          },
         ),
         if (_notifyTrades) ...[
           const SizedBox(height: 8),

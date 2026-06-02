@@ -46,6 +46,7 @@ class _DeepSeekBalancePageState extends State<DeepSeekBalancePage> {
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       title: 'DeepSeek API',
+      showBackButton: true,
       currentPath: '/admin/deepseek',
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: PfColors.accentAdmin))

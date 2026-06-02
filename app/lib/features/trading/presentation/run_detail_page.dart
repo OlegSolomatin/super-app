@@ -105,6 +105,7 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
 
     return AdaptiveScaffold(
       title: name,
+      showBackButton: true,
       currentPath: '/trading/run/${widget.runId}',
       body: _loading
           ? const Center(child: CircularProgressIndicator())

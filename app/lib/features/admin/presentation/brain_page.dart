@@ -241,6 +241,7 @@ class _BrainPageState extends State<BrainPage>
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       title: 'Второй мозг',
+      showBackButton: true,
       currentPath: '/brain',
       body: Column(
         children: [

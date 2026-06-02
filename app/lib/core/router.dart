@@ -80,7 +80,7 @@ class AppRouter {
         ),
       ),
       GoRoute(
-        path: '/trading/runs/:id',
+        path: '/trading/run/:id',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return TradingRunDetailPage(

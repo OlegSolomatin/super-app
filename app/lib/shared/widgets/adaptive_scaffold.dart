@@ -44,6 +44,7 @@ class AdaptiveScaffold extends StatelessWidget {
   final String? username;
   final String? userInitials;
   final VoidCallback? onLogout;
+  final bool showBackButton;
 
   const AdaptiveScaffold({
     super.key,
@@ -58,6 +59,7 @@ class AdaptiveScaffold extends StatelessWidget {
     this.username,
     this.userInitials,
     this.onLogout,
+    this.showBackButton = false,
   });
 
   @override
@@ -86,16 +88,25 @@ class AdaptiveScaffold extends StatelessWidget {
         backgroundColor: PfColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: PhosphorIcon(
-              PhosphorIconsFill.list,
-              color: PfColors.foreground,
-              size: 22,
-            ),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
-        ),
+        leading: showBackButton
+            ? IconButton(
+                icon: const PhosphorIcon(
+                  PhosphorIconsFill.caretLeft,
+                  color: PfColors.foreground,
+                  size: 22,
+                ),
+                onPressed: () => context.pop(),
+              )
+            : Builder(
+                builder: (ctx) => IconButton(
+                  icon: PhosphorIcon(
+                    PhosphorIconsFill.list,
+                    color: PfColors.foreground,
+                    size: 22,
+                  ),
+                  onPressed: () => Scaffold.of(ctx).openDrawer(),
+                ),
+              ),
         actions: actions,
       ),
       drawer: _buildSidebar(context, section, isCompact: false, isDrawer: true),
@@ -365,6 +376,19 @@ class AdaptiveScaffold extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (showBackButton) ...[
+            IconButton(
+              icon: const PhosphorIcon(
+                PhosphorIconsFill.caretLeft,
+                color: PfColors.foreground,
+                size: 20,
+              ),
+              onPressed: () => context.pop(),
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Назад',
+            ),
+            const SizedBox(width: PfSpacing.xs),
+          ],
           // Section icon + title
           PhosphorIcon(
             section.icon,

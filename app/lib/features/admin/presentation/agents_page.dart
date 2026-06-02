@@ -78,6 +78,7 @@ class _AdminAgentsPageState extends State<AdminAgentsPage>
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       title: 'Мониторинг агентов',
+      showBackButton: true,
       currentPath: '/admin/agents',
       body: _buildBody(),
     );
