@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -32,7 +33,7 @@ from app.services.trading.models import (
     TradingConfig,
     TradingRunStatus,
 )
-from app.services.trading.pair_list import ALL_PAIR_SYMBOLS
+from app.services.trading.pair_list import ALL_PAIR_SYMBOLS, fetch_all_usdt_pairs
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,36 @@ class TradingScheduler:
 
     def __init__(self) -> None:
         self._tasks: Dict[int, asyncio.Task] = {}
+        self._scan_progress: Dict[int, dict] = {}  # run_id -> progress info
+
+    def get_scan_progress(self, run_id: int) -> Optional[dict]:
+        """Return scan progress for a pair-scanner run, or None if not scanning."""
+        return self._scan_progress.get(run_id)
+
+    def _update_scan_progress(
+        self,
+        run_id: int,
+        scanned: int,
+        total: int,
+        trades: int,
+        pnl: float,
+        current_pair: str,
+        start_time: float,
+    ) -> None:
+        """Update in-memory scan progress with ETA calculation."""
+        elapsed = time.time() - start_time
+        avg_per_pair = elapsed / max(scanned, 1)
+        remaining = avg_per_pair * (total - scanned)
+        self._scan_progress[run_id] = {
+            "status": "scanning",
+            "total_pairs": total,
+            "scanned_pairs": scanned,
+            "trades_found": trades,
+            "pnl": round(pnl, 2),
+            "elapsed_seconds": round(elapsed, 1),
+            "estimated_remaining_seconds": round(remaining, 1),
+            "current_pair": current_pair,
+        }
 
     def can_start(self) -> bool:
         """Return True if fewer than MAX_RUNS are active."""
@@ -154,14 +185,29 @@ class TradingScheduler:
                         if config.mode.value != "history":
                             raise ValueError("Pair-scanner strategies only work in history mode")
 
+                        # Fetch dynamic pair list from Binance (cached)
+                        all_pairs = await fetch_all_usdt_pairs()
+                        total_pairs = len(all_pairs)
                         all_trades: List[Trade] = []
                         total_pnl = 0.0
+                        scan_start = time.time()
                         logger.info(
-                            "Run %d: pair-scanner %s scanning %d pairs [%s]",
-                            run_id, config.strategy, len(ALL_PAIR_SYMBOLS), config.timeframe,
+                            "Run %d: pair-scanner %s scanning %d pairs (dynamic from Binance) [%s]",
+                            run_id, config.strategy, total_pairs, config.timeframe,
                         )
 
-                        for idx, pair_symbol in enumerate(ALL_PAIR_SYMBOLS):
+                        # Init progress
+                        self._scan_progress[run_id] = {
+                            "status": "scanning",
+                            "total_pairs": total_pairs,
+                            "scanned_pairs": 0,
+                            "trades_found": 0,
+                            "elapsed_seconds": 0.0,
+                            "estimated_remaining_seconds": 0.0,
+                            "current_pair": "",
+                        }
+
+                        for idx, pair_symbol in enumerate(all_pairs):
                             try:
                                 loader = DataLoader(
                                     pair=pair_symbol,
@@ -171,6 +217,8 @@ class TradingScheduler:
                                 pair_candles = await loader.load_history(period_start, period_end)
 
                                 if not pair_candles or len(pair_candles) < 20:
+                                    # Still count as scanned for progress
+                                    self._update_scan_progress(run_id, idx + 1, total_pairs, len(all_trades), total_pnl, pair_symbol, scan_start)
                                     continue
 
                                 # Reuse engine with this pair
@@ -200,22 +248,28 @@ class TradingScheduler:
                                 all_trades.extend(pair_trades)
                                 total_pnl += pair_metrics.profit_loss
 
-                                if (idx + 1) % 10 == 0:
-                                    logger.info(
-                                        "Run %d: scan progress %d/%d pairs, %d trades found, PnL=%.2f",
-                                        run_id, idx + 1, len(ALL_PAIR_SYMBOLS),
-                                        len(all_trades), total_pnl,
-                                    )
+                                self._update_scan_progress(run_id, idx + 1, total_pairs, len(all_trades), total_pnl, pair_symbol, scan_start)
 
                             except Exception as pair_err:
                                 logger.warning(
                                     "Run %d: pair %s scan error: %s", run_id, pair_symbol, pair_err,
                                 )
+                                self._update_scan_progress(run_id, idx + 1, total_pairs, len(all_trades), total_pnl, pair_symbol, scan_start)
                                 continue
 
+                        # Mark done
+                        self._scan_progress[run_id] = {
+                            "status": "done",
+                            "total_pairs": total_pairs,
+                            "scanned_pairs": total_pairs,
+                            "trades_found": len(all_trades),
+                            "elapsed_seconds": time.time() - scan_start,
+                            "estimated_remaining_seconds": 0.0,
+                            "current_pair": "",
+                        }
                         logger.info(
                             "Run %d: scan completed %d pairs, %d trades found, PnL=%.2f",
-                            run_id, len(ALL_PAIR_SYMBOLS), len(all_trades), total_pnl,
+                            run_id, total_pairs, len(all_trades), total_pnl,
                         )
                         trades = all_trades
                         metrics = Metrics(
@@ -299,6 +353,7 @@ class TradingScheduler:
 
             finally:
                 self._tasks.pop(run_id, None)
+                self._scan_progress.pop(run_id, None)
 
     async def _save_results(
         self,

@@ -4,7 +4,61 @@ Centralised here to avoid circular imports between api/v1/trading.py
 and services/trading/scheduler.py.
 """
 
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
 from typing import Optional
+
+import aiohttp
+
+logger = logging.getLogger(__name__)
+
+# ── Cache for Binance pair list ──
+_binance_pairs_cache: list[str] | None = None
+_binance_pairs_cache_time: float = 0.0
+BINANCE_CACHE_TTL = 300  # 5 minutes
+
+
+async def fetch_all_usdt_pairs() -> list[str]:
+    """Fetch ALL active USDT trading pairs from Binance.
+
+    Results are cached for 5 minutes to avoid hammering the API.
+    Falls back to ALL_PAIR_SYMBOLS (hardcoded) on network error.
+    """
+    global _binance_pairs_cache, _binance_pairs_cache_time
+
+    now = time.time()
+    if _binance_pairs_cache is not None and (now - _binance_pairs_cache_time) < BINANCE_CACHE_TTL:
+        return _binance_pairs_cache
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.binance.com/api/v3/exchangeInfo",
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning("Binance API returned %d, using hardcoded pairs", resp.status)
+                    return list(ALL_PAIR_SYMBOLS)
+
+                data = await resp.json()
+                pairs = [
+                    s["symbol"]
+                    for s in data.get("symbols", [])
+                    if s["symbol"].endswith("USDT") and s["status"] == "TRADING"
+                ]
+                pairs.sort()
+                _binance_pairs_cache = pairs
+                _binance_pairs_cache_time = now
+                logger.info("Fetched %d USDT pairs from Binance", len(pairs))
+                return pairs
+
+    except Exception as e:
+        logger.warning("Failed to fetch pairs from Binance: %s — using hardcoded %d pairs", e, len(ALL_PAIR_SYMBOLS))
+        return list(ALL_PAIR_SYMBOLS)
+
 
 # ── Coin icon names (for crypto logos CDN) ──
 COIN_ICON_NAMES: dict[str, str] = {

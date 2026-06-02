@@ -77,6 +77,15 @@ class TradingRepository {
     return TradingRun.fromJson(response.data as Map<String, dynamic>);
   }
 
+  Future<Map<String, dynamic>> getRunScanProgress(String id) async {
+    try {
+      final response = await _dio.get('/trading/runs/$id/scan-progress');
+      return response.data as Map<String, dynamic>;
+    } catch (_) {
+      return {'status': null};
+    }
+  }
+
   Future<({List<TradingTrade> items, int total})> getRunTrades(
     String id, {
     int page = 1,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -25,11 +26,21 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
   List<TradingTrade> _trades = [];
   bool _loading = true;
   bool _loadingTrades = true;
+  Map<String, dynamic>? _scanProgress;
+  bool _isScanner = false;
+
+  Timer? _scanTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _scanTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -40,11 +51,40 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
         setState(() {
           _run = run;
           _loading = false;
+          _isScanner = (run.config['strategy'] as String? ?? '')
+              .contains('all_pairs');
         });
+        // Start polling scan progress if running + scanner
+        if (_isScanner && (run.status == 'running' || run.status == 'pending')) {
+          _startScanPolling();
+        }
       }
       _loadTrades();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _startScanPolling() {
+    _scanTimer?.cancel();
+    _scanTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchScanProgress());
+    _fetchScanProgress();
+  }
+
+  Future<void> _fetchScanProgress() async {
+    try {
+      final data = await widget.repository.getRunScanProgress(widget.runId);
+      if (mounted) {
+        setState(() => _scanProgress = data);
+        // Stop polling when done
+        if (data['status'] == 'done' || data['status'] == null) {
+          _scanTimer?.cancel();
+          // Reload trades if done (new trades may have appeared)
+          if (data['status'] == 'done') _loadTrades();
+        }
+      }
+    } catch (_) {
+      // Silently retry on next tick
     }
   }
 
@@ -98,6 +138,10 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       _buildStatusCard(theme, isDark),
+                      if (_isScanner && _scanProgress != null) ...[
+                        const SizedBox(height: 12),
+                        _buildScanProgressCard(theme),
+                      ],
                       const SizedBox(height: 16),
                       _buildInfoCard(theme, isDark),
                       const SizedBox(height: 24),
@@ -214,6 +258,134 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
         ),
       ],
     );
+  }
+
+  Widget _buildScanProgressCard(ThemeData theme) {
+    final progress = _scanProgress!;
+    final status = progress['status'] as String? ?? '';
+    final total = (progress['total_pairs'] as num?)?.toInt() ?? 0;
+    final scanned = (progress['scanned_pairs'] as num?)?.toInt() ?? 0;
+    final trades = (progress['trades_found'] as num?)?.toInt() ?? 0;
+    final pnl = (progress['pnl'] as num?)?.toDouble() ?? 0.0;
+    final elapsed = (progress['elapsed_seconds'] as num?)?.toDouble() ?? 0.0;
+    final eta = (progress['estimated_remaining_seconds'] as num?)?.toDouble() ?? 0.0;
+    final currentPair = progress['current_pair'] as String? ?? '';
+    final ratio = total > 0 ? scanned / total : 0.0;
+    final elapsedStr = _fmtDuration(elapsed);
+    final etaStr = eta > 0 ? _fmtDuration(eta) : '—';
+    final pnlStr = '${pnl >= 0 ? '+' : ''}\$${pnl.toStringAsFixed(2)}';
+    final isDone = status == 'done';
+
+    return Card(
+      color: theme.cardTheme.color,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isDone
+              ? const Color(0xFF4CAF50).withValues(alpha: 0.3)
+              : AppTheme.accentColor.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                PhosphorIcon(
+                  isDone ? PhosphorIconsFill.checkCircle : PhosphorIconsFill.binoculars,
+                  size: 20,
+                  color: isDone ? const Color(0xFF4CAF50) : AppTheme.accentColor,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isDone ? 'Сканирование завершено' : 'Сканирование пар...',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 8,
+                backgroundColor: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.1),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isDone ? const Color(0xFF4CAF50) : AppTheme.accentColor,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Stats row
+            Row(
+              children: [
+                _progressStat('Сканировано', '$scanned / $total'),
+                const SizedBox(width: 16),
+                _progressStat('Сделок', '$trades'),
+                if (!isDone) ...[
+                  const SizedBox(width: 16),
+                  _progressStat('Текущая', currentPair.length > 8
+                      ? '${currentPair.substring(0, 8)}…'
+                      : currentPair),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Time row
+            Row(
+              children: [
+                _progressStat('Прошло', elapsedStr),
+                const SizedBox(width: 16),
+                _progressStat('Осталось', etaStr),
+                if (trades > 0) ...[
+                  const SizedBox(width: 16),
+                  _progressStat('PnL', pnlStr),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _progressStat(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.white54,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _fmtDuration(double seconds) {
+    final totalSec = seconds.round();
+    final h = totalSec ~/ 3600;
+    final m = (totalSec % 3600) ~/ 60;
+    final s = totalSec % 60;
+    if (h > 0) return '${h}ч ${m}м';
+    if (m > 0) return '${m}м ${s}с';
+    return '${s}с';
   }
 
   Widget _buildInfoCard(ThemeData theme, bool isDark) {

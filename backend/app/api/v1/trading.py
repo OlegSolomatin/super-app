@@ -765,6 +765,31 @@ async def get_run_trades(
     )
 
 
+@router.get("/runs/{run_id}/scan-progress")
+async def get_scan_progress(
+    run_id: int,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Return real-time scan progress for a pair-scanner run.
+
+    Returns {
+        "status": "scanning" | "done" | null,
+        "total_pairs": int,
+        "scanned_pairs": int,
+        "trades_found": int,
+        "pnl": float,
+        "elapsed_seconds": float,
+        "estimated_remaining_seconds": float,
+        "current_pair": str,
+    }
+    Returns empty dict with status=null if not a scanner run.
+    """
+    progress = scheduler.get_scan_progress(run_id)
+    if progress is None:
+        return {"status": None}
+    return progress
+
+
 @router.get("/runs/{run_id}/code")
 async def get_run_strategy_code(
     run_id: int,
