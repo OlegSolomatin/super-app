@@ -50,8 +50,8 @@ class SuperApp extends StatelessWidget {
             autofocus: true,
             child: MaterialApp.router(
               title: 'Super App',
-              theme: AppTheme.lightTheme,
-              darkTheme: AppTheme.darkTheme,
+              theme: AppTheme.lightTheme(),
+              darkTheme: AppTheme.darkTheme(),
               themeMode: themeProvider.themeMode,
               routerConfig: appRouter.router,
               debugShowCheckedModeBanner: false,

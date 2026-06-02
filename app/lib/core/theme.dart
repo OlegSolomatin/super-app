@@ -1,187 +1,337 @@
 import 'package:flutter/material.dart';
+import 'package:app/shared/tokens/pf_colors.dart';
+import 'package:app/shared/tokens/pf_typography.dart';
+import 'package:app/shared/tokens/pf_spacing.dart';
+import 'package:app/shared/tokens/pf_radius.dart';
+import 'package:app/core/section_theme.dart';
 
+/// Фабрика тем pfumiko design system.
+///
+/// Использует PfColors токены + SectionTheme для accent-цвета раздела.
+/// Единый источник истины для всех визуальных стилей.
 class AppTheme {
-  // Dark theme colors
-  static const Color bgColor = Color(0xFF08081C);
-  static const Color accentColor = Color(0xFF7C5CFC);
-  static const Color surfaceColor = Color(0xFF12122A);
-  static const Color cardColor = Color(0xFF1A1A35);
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0B0CC);
+  // ─── Backward-compatible aliases (до редизайна виджетов) ──────────
+  // Будут удалены после Фазы 2
+  static Color get accentColor => PfColors.accentAdmin;
+  static Color get bgColor => PfColors.background;
+  static Color get surfaceColor => PfColors.surface;
+  static Color get cardColor => PfColors.card;
+  static Color get textPrimary => PfColors.foreground;
+  static Color get textSecondary => PfColors.mutedForeground;
+  static Color get lightBgColor => PfColors.backgroundLight;
+  static Color get lightSurfaceColor => PfColors.cardLight;
+  static Color get lightCardColor => PfColors.cardLight;
+  static Color get lightTextPrimary => PfColors.foregroundLight;
+  static Color get lightTextSecondary => PfColors.mutedForeground;
 
-  // Light theme colors
-  static const Color lightBgColor = Color(0xFFF5F5FA);
-  static const Color lightSurfaceColor = Color(0xFFFFFFFF);
-  static const Color lightCardColor = Color(0xFFFFFFFF);
-  static const Color lightTextPrimary = Color(0xFF1A1A2E);
-  static const Color lightTextSecondary = Color(0xFF7A7A9A);
-
-  static ThemeData get darkTheme {
+  // ─── Dark theme ──────────────────────────────────────────────────────
+  static ThemeData darkTheme({SectionTheme section = SectionTheme.home}) {
     return ThemeData(
+      useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: bgColor,
-      primaryColor: accentColor,
-      colorScheme: const ColorScheme.dark(
-        primary: accentColor,
-        secondary: accentColor,
-        surface: surfaceColor,
-        onPrimary: Colors.white,
-        onSurface: textPrimary,
+      scaffoldBackgroundColor: PfColors.background,
+      primaryColor: section.accent,
+
+      colorScheme: ColorScheme.dark(
+        primary: section.accent,
+        onPrimary: section.onAccent,
+        primaryContainer: section.accent.withValues(alpha: 0.15),
+        secondary: PfColors.surface,
+        onSecondary: PfColors.foreground,
+        surface: PfColors.card,
+        onSurface: PfColors.foreground,
+        surfaceContainerHighest: PfColors.surface,
+        error: PfColors.destructive,
+        onError: Colors.white,
+        outline: PfColors.border,
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: bgColor,
-        foregroundColor: textPrimary,
+
+      // ─── AppBar ──────────────────────────────────────────────────────
+      appBarTheme: AppBarTheme(
+        backgroundColor: PfColors.background,
+        foregroundColor: PfColors.foreground,
         elevation: 0,
         centerTitle: true,
+        titleTextStyle: PfTypography.titleLg.copyWith(color: PfColors.foreground),
+        scrolledUnderElevation: 0,
       ),
+
+      // ─── Card ────────────────────────────────────────────────────────
       cardTheme: CardThemeData(
-        color: cardColor,
+        color: PfColors.card,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: PfRadius.borderRadiusXl,
+          side: const BorderSide(color: PfColors.border, width: 1),
         ),
+        margin: EdgeInsets.zero,
       ),
+
+      // ─── Input ───────────────────────────────────────────────────────
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surfaceColor,
+        fillColor: PfColors.background,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: PfSpacing.md,
+          vertical: 10,
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: const BorderSide(color: PfColors.input),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF2A2A45)),
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: const BorderSide(color: PfColors.input),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: accentColor, width: 2),
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: BorderSide(color: section.accent, width: 2),
         ),
-        labelStyle: const TextStyle(color: textSecondary),
-        hintStyle: const TextStyle(color: textSecondary),
+        errorBorder: OutlineInputBorder(
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: const BorderSide(color: PfColors.destructive),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: const BorderSide(color: PfColors.destructive, width: 2),
+        ),
+        labelStyle: PfTypography.bodyMd.copyWith(color: PfColors.mutedForeground),
+        hintStyle: PfTypography.bodyMd.copyWith(color: PfColors.mutedForeground),
       ),
+
+      // ─── Buttons ─────────────────────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: accentColor,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 50),
+          backgroundColor: section.accent,
+          foregroundColor: section.onAccent,
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: PfRadius.borderRadiusPill,
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: PfTypography.button,
+          elevation: 0,
+          shadowColor: Colors.transparent,
         ),
       ),
+
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: accentColor,
+          foregroundColor: section.accent,
+          textStyle: PfTypography.button,
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.sm),
         ),
       ),
-      textTheme: const TextTheme(
-        headlineLarge: TextStyle(
-          color: textPrimary,
-          fontSize: 28,
-          fontWeight: FontWeight.bold,
+
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: PfColors.foreground,
+          side: const BorderSide(color: PfColors.border),
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md),
+          shape: RoundedRectangleBorder(
+            borderRadius: PfRadius.borderRadiusLg,
+          ),
+          textStyle: PfTypography.button,
         ),
-        headlineMedium: TextStyle(
-          color: textPrimary,
-          fontSize: 22,
-          fontWeight: FontWeight.w600,
+      ),
+
+      // ─── Text ────────────────────────────────────────────────────────
+      textTheme: TextTheme(
+        headlineLarge: PfTypography.displayXl.copyWith(color: PfColors.foreground),
+        headlineMedium: PfTypography.displayLg.copyWith(color: PfColors.foreground),
+        headlineSmall: PfTypography.displayMd.copyWith(color: PfColors.foreground),
+        titleLarge: PfTypography.titleLg.copyWith(color: PfColors.foreground),
+        titleMedium: PfTypography.titleMd.copyWith(color: PfColors.foreground),
+        bodyLarge: PfTypography.bodyLg.copyWith(color: PfColors.foreground),
+        bodyMedium: PfTypography.bodyMd.copyWith(color: PfColors.foreground),
+        bodySmall: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground),
+        labelLarge: PfTypography.button.copyWith(color: PfColors.foreground),
+        labelSmall: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+      ),
+
+      // ─── Divider ─────────────────────────────────────────────────────
+      dividerTheme: DividerThemeData(
+        color: PfColors.border,
+        thickness: 1,
+        space: 0,
+      ),
+
+      // ─── Chip / Badge ───────────────────────────────────────────────
+      chipTheme: ChipThemeData(
+        backgroundColor: PfColors.muted,
+        labelStyle: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        shape: RoundedRectangleBorder(
+          borderRadius: PfRadius.borderRadiusMd,
         ),
-        titleLarge: TextStyle(
-          color: textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
+        side: BorderSide.none,
+      ),
+
+      // ─── Progress Indicator ─────────────────────────────────────────
+      // LinearProgressIndicator styling — use default theme params
+      // Theme extension will be used in custom components (Phase 1)
+
+      // ─── Dialog ─────────────────────────────────────────────────────
+      dialogTheme: DialogThemeData(
+        backgroundColor: PfColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: PfRadius.borderRadiusXl,
+          side: const BorderSide(color: PfColors.border),
         ),
-        bodyLarge: TextStyle(color: textPrimary, fontSize: 16),
-        bodyMedium: TextStyle(color: textSecondary, fontSize: 14),
+      ),
+
+      // ─── Snackbar ────────────────────────────────────────────────────
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: PfColors.card,
+        contentTextStyle: PfTypography.bodyMd.copyWith(color: PfColors.foreground),
+        shape: RoundedRectangleBorder(
+          borderRadius: PfRadius.borderRadiusLg,
+          side: const BorderSide(color: PfColors.border),
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+
+      // ─── Bottom Nav ────────────────────────────────────────────────
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: PfColors.background,
+        selectedItemColor: section.accent,
+        unselectedItemColor: PfColors.mutedForeground,
+      ),
+
+      // ─── Tab Bar ───────────────────────────────────────────────────
+      tabBarTheme: TabBarThemeData(
+        labelColor: PfColors.foreground,
+        unselectedLabelColor: PfColors.mutedForeground,
+        indicatorColor: section.accent,
+        labelStyle: PfTypography.button,
+        unselectedLabelStyle: PfTypography.button,
       ),
     );
   }
 
-  static ThemeData get lightTheme {
+  // ─── Light theme (login, forms) ──────────────────────────────────────
+  static ThemeData lightTheme({SectionTheme section = SectionTheme.login}) {
     return ThemeData(
+      useMaterial3: true,
       brightness: Brightness.light,
-      scaffoldBackgroundColor: lightBgColor,
-      primaryColor: accentColor,
-      colorScheme: const ColorScheme.light(
-        primary: accentColor,
-        secondary: accentColor,
-        surface: lightSurfaceColor,
-        onPrimary: Colors.white,
-        onSurface: lightTextPrimary,
+      scaffoldBackgroundColor: PfColors.backgroundLight,
+      primaryColor: section.accent,
+
+      colorScheme: ColorScheme.light(
+        primary: section.accent,
+        onPrimary: section.onAccent,
+        primaryContainer: section.accent.withValues(alpha: 0.12),
+        secondary: PfColors.borderLight,
+        onSecondary: PfColors.foregroundLight,
+        surface: PfColors.cardLight,
+        onSurface: PfColors.foregroundLight,
+        error: PfColors.destructive,
+        onError: Colors.white,
+        outline: PfColors.borderLight,
       ),
+
       appBarTheme: const AppBarTheme(
-        backgroundColor: lightSurfaceColor,
-        foregroundColor: lightTextPrimary,
+        backgroundColor: PfColors.cardLight,
+        foregroundColor: PfColors.foregroundLight,
         elevation: 0,
         centerTitle: true,
+        scrolledUnderElevation: 0,
       ),
+
       cardTheme: CardThemeData(
-        color: lightCardColor,
+        color: PfColors.cardLight,
         elevation: 0,
-        shadowColor: Color(0x1A000000),
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: PfRadius.borderRadiusXl,
+          side: const BorderSide(color: PfColors.borderLight, width: 1),
         ),
+        margin: EdgeInsets.zero,
       ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: lightBgColor,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE0E0EC)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: accentColor, width: 2),
-        ),
-        labelStyle: const TextStyle(color: lightTextSecondary),
-        hintStyle: const TextStyle(color: lightTextSecondary),
-      ),
+
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: accentColor,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 50),
+          backgroundColor: section.accent,
+          foregroundColor: section.onAccent,
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: PfRadius.borderRadiusPill,
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: PfTypography.button,
+          elevation: 0,
+          shadowColor: Colors.transparent,
         ),
       ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: accentColor,
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: PfColors.cardLight,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: PfSpacing.md,
+          vertical: 10,
         ),
+        border: OutlineInputBorder(
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: const BorderSide(color: PfColors.borderLight),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: const BorderSide(color: PfColors.borderLight),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: PfRadius.borderRadiusLg,
+          borderSide: BorderSide(color: section.accent, width: 2),
+        ),
+        labelStyle: PfTypography.bodyMd.copyWith(color: PfColors.mutedForeground),
+        hintStyle: PfTypography.bodyMd.copyWith(color: PfColors.mutedForeground),
       ),
-      textTheme: const TextTheme(
-        headlineLarge: TextStyle(
-          color: lightTextPrimary,
-          fontSize: 28,
-          fontWeight: FontWeight.bold,
+
+      textTheme: TextTheme(
+        headlineLarge: PfTypography.displayXl.copyWith(color: PfColors.foregroundLight),
+        headlineMedium: PfTypography.displayLg.copyWith(color: PfColors.foregroundLight),
+        headlineSmall: PfTypography.displayMd.copyWith(color: PfColors.foregroundLight),
+        titleLarge: PfTypography.titleLg.copyWith(color: PfColors.foregroundLight),
+        titleMedium: PfTypography.titleMd.copyWith(color: PfColors.foregroundLight),
+        bodyLarge: PfTypography.bodyLg.copyWith(color: PfColors.foregroundLight),
+        bodyMedium: PfTypography.bodyMd.copyWith(color: PfColors.foregroundLight),
+        bodySmall: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground),
+        labelLarge: PfTypography.button.copyWith(color: PfColors.foregroundLight),
+        labelSmall: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+      ),
+
+      dividerTheme: const DividerThemeData(
+        color: PfColors.borderLight,
+        thickness: 1,
+        space: 0,
+      ),
+
+      dialogTheme: DialogThemeData(
+        backgroundColor: PfColors.cardLight,
+        shape: RoundedRectangleBorder(
+          borderRadius: PfRadius.borderRadiusXl,
+          side: const BorderSide(color: PfColors.borderLight),
         ),
-        headlineMedium: TextStyle(
-          color: lightTextPrimary,
-          fontSize: 22,
-          fontWeight: FontWeight.w600,
-        ),
-        titleLarge: TextStyle(
-          color: lightTextPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
-        bodyLarge: TextStyle(color: lightTextPrimary, fontSize: 16),
-        bodyMedium: TextStyle(color: lightTextSecondary, fontSize: 14),
       ),
     );
+  }
+
+  // ─── Convenience: get theme by mode + section ─────────────────────
+  static ThemeData of({
+    required ThemeMode mode,
+    SectionTheme section = SectionTheme.home,
+  }) {
+    switch (mode) {
+      case ThemeMode.light:
+        return lightTheme(section: section);
+      case ThemeMode.dark:
+        return darkTheme(section: section);
+      case ThemeMode.system:
+        // WidgetsBinding.instance.window.platformBrightness недоступен
+        // в изолированном контексте — используй MediaQuery в рантайме
+        return darkTheme(section: section);
+    }
   }
 }

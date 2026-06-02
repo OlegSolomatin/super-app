@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-01 — Фаза 0: Фундамент дизайн-системы
+
+- **Создан `DESIGN.md`** — полный дизайн-спек проекта по Google-спецификации: цвета, типографика, отступы, скругления, компоненты, Do's and Don'ts
+- **Созданы токены** — `lib/shared/tokens/`:
+  - `pf_colors.dart` — 40+ цветовых констант (dark, light, section accents, chart)
+  - `pf_typography.dart` — 12 токенов типографики (Inter + JetBrains Mono)
+  - `pf_spacing.dart` — 4px-base шкала отступов
+  - `pf_radius.dart` — скругления от xs до pill
+- **Создан `section_theme.dart`** — модель SectionTheme с 8 разделами (home, trading, admin, music, video, posts, settings, login) — каждый со своим accent-цветом и иконкой Phosphor
+- **Переписан `theme.dart`** — ThemeData через PfColors + SectionTheme. Полностью переработаны все sub-themes (appBar, card, input, button, text, divider, dialog, snackbar, tabBar)
+- **Обновлён `theme_provider.dart`** — добавлен `setSection()`, геттер `theme` возвращает ThemeData с учётом skin'а
+- **Анализ:** `dart analyze` — 0 issues
+
 ## 2026-06-01 — Утверждён план редизайна (единый скелет + skin'ы)
 
 - **Концепция:** единая база (фон, карточки, типографика, навигация) + тематические акцентные цвета под каждый раздел

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:app/core/section_theme.dart';
+import 'package:app/core/theme.dart';
 
 enum ThemeModePreference {
   dark,
@@ -10,12 +12,16 @@ enum ThemeModePreference {
 class ThemeProvider extends ChangeNotifier {
   final SharedPreferences _prefs;
   ThemeModePreference _mode = ThemeModePreference.dark;
+  SectionTheme _section = SectionTheme.home;
 
   ThemeProvider(this._prefs) {
     _loadFromPrefs();
   }
 
   ThemeModePreference get mode => _mode;
+  SectionTheme get section => _section;
+
+  ThemeData get theme => AppTheme.of(mode: themeMode, section: _section);
 
   ThemeMode get themeMode => switch (_mode) {
         ThemeModePreference.dark => ThemeMode.dark,
@@ -27,6 +33,14 @@ class ThemeProvider extends ChangeNotifier {
     _mode = mode;
     _prefs.setString('theme_mode', mode.name);
     notifyListeners();
+  }
+
+  /// Переключает skin раздела. Вызывать при навигации между разделами.
+  void setSection(SectionTheme section) {
+    if (_section != section) {
+      _section = section;
+      notifyListeners();
+    }
   }
 
   void _loadFromPrefs() {
