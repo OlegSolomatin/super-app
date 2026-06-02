@@ -46,6 +46,7 @@ class Signal:
     time: datetime
     type: str  # entry / exit
     confidence: float  # 0.0 – 1.0
+    exit_target: Optional[float] = None  # Dynamic TP price (overrides config TP if set)
 
 
 @dataclass
@@ -61,6 +62,7 @@ class Trade:
     pnl: float = 0.0
     exit_reason: Optional[str] = None
     pair: Optional[str] = None  # Which pair this trade belongs to
+    exit_target: Optional[float] = None  # Dynamic TP price from strategy
 
 
 @dataclass

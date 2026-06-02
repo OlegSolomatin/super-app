@@ -97,6 +97,9 @@ class InverseHammerStrategy(AbstractStrategy):
             and lower_shadow <= 0.3 * body
         ):
             entry_price = current.close
+            # Dynamic TP: full candle range (high-low) from entry (for SELL: entry - range)
+            candle_range = current.high - current.low
+            exit_target = entry_price - candle_range
             signals.append(
                 Signal(
                     side="SELL",
@@ -104,6 +107,7 @@ class InverseHammerStrategy(AbstractStrategy):
                     time=current.timestamp,
                     type="entry",
                     confidence=min(1.0, upper_shadow / (body * 3)),
+                    exit_target=exit_target,
                 )
             )
 

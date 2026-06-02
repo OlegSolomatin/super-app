@@ -90,6 +90,9 @@ class AllPairsHammerStrategy(AbstractStrategy):
                     return signals
 
             entry_price = current.close
+            # Dynamic TP: full candle range (high-low) from entry
+            candle_range = current.high - current.low
+            exit_target = entry_price + candle_range
             signals.append(
                 Signal(
                     side="BUY",
@@ -97,6 +100,7 @@ class AllPairsHammerStrategy(AbstractStrategy):
                     time=current.timestamp,
                     type="entry",
                     confidence=min(1.0, lower_shadow / (body * 3)),
+                    exit_target=exit_target,
                 )
             )
 

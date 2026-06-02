@@ -351,7 +351,7 @@ class TradingEngine:
 
                     if open_trade.side == "BUY":
                         sl_price = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
-                        tp_price = open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+                        tp_price = open_trade.exit_target or (open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                         if sl_price and latest.low <= sl_price:
                             should_close = True
@@ -363,7 +363,7 @@ class TradingEngine:
                             exit_reason = "take_profit"
                     else:
                         sl_price = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
-                        tp_price = open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+                        tp_price = open_trade.exit_target or (open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                         if sl_price and latest.high >= sl_price:
                             should_close = True
@@ -427,6 +427,7 @@ class TradingEngine:
                                     entry_price=sig.price,
                                     entry_time=latest.timestamp,
                                     quantity=quantity,
+                                    exit_target=sig.exit_target,
                                 )
                                 logger.info(
                                     "Virtual live: ENTRY %s %s at %.2f qty=%.4f",
@@ -519,7 +520,7 @@ class TradingEngine:
                 # Check Stop Loss
                 if open_trade.side == "BUY":
                     sl_price = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
-                    tp_price = open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+                    tp_price = open_trade.exit_target or (open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                     if sl_price and current.low <= sl_price:
                         should_close = True
@@ -531,7 +532,7 @@ class TradingEngine:
                         exit_reason = "take_profit"
                 else:  # SELL (short)
                     sl_price = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
-                    tp_price = open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None
+                    tp_price = open_trade.exit_target or (open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                     if sl_price and current.high >= sl_price:
                         should_close = True
@@ -591,6 +592,7 @@ class TradingEngine:
                             entry_price=sig.price,
                             entry_time=current.timestamp,
                             quantity=quantity,
+                            exit_target=sig.exit_target,
                         )
                         break  # One entry signal at a time
 
