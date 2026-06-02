@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-01 — Фаза 1: Базовые UI-компоненты
+
+- **Создан `PfCard`** — виджет карточки с hairline-бордером `--border`, variant: default/trading, опциональные header/footer
+- **Создан `PfButton`** — универсальная кнопка: 7 variant'ов (primary/secondary/ghost/outline/destructive/link), 7 size'ов (sm/md/lg/pill/icon-sm/icon-md/icon-lg), поддержка иконок слева/справа, loading state, expanded режим
+- **Создан `PfBadge`** — badge с variant'ами: default/success/destructive/warning/info
+- **Создан `PfDivider` / `PfVerticalDivider`** — системные разделители через `--border` токен
+- **Создан `PfSkeleton`** — placeholder загрузки с пульсацией (fade in-out)
+- **Создан `PfAvatar`** — аватар с fallback initials
+- **Анализ:** `dart analyze` — 0 issues
+
 ## 2026-06-01 — Фаза 0: Фундамент дизайн-системы
 
 - **Создан `DESIGN.md`** — полный дизайн-спек проекта по Google-спецификации: цвета, типографика, отступы, скругления, компоненты, Do's and Don'ts
