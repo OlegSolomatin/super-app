@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 
 # ── Super-App ──────────────────────────────────────────
 FLUTTER_DIST = Path.home() / "workspace/super-app/app/build/web"
+HERMES_WEB_DIST = Path.home() / ".hermes/hermes-agent/hermes_cli/web_dist"
 API_BASE = "http://localhost:8000"          # FastAPI backend
 PORT = 8790
 
@@ -80,7 +81,37 @@ class SuperAppProxy(BaseHTTPRequestHandler):
         if serve_path in ("/", ""):
             serve_path = "/index.html"
 
-        # SPA fallback
+        # ── Telegram Mini App routes ─────────────────
+        # Serve Mini App pages from web_dist (only known paths to avoid Flutter conflicts)
+        MINI_APP_PAGES = {
+            "/telegram-mini-app.html", "/dashboard.html", "/brain.html",
+            "/backtest.html", "/health.html", "/balances.html", "/moscow_timeline.html",
+        }
+        MINI_APP_PREFIXES = {"/styles/", "/fonts/", "/fonts-terminal/", "/ds-assets/"}
+        is_mini_page = serve_path in MINI_APP_PAGES
+        is_mini_prefix = any(serve_path.startswith(p) for p in MINI_APP_PREFIXES)
+        is_mini_asset = serve_path in ("/theme.js", "/sw.js", "/lwcharts.js",
+            "/favicon.ico", "/dashboard.json", "/health-data.json",
+            "/icon-180.png", "/icon-192.png", "/icon-dark-180.png", "/icon-dark-192.png",
+            "/icon-dark-512.png", "/icon-dark.png", "/icon-dark.svg",
+            "/icon-light-180.png", "/icon-light-192.png", "/icon-light-512.png",
+            "/icon-light.png", "/icon-light.svg", "/icon.png", "/icon.svg")
+        if is_mini_page or is_mini_prefix or is_mini_asset:
+            web_path = HERMES_WEB_DIST / serve_path.lstrip("/")
+            if web_path.exists() and web_path.is_file():
+                content = web_path.read_bytes()
+                suffix = web_path.suffix
+                ct = CONTENT_TYPES.get(suffix, "application/octet-stream")
+                self.send_response(200)
+                self.send_header("Content-Type", f"{ct}; charset=utf-8" if ct.startswith("text/") else ct)
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+
+        # SPA fallback — serve Flutter build
         file_path = FLUTTER_DIST / serve_path.lstrip("/")
         if not (file_path.exists() and file_path.is_file() and
                 file_path.resolve().is_relative_to(FLUTTER_DIST.resolve())):
