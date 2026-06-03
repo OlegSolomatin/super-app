@@ -54,3 +54,9 @@
 - **Pair-scanner стратегии:** All Pairs Hammer и All Pairs Inverse Hammer — сканируют все 430+ пар в history mode, TF ≥ 30m.
 - **UI:** кнопка `?` вместо `!`, пресеты дат в визарде, авто-скрытие virtual/real для сканера.
 
+- `feat` Фаза 1: Engine — фундаментальные улучшения
+
+- _locked_pairs инициализация в __init__
+- min_confidence фильтр (сигналы < 0.3 отсеиваются при entry)
+- ATR-based дефолтный exit_target (entry +- ATR*2) в history и virtual_live
+- ATR-based SL в virtual_live (выбирается более строгий между ATR-SL и фикс. %) | Hermes

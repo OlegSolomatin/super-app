@@ -104,6 +104,8 @@ class TradingEngine:
     def __init__(self, config: TradingConfig) -> None:
         self.config = config
         self.run = TradingRun(config=config)
+        self._locked_pairs: set[str] = set()
+        self._min_confidence: float = 0.3
 
     async def _notify_trade_closed(self, trade: Trade, exit_reason: str) -> None:
         """Fire-and-forget Telegram notification for a closed trade.
@@ -440,9 +442,13 @@ class TradingEngine:
                     should_close = False
                     exit_price = latest.close
                     exit_reason = "signal"
+                    atr = self._compute_atr(window, ATR_PERIOD)
 
                     if open_trade.side == "BUY":
-                        sl_price = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                        # ATR-based stop or fixed percent (whichever is tighter)
+                        atr_sl = self._get_atr_sl_price("BUY", open_trade.entry_price, atr)
+                        fixed_sl = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                        sl_price = atr_sl if atr_sl > 0 and (fixed_sl is None or atr_sl > fixed_sl) else fixed_sl
                         tp_price = open_trade.exit_target or (open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                         if sl_price and latest.low <= sl_price:
@@ -454,7 +460,9 @@ class TradingEngine:
                             exit_price = tp_price
                             exit_reason = "take_profit"
                     else:
-                        sl_price = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                        atr_sl = self._get_atr_sl_price("SELL", open_trade.entry_price, atr)
+                        fixed_sl = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                        sl_price = atr_sl if atr_sl > 0 and (fixed_sl is None or atr_sl < fixed_sl) else fixed_sl
                         tp_price = open_trade.exit_target or (open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                         if sl_price and latest.high >= sl_price:
@@ -512,6 +520,25 @@ class TradingEngine:
                     signals = await strategy.analyze(window)
                     for sig in signals:
                         if sig.type == "entry":
+                            # Min confidence filter
+                            if sig.confidence < self._min_confidence:
+                                logger.info(
+                                    "Virtual live: entry SKIPPED %s %s (confidence %.2f < %.2f)",
+                                    sig.side, self.config.pair, sig.confidence, self._min_confidence,
+                                )
+                                continue
+
+                            # ATR-based default exit_target if strategy didn't set one
+                            exit_target = sig.exit_target
+                            if exit_target is None:
+                                atr = self._compute_atr(window, ATR_PERIOD)
+                                if atr > 0:
+                                    atr_distance = atr * 2.0
+                                    if sig.side == "BUY":
+                                        exit_target = sig.price + atr_distance
+                                    else:
+                                        exit_target = sig.price - atr_distance
+
                             quantity = min(max_trade_amount / sig.price, balance * 0.5 / sig.price) if sig.price > 0 else 0
                             if quantity > 0:
                                 open_trade = Trade(
@@ -519,7 +546,7 @@ class TradingEngine:
                                     entry_price=sig.price,
                                     entry_time=latest.timestamp,
                                     quantity=quantity,
-                                    exit_target=sig.exit_target,
+                                    exit_target=exit_target,
                                 )
                                 logger.info(
                                     "Virtual live: ENTRY %s %s at %.2f qty=%.4f",
@@ -694,6 +721,25 @@ class TradingEngine:
                 signals = await strategy.analyze(window)
                 for sig in signals:
                     if sig.type == "entry":
+                        # Min confidence filter
+                        if sig.confidence < self._min_confidence:
+                            logger.info(
+                                "Entry SKIPPED for %s (confidence %.2f < %.2f)",
+                                self.config.pair, sig.confidence, self._min_confidence,
+                            )
+                            continue
+
+                        # ATR-based default exit_target if strategy didn't set one
+                        exit_target = sig.exit_target
+                        if exit_target is None:
+                            atr = self._compute_atr(window, ATR_PERIOD)
+                            if atr > 0:
+                                atr_distance = atr * 2.0
+                                if sig.side == "BUY":
+                                    exit_target = sig.price + atr_distance
+                                else:
+                                    exit_target = sig.price - atr_distance
+
                         # confirm_trade_entry hook (Freqtrade-style)
                         confirmed = await self.confirm_trade_entry(
                             pair=self.config.pair, side=sig.side, price=sig.price,
@@ -711,7 +757,7 @@ class TradingEngine:
                             entry_price=sig.price,
                             entry_time=current.timestamp,
                             quantity=quantity,
-                            exit_target=sig.exit_target,
+                            exit_target=exit_target,
                             pair=self.config.pair,
                         )
                         break  # One entry signal at a time
