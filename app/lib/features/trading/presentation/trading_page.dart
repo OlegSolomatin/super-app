@@ -35,6 +35,8 @@ class _TradingPageState extends State<TradingPage>
   bool _loadingActive = true;
   bool _loadingHistory = true;
   Timer? _pollTimer;
+  /// Scan progress cache: run_id -> {status, scanned_pairs, total_pairs, ...}
+  final Map<String, Map<String, dynamic>> _scanProgress = {};
 
   @override
   void initState() {
@@ -77,6 +79,15 @@ class _TradingPageState extends State<TradingPage>
       setState(() => _activeRuns = result.items);
       if (hadActive && result.items.isEmpty) {
         _loadHistoryRuns();
+      }
+      // Poll scan progress for scanner runs (molot)
+      for (final run in result.items) {
+        if (run.isScanner) {
+          final progress = await widget.repository.getRunScanProgress(run.id);
+          if (mounted) {
+            setState(() => _scanProgress[run.id] = progress);
+          }
+        }
       }
     } catch (_) {}
   }
@@ -247,6 +258,7 @@ class _TradingPageState extends State<TradingPage>
           final run = runs[index];
           return _TradingRunCard(
             run: run,
+            scanProgress: _scanProgress[run.id],
             onTap: () => context.go('/trading/run/${run.id}'),
           );
         },
@@ -322,9 +334,14 @@ class _PillTab extends StatelessWidget {
 // ─── Trading Run Card ─────────────────────────────────────────────────
 class _TradingRunCard extends StatelessWidget {
   final TradingRun run;
+  final Map<String, dynamic>? scanProgress;
   final VoidCallback onTap;
 
-  const _TradingRunCard({required this.run, required this.onTap});
+  const _TradingRunCard({
+    required this.run,
+    this.scanProgress,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -398,54 +415,153 @@ class _TradingRunCard extends StatelessWidget {
             ],
           ),
           // ── Progress bar for active runs ───────────────
-          if (isActive && run.progressPercent != null) ...[
-            const SizedBox(height: PfSpacing.md),
-            _buildProgressBar(run),
+          if (isActive) ...[
+            if (run.isScanner && scanProgress != null && scanProgress!['status'] == 'scanning')
+              _buildScanProgress(scanProgress!)
+            else if (run.isVirtual && run.progressPercent != null)
+              _buildTimeProgress(run)
+            else if (!run.isScanner && !run.isVirtual)
+              _buildEstimatedTime(run),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildProgressBar(TradingRun run) {
-    final progress = (run.progressPercent ?? 0.0) / 100.0;
-    final remaining = run.timeRemainingLabel;
+  /// Scan progress — for all_pairs_hammer / all_pairs_inverse_hammer
+  Widget _buildScanProgress(Map<String, dynamic> progress) {
+    final total = (progress['total_pairs'] as num?)?.toInt() ?? 0;
+    final scanned = (progress['scanned_pairs'] as num?)?.toInt() ?? 0;
+    final currentPair = (progress['current_pair'] as String?) ?? '';
+    final eta = (progress['estimated_remaining_seconds'] as num?)?.toDouble() ?? 0;
+    final pct = total > 0 ? scanned / total : 0.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Time remaining + percent
-        Row(
-          children: [
-            if (remaining != null)
-              Text(
-                remaining,
-                style: PfTypography.caption.copyWith(
-                  color: PfColors.accentTrading,
-                  fontWeight: FontWeight.w500,
+    String etaLabel = '';
+    if (eta > 0) {
+      if (eta > 60) {
+        etaLabel = '${(eta / 60).round()} мин';
+      } else {
+        etaLabel = '${eta.round()} сек';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: PfSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Current pair + progress text
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  currentPair.isNotEmpty ? currentPair : 'Сканирование…',
+                  style: PfTypography.caption.copyWith(
+                    color: PfColors.accentTrading,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            const Spacer(),
+              const SizedBox(width: 8),
+              Text(
+                '$scanned / $total',
+                style: PfTypography.caption.copyWith(
+                  color: PfColors.mutedForeground,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Progress bar
+          ClipRRect(
+            borderRadius: PfRadius.borderRadiusPill,
+            child: LinearProgressIndicator(
+              value: pct.clamp(0.0, 1.0),
+              backgroundColor: PfColors.surface,
+              valueColor: AlwaysStoppedAnimation(PfColors.accentTrading),
+              minHeight: 6,
+            ),
+          ),
+          if (etaLabel.isNotEmpty) ...[
+            const SizedBox(height: 4),
             Text(
-              '${(progress * 100).toStringAsFixed(1)}%',
+              'Осталось: $etaLabel',
               style: PfTypography.caption.copyWith(
-                color: PfColors.mutedForeground,
+                color: PfColors.mutedForeground.withValues(alpha: 0.7),
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 6),
-        // Progress bar — trading yellow
-        ClipRRect(
-          borderRadius: PfRadius.borderRadiusPill,
-          child: LinearProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            backgroundColor: PfColors.surface,
-            valueColor: AlwaysStoppedAnimation(PfColors.accentTrading),
-            minHeight: 6,
+        ],
+      ),
+    );
+  }
+
+  /// Time-based progress — for virtual/real mode with duration
+  Widget _buildTimeProgress(TradingRun run) {
+    final progress = (run.progressPercent ?? 0.0) / 100.0;
+    final remaining = run.timeRemainingLabel;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: PfSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (remaining != null)
+                Text(
+                  remaining,
+                  style: PfTypography.caption.copyWith(
+                    color: PfColors.accentTrading,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              const Spacer(),
+              Text(
+                '${(progress * 100).toStringAsFixed(1)}%',
+                style: PfTypography.caption.copyWith(
+                  color: PfColors.mutedForeground,
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: PfRadius.borderRadiusPill,
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              backgroundColor: PfColors.surface,
+              valueColor: AlwaysStoppedAnimation(PfColors.accentTrading),
+              minHeight: 6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Estimated time text — for fast history mode runs
+  Widget _buildEstimatedTime(TradingRun run) {
+    final label = run.estimatedTimeLabel ?? '~7 сек';
+    return Padding(
+      padding: const EdgeInsets.only(top: PfSpacing.sm),
+      child: Row(
+        children: [
+          PhosphorIcon(
+            PhosphorIconsFill.clock,
+            size: 14,
+            color: PfColors.mutedForeground.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Примерное время расчёта: $label',
+            style: PfTypography.caption.copyWith(
+              color: PfColors.mutedForeground.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

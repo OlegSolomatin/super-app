@@ -93,6 +93,24 @@ class TradingRun {
     return '${hours}ч ${minutes}м';
   }
 
+  /// True if this is a pair-scanner strategy (all_pairs_hammer etc.)
+  bool get isScanner {
+    final strategy = config['strategy'] as String? ?? '';
+    return strategy == 'all_pairs_hammer' || strategy == 'all_pairs_inverse_hammer';
+  }
+
+  /// True if this is virtual/real mode with duration
+  bool get isVirtual {
+    return mode == 'virtual' && durationDays != null && durationDays! > 0;
+  }
+
+  /// Estimated time label for fast history-mode runs (non-scanner)
+  String? get estimatedTimeLabel {
+    if (isScanner || isVirtual || status != 'running') return null;
+    // History mode — fast, ~7 seconds
+    return '~7 сек';
+  }
+
   /// Human-readable pair name from config
   String get pairDisplay => (config['pair'] as String?) ?? '—';
 
