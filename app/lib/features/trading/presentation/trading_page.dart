@@ -397,8 +397,55 @@ class _TradingRunCard extends StatelessWidget {
                 ),
             ],
           ),
+          // ── Progress bar for active runs ───────────────
+          if (isActive && run.progressPercent != null) ...[
+            const SizedBox(height: PfSpacing.md),
+            _buildProgressBar(run),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildProgressBar(TradingRun run) {
+    final progress = (run.progressPercent ?? 0.0) / 100.0;
+    final remaining = run.timeRemainingLabel;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Time remaining + percent
+        Row(
+          children: [
+            if (remaining != null)
+              Text(
+                remaining,
+                style: PfTypography.caption.copyWith(
+                  color: PfColors.accentTrading,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            const Spacer(),
+            Text(
+              '${(progress * 100).toStringAsFixed(1)}%',
+              style: PfTypography.caption.copyWith(
+                color: PfColors.mutedForeground,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        // Progress bar — trading yellow
+        ClipRRect(
+          borderRadius: PfRadius.borderRadiusPill,
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            backgroundColor: PfColors.surface,
+            valueColor: AlwaysStoppedAnimation(PfColors.accentTrading),
+            minHeight: 6,
+          ),
+        ),
+      ],
     );
   }
 }
