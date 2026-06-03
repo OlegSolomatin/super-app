@@ -70,6 +70,10 @@
   — bollinger_bands: направленный trend filter, volume confirm, exit при возврате к middle, параметры bb_period/bb_std
   — keltner_channels: направленный trend filter (фикс бага SELL), volume confirm, параметры ema/atr/multiplier
   — donchian: направленный trend filter, volume confirm, exit при возврате в канал, atr filter вынесен в метод | Hermes
+| 2026-06-01 23:00 | feat | Фаза 5: Candlestick Patterns — 3 стратегии по образу молота
+  — engulfing: exit_target=candle_range, направленный trend filter, min_engulf_ratio параметр
+  — doji: exit_target=candle_range, направленный trend filter, volume (doji на низком объёме), параметры threshold/min_prior
+  — three_soldiers: exit_target=avg_candle_range, направленный trend filter, volume expand confirm | Hermes
 
 - _locked_pairs инициализация в __init__
 - min_confidence фильтр (сигналы < 0.3 отсеиваются при entry)

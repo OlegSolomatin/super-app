@@ -160,25 +160,25 @@
 ### 1️⃣4️⃣ `engulfing.py`
 **Сейчас:** Body engulf + volume confirm (SMA200 — баг для SELL)
 
-- [ ] ⬜ `exit_target = candle_range` (как в молоте)
-- [ ] ⬜ Trend filter по направлению: BUY → close > SMA, SELL → close < SMA
-- [ ] ⬜ Порог: ratio engulfing >= 1.0
+- [x] `exit_target = candle_range` (как в молоте)
+- [x] Trend filter по направлению: BUY → close > SMA, SELL → close < SMA
+- [x] `min_engulf_ratio=1.0` параметр
 
 ### 1️⃣5️⃣ `doji.py`
 **Сейчас:** body < 3% range + 2+ prior candles (SMA200 — баг для SELL)
 
-- [ ] ⬜ `exit_target` — BUY: entry + candle_range (как молот)
-- [ ] ⬜ Trend filter по направлению
-- [ ] ⬜ Volume: must be lower than prior (doji на низком объёме = сильнее)
-- [ ] ⬜ `doji_threshold=0.03, min_prior=2`
+- [x] `exit_target` — BUY: entry + candle_range (как молот)
+- [x] Trend filter по направлению
+- [x] Volume: doji на низком объёме (avg за 5 свечей)
+- [x] `doji_threshold=0.03, min_prior=2`
 
 ### 1️⃣6️⃣ `three_soldiers.py`
 **Сейчас:** 3 bullish/bearish candles + body/range ratio (SMA200 — баг для SELL)
 
-- [ ] ⬜ `exit_target` — BUY: entry + avg_candle_range×2
-- [ ] ⬜ Trend filter по направлению
-- [ ] ⬜ Volume confirmation: volume must expand on each soldier
-- [ ] ⬜ Exit-signal: при закрытии противоположной свечи
+- [x] `exit_target` — BUY: entry + avg_candle_range
+- [x] Trend filter по направлению
+- [x] Volume confirmation: volume must expand on each soldier
+- [x] Exit-signal: при закрытии противоположной свечи
 
 ---
 
