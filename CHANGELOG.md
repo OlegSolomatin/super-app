@@ -76,6 +76,8 @@
   — three_soldiers: exit_target=avg_candle_range, направленный trend filter, volume expand confirm | Hermes
 | 2026-06-01 23:10 | feat | Фаза 6: Volume — OBV стратегия
   — obv: направленный trend filter, 2-candle confirmation, confidence через normalised OBV/volume, параметр lookback | Hermes
+| 2026-06-01 23:20 | feat | Фаза 7: VWAP — финальная стратегия
+  — vwap: exit_target=VWAP (mean reversion), направленный trend filter (SELL fix), volume confirm, exit при возврате к VWAP, параметр deviation_pct | Hermes
 
 - _locked_pairs инициализация в __init__
 - min_confidence фильтр (сигналы < 0.3 отсеиваются при entry)

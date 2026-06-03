@@ -198,11 +198,13 @@
 ## 🎯 Фаза 7: VWAP (1 стратегия, low priority)
 
 ### 1️⃣8️⃣ `vwap.py`
-**Сейчас:** Price 2% below/above VWAP (нет exit_target, нет volume)
+**Сейчас:** Price 2% below/above VWAP (нет exit_target, нет volume, SELL без фильтра)
 
-- [ ] ⬜ `exit_target` — BUY/SELL: to VWAP (mean reversion)
-- [ ] ⬜ Только если VWAP восходящий для BUY
-- [ ] ⬜ `deviation_pct=0.02, lookback=50`
+- [x] `exit_target = VWAP` (mean reversion)
+- [x] Направленный trend filter (SELL: close < SMA, BUY: close > SMA)
+- [x] Volume confirmation
+- [x] Exit при возврате к VWAP
+- [x] `deviation_pct=0.02, sma50_period=50` параметры
 
 ---
 
