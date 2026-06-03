@@ -159,6 +159,74 @@ class AdaptiveScaffold extends StatelessWidget {
     );
   }
 
+  // ─── Default navigation (auto-built when navDestinations is null) ───
+  static List<NavDestination> _defaultNavDestinations(
+      bool isLoggedIn, bool isAdmin) {
+    if (!isLoggedIn) {
+      return [
+        const NavDestination(
+          icon: PhosphorIconsFill.house,
+          label: 'Главная',
+          path: '/',
+          section: SectionTheme.home,
+        ),
+      ];
+    }
+
+    return [
+      const NavDestination(
+        icon: PhosphorIconsFill.house,
+        label: 'Главная',
+        path: '/',
+        section: SectionTheme.home,
+      ),
+      if (isAdmin) ...[
+        const NavDestination(
+          icon: PhosphorIconsFill.robot,
+          label: 'Агенты',
+          path: '/admin/agents',
+          section: SectionTheme.admin,
+        ),
+        const NavDestination(
+          icon: PhosphorIconsFill.magnifyingGlass,
+          label: 'DeepSeek',
+          path: '/admin/deepseek',
+          section: SectionTheme.admin,
+        ),
+      ],
+      const NavDestination(
+        icon: PhosphorIconsFill.brain,
+        label: 'Мозг',
+        path: '/brain',
+        section: SectionTheme.home,
+      ),
+      const NavDestination(
+        icon: PhosphorIconsFill.chartBar,
+        label: 'Трейдинг',
+        path: '/trading',
+        section: SectionTheme.trading,
+      ),
+      const NavDestination(
+        icon: PhosphorIconsFill.musicNotes,
+        label: 'Музыка',
+        path: '/music',
+        section: SectionTheme.music,
+      ),
+      const NavDestination(
+        icon: PhosphorIconsFill.videoCamera,
+        label: 'Видео',
+        path: '/video',
+        section: SectionTheme.video,
+      ),
+      const NavDestination(
+        icon: PhosphorIconsFill.fileText,
+        label: 'Посты',
+        path: '/posts',
+        section: SectionTheme.posts,
+      ),
+    ];
+  }
+
   // ─── Sidebar ────────────────────────────────────────────────────────
   Widget _buildSidebar(
     BuildContext context,
@@ -166,7 +234,11 @@ class AdaptiveScaffold extends StatelessWidget {
     required bool isCompact,
     required bool isDrawer,
   }) {
-    final nav = navDestinations ?? [];
+    final userProvider = context.watch<UserProvider>();
+    final isLoggedIn = userProvider.isLoggedIn;
+    final isAdmin = userProvider.isAdmin;
+    final nav = navDestinations ?? _defaultNavDestinations(isLoggedIn, isAdmin);
+    final path = GoRouterState.of(context).uri.toString();
     final sidebarWidth = isCompact ? 64.0 : 240.0;
 
     Widget sidebar = Container(
@@ -220,7 +292,7 @@ class AdaptiveScaffold extends StatelessWidget {
               itemCount: nav.length,
               itemBuilder: (context, index) {
                 final dest = nav[index];
-                final active = dest.path == currentPath;
+                final active = dest.path == path;
                 return _SidebarItem(
                   icon: dest.icon,
                   label: dest.label,
@@ -228,7 +300,7 @@ class AdaptiveScaffold extends StatelessWidget {
                   isActive: active,
                   isCompact: isCompact,
                   onTap: () {
-                    if (dest.path != currentPath) {
+                    if (dest.path != path) {
                       context.read<ThemeProvider>().setSection(dest.section);
                       if (isDrawer) Navigator.of(context).pop();
                       context.go(dest.path);
