@@ -74,6 +74,8 @@
   — engulfing: exit_target=candle_range, направленный trend filter, min_engulf_ratio параметр
   — doji: exit_target=candle_range, направленный trend filter, volume (doji на низком объёме), параметры threshold/min_prior
   — three_soldiers: exit_target=avg_candle_range, направленный trend filter, volume expand confirm | Hermes
+| 2026-06-01 23:10 | feat | Фаза 6: Volume — OBV стратегия
+  — obv: направленный trend filter, 2-candle confirmation, confidence через normalised OBV/volume, параметр lookback | Hermes
 
 - _locked_pairs инициализация в __init__
 - min_confidence фильтр (сигналы < 0.3 отсеиваются при entry)

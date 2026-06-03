@@ -187,10 +187,11 @@
 ### 1️⃣7️⃣ `obv.py`
 **Сейчас:** OBV divergence over 5 periods (сырая)
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Trend filter: BUY только если SMA(200) восходящий
-- [ ] ⬜ `lookback=5` в `__init__`
-- [ ] ⬜ Confidence: переписать normalised deviation (вместо `strength / 100000`)
+- [x] `exit_target` (через engine)
+- [x] Направленный trend filter
+- [x] `lookback=5` в `__init__`
+- [x] Confidence: нормализация OBV/volume (вместо `strength / 100000`)
+- [x] 2-candle confirmation (дивергенция на 2+ свечах подряд)
 
 ---
 
