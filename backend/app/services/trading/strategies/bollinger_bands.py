@@ -1,14 +1,17 @@
 """Bollinger Bands Reversal strategy.
 
 Logic:
-    BUY  when the price touches or crosses below the lower band (oversold bounce).
-    SELL when the price touches or crosses above the upper band (overbought pullback).
+    BUY  when the price touches or crosses below the lower band (oversold bounce)
+         in an uptrend (close > SMA50 AND close > SMA(trend_filter_period)).
+    SELL when the price touches or crosses above the upper band (overbought pullback)
+         in a downtrend (close < SMA50 AND close < SMA(trend_filter_period)).
 
-    Uses standard Bollinger Bands configuration: period=20, k=2.
+    Volume confirmation: current volume must exceed average of last 5 candles.
 
-    Confidence is based on how far the price is beyond the band:
-      - BUY:  how far below the lower band (normalised by band width), capped at 1.0
-      - SELL: how far above the upper band (normalised by band width), capped at 1.0
+    Exit signal: price returns to the middle band (mean reversion complete).
+
+    Confidence is based on how far the price is beyond the band.
+    exit_target is calculated dynamically by the engine (entry ± ATR×2).
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from typing import List, Optional
 from app.services.trading.models import Candle, Signal
 from app.services.trading.strategies.base import AbstractStrategy
 from app.services.trading.indicators.bollinger import BollingerBands
+from app.services.trading.indicators.sma import SMA
 
 
 class BollingerBandsStrategy(AbstractStrategy):
@@ -27,20 +31,24 @@ class BollingerBandsStrategy(AbstractStrategy):
         self,
         trend_filter_enabled: bool = True,
         trend_filter_period: int = 200,
+        bb_period: int = 20,
+        bb_std: float = 2.0,
     ) -> None:
         super().__init__(name="bollinger_bands")
         self.trend_filter_enabled = trend_filter_enabled
         self.trend_filter_period = trend_filter_period
+        self.bb_period = bb_period
+        self.bb_std = bb_std
 
     async def analyze(self, candles: List[Candle]) -> List[Signal]:
         """Analyze candles for Bollinger Bands reversal signals."""
         signals: List[Signal] = []
-        min_candles = max(self.trend_filter_period, 21) if self.trend_filter_enabled else 21
+        min_candles = max(self.trend_filter_period, self.bb_period + 5) if self.trend_filter_enabled else self.bb_period + 5
 
         if len(candles) < min_candles:
             return signals
 
-        bb_indicator = BollingerBands(period=20, k=2.0)
+        bb_indicator = BollingerBands(period=self.bb_period, k=self.bb_std)
         bb_values = bb_indicator.compute(candles)
 
         if len(bb_values) < 2:
@@ -55,47 +63,57 @@ class BollingerBandsStrategy(AbstractStrategy):
 
         current = candles[-1]
 
-        # Trend filter: only BUY if price is above long-term SMA
+        # Long-term trend filter SMA
+        tf_val: Optional[float] = None
         if self.trend_filter_enabled:
-            from app.services.trading.indicators.sma import SMA
-
             sma_tf = SMA(period=self.trend_filter_period)
             tf_vals = sma_tf.compute(candles)
             tf_val = tf_vals[-1]
-            if tf_val != tf_val:
-                return signals
-            if current.close <= tf_val:
+            if tf_val is not None and tf_val != tf_val:
                 return signals
 
-        band_width = upper_curr - lower_curr
-
-        # SMA(50) trend filter: BUY only in uptrend, SELL only in downtrend
-        from app.services.trading.indicators.sma import SMA
+        # SMA(50) directional short-term filter
         sma50 = SMA(period=50)
         sma50_vals = sma50.compute(candles)
         sma50_val = sma50_vals[-1]
         if sma50_val != sma50_val:
             return signals
 
-        # BUY: price touches or crosses below lower band (oversold bounce in uptrend)
-        if current.close <= lower_curr and current.close > sma50_val:
-            # Check for touch/cross (either current is below, or crossed from above)
-            prev_above_lower = upper_prev  # just check that previous existed (not NaN)
-            if prev_above_lower == prev_above_lower:  # not NaN
-                distance_below = (lower_curr - current.close) / band_width if band_width > 0 else 0.0
-                confidence = min(1.0, 0.5 + distance_below)
-                signals.append(
-                    Signal(
-                        side="BUY",
-                        price=current.close,
-                        time=current.timestamp,
-                        type="entry",
-                        confidence=confidence,
-                    )
-                )
+        # Volume confirmation
+        if len(candles) >= 6:
+            avg_vol = sum(c.volume for c in candles[-6:-1]) / 5.0
+            volume_ok = current.volume > avg_vol
+        else:
+            volume_ok = True
 
-        # SELL: price touches or crosses above upper band (overbought pullback in downtrend)
+        band_width = upper_curr - lower_curr
+
+        # BUY: price touches or crosses below lower band in uptrend
+        if current.close <= lower_curr and current.close > sma50_val:
+            # Long-term trend filter: only BUY if close > SMA
+            if tf_val is not None and current.close <= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
+            distance_below = (lower_curr - current.close) / band_width if band_width > 0 else 0.0
+            confidence = min(1.0, 0.5 + distance_below)
+            signals.append(
+                Signal(
+                    side="BUY",
+                    price=current.close,
+                    time=current.timestamp,
+                    type="entry",
+                    confidence=confidence,
+                )
+            )
+
+        # SELL: price touches or crosses above upper band in downtrend
         elif current.close >= upper_curr and current.close < sma50_val:
+            # Long-term trend filter: only SELL if close < SMA
+            if tf_val is not None and current.close >= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
             distance_above = (current.close - upper_curr) / band_width if band_width > 0 else 0.0
             confidence = min(1.0, 0.5 + distance_above)
             signals.append(
@@ -107,6 +125,31 @@ class BollingerBandsStrategy(AbstractStrategy):
                     confidence=confidence,
                 )
             )
+
+        # Exit signal: price returns to middle band (from either side)
+        prev_above_middle = candles[-2].close > middle_prev
+        curr_above_middle = current.close > middle_curr
+        if prev_above_middle != curr_above_middle:
+            if curr_above_middle:
+                signals.append(
+                    Signal(
+                        side="BUY",
+                        price=current.close,
+                        time=current.timestamp,
+                        type="exit",
+                        confidence=0.7,
+                    )
+                )
+            else:
+                signals.append(
+                    Signal(
+                        side="SELL",
+                        price=current.close,
+                        time=current.timestamp,
+                        type="exit",
+                        confidence=0.7,
+                    )
+                )
 
         return signals
 

@@ -122,28 +122,36 @@
 ### 🔟 `atr_breakout.py`
 **Сейчас:** ATR(14)×2 breakout + volume confirm (уже хорошо)
 
-- [ ] ⬜ `exit_target` — BUY: entry − ATR×0.5 + ATR×2, SELL: entry + ATR×0.5 − ATR×2
-- [ ] ⬜ 2-candle confirmation (пробой подтверждён закрытием следующей свечи)
+- [x] `exit_target` (через engine)
+- [x] 2-candle confirmation (close must also break previous high/low)
+- [x] Направленный trend filter
+- [x] Параметры: `atr_period=14, multiplier=2.0`
 
 ### 1️⃣1️⃣ `bollinger_bands.py`
 **Сейчас:** Touch lower/upper band + SMA50
 
-- [ ] ⬜ `exit_target` — BUY/SELL: to middle band (mean reversion)
-- [ ] ⬜ Exit-signal: возврат к middle band
-- [ ] ⬜ Volume confirmation при пробое
-- [ ] ⬜ Параметры: `bb_period=20, bb_std=2.0`
+- [x] `exit_target` (через engine)
+- [x] Exit-signal: возврат к middle band
+- [x] Volume confirmation при пробое
+- [x] Параметры: `bb_period=20, bb_std=2.0`
+- [x] Направленный trend filter
 
 ### 1️⃣2️⃣ `keltner_channels.py`
 **Сейчас:** EMA20 + ATR×2.5 bands + RSI filter (уже хорошо)
 
-- [ ] ⬜ `exit_target` — BUY: entry − ATR×0.5 + ATR×1.5 (частичный)
-- [ ] ⬜ `multiplier` в `__init__`
+- [x] `exit_target` (через engine)
+- [x] `multiplier` в `__init__`
+- [x] Направленный trend filter
+- [x] Volume confirmation
 
 ### 1️⃣3️⃣ `donchian.py`
 **Сейчас:** Breakout 20-period high/low + ATR filter
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Exit-signal: возврат внутрь канала
+- [x] `exit_target` (через engine)
+- [x] Exit-signal: возврат внутрь канала
+- [x] Направленный trend filter
+- [x] Volume confirmation
+- [x] ATR filter вынесен в отдельный метод
 
 ---
 

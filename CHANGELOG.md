@@ -61,10 +61,15 @@
   — adx: направленный trend filter, volume confirm, exit-signal при падении ADX, adx_threshold
   — supertrend: направленный trend filter (фикс бага SELL), volume confirm при флипе | Hermes
 | 2026-06-01 22:30 | feat | Фаза 3: Momentum/Осцилляторы — 4 стратегии улучшены
-  — rsi_oversold: направленный trend filter, volume confirm, параметры порогов (oversold/overbought/exit)
+  — rsi_oversold: направленный trend filter, volume confirm, параметры порогов
   — stochastic: направленный trend filter, volume confirm, параметры k_period/oversold/overbought
   — rsi_ma_combo: направленный trend filter (был баг — SMA200 не использовался), volume confirm, exit при RSI=50
   — parabolic_sar: направленный trend filter, volume confirm при флипе SAR | Hermes
+| 2026-06-01 22:45 | feat | Фаза 4: Breakout/Volatility — 4 стратегии улучшены
+  — atr_breakout: направленный trend filter, volume confirm, 2-candle confirmation, параметры atr_period/multiplier
+  — bollinger_bands: направленный trend filter, volume confirm, exit при возврате к middle, параметры bb_period/bb_std
+  — keltner_channels: направленный trend filter (фикс бага SELL), volume confirm, параметры ema/atr/multiplier
+  — donchian: направленный trend filter, volume confirm, exit при возврате в канал, atr filter вынесен в метод | Hermes
 
 - _locked_pairs инициализация в __init__
 - min_confidence фильтр (сигналы < 0.3 отсеиваются при entry)
