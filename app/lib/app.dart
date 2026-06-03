@@ -18,6 +18,7 @@ class SuperApp extends StatelessWidget {
 
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
+        final platformBr = MediaQuery.platformBrightnessOf(context);
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             // Escape → назад
@@ -50,8 +51,16 @@ class SuperApp extends StatelessWidget {
             autofocus: true,
             child: MaterialApp.router(
               title: 'Super App',
-              theme: AppTheme.lightTheme(),
-              darkTheme: AppTheme.darkTheme(),
+              theme: AppTheme.of(
+                mode: ThemeMode.light,
+                section: themeProvider.section,
+                platformBrightness: platformBr,
+              ),
+              darkTheme: AppTheme.of(
+                mode: ThemeMode.dark,
+                section: themeProvider.section,
+                platformBrightness: platformBr,
+              ),
               themeMode: themeProvider.themeMode,
               routerConfig: appRouter.router,
               debugShowCheckedModeBanner: false,

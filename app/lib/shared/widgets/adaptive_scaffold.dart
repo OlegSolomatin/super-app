@@ -78,22 +78,23 @@ class AdaptiveScaffold extends StatelessWidget {
   // ─── Mobile Layout ──────────────────────────────────────────────────
   Widget _buildMobileLayout(BuildContext context) {
     final section = context.watch<ThemeProvider>().section;
+    final pc = PfColors.of(context);
 
     return Scaffold(
-      backgroundColor: PfColors.background,
+      backgroundColor: pc.backgroundC,
       appBar: AppBar(
         title: Text(
           title,
-          style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
+          style: PfTypography.titleMd.copyWith(color: pc.foregroundC),
         ),
-        backgroundColor: PfColors.background,
+        backgroundColor: pc.backgroundC,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: showBackButton
             ? IconButton(
-                icon: const PhosphorIcon(
+                icon: PhosphorIcon(
                   PhosphorIconsFill.caretLeft,
-                  color: PfColors.foreground,
+                  color: pc.foregroundC,
                   size: 22,
                 ),
                 onPressed: () {
@@ -108,7 +109,7 @@ class AdaptiveScaffold extends StatelessWidget {
                 builder: (ctx) => IconButton(
                   icon: PhosphorIcon(
                     PhosphorIconsFill.list,
-                    color: PfColors.foreground,
+                    color: pc.foregroundC,
                     size: 22,
                   ),
                   onPressed: () => Scaffold.of(ctx).openDrawer(),
@@ -126,9 +127,10 @@ class AdaptiveScaffold extends StatelessWidget {
   Widget _buildDesktopLayout(BuildContext context, ScreenSize screenSize) {
     final section = context.watch<ThemeProvider>().section;
     final isTablet = screenSize == ScreenSize.tablet;
+    final pc = PfColors.of(context);
 
     return Scaffold(
-      backgroundColor: PfColors.background,
+      backgroundColor: pc.backgroundC,
       body: Row(
         children: [
           // ── Sidebar ──────────────────────────────────────
@@ -376,22 +378,23 @@ class AdaptiveScaffold extends StatelessWidget {
 
   // ─── Top Bar ────────────────────────────────────────────────────────
   Widget _buildTopBar(BuildContext context, SectionTheme section) {
+    final pc = PfColors.of(context);
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
       decoration: BoxDecoration(
-        color: PfColors.background,
-        border: const Border(
-          bottom: BorderSide(color: PfColors.border, width: 1),
+        color: pc.backgroundC,
+        border: Border(
+          bottom: BorderSide(color: pc.borderC, width: 1),
         ),
       ),
       child: Row(
         children: [
           if (showBackButton) ...[
             IconButton(
-              icon: const PhosphorIcon(
+              icon: PhosphorIcon(
                 PhosphorIconsFill.caretLeft,
-                color: PfColors.foreground,
+                color: pc.foregroundC,
                 size: 20,
               ),
               onPressed: () {
@@ -415,7 +418,7 @@ class AdaptiveScaffold extends StatelessWidget {
           const SizedBox(width: 10),
           Text(
             title,
-            style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
+            style: PfTypography.titleMd.copyWith(color: pc.foregroundC),
           ),
           const Spacer(),
           if (actions != null) ...actions!,
@@ -427,11 +430,12 @@ class AdaptiveScaffold extends StatelessWidget {
   // ─── Theme Sheet ────────────────────────────────────────────────────
   void _showThemeSheet(BuildContext context) {
     final provider = context.read<ThemeProvider>();
+    final pc = PfColors.of(context);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: PfColors.card,
-      shape: const RoundedRectangleBorder(
+      backgroundColor: pc.cardC,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
@@ -444,14 +448,14 @@ class AdaptiveScaffold extends StatelessWidget {
                 width: 32,
                 height: 3,
                 decoration: BoxDecoration(
-                  color: PfColors.mutedForeground,
+                  color: pc.mutedForegroundC,
                   borderRadius: PfRadius.borderRadiusPill,
                 ),
               ),
               const SizedBox(height: 20),
               Text(
                 'Тема оформления',
-                style: PfTypography.titleLg.copyWith(color: PfColors.foreground),
+                style: PfTypography.titleLg.copyWith(color: pc.foregroundC),
               ),
               const SizedBox(height: 24),
               Row(
@@ -597,6 +601,7 @@ class _ThemeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -605,10 +610,10 @@ class _ThemeOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: active
               ? section.accent.withValues(alpha: 0.15)
-              : PfColors.surface,
+              : pc.surfaceC,
           borderRadius: PfRadius.borderRadiusXl,
           border: Border.all(
-            color: active ? section.accent : PfColors.border,
+            color: active ? section.accent : pc.borderC,
             width: active ? 1.5 : 1,
           ),
         ),
@@ -617,7 +622,7 @@ class _ThemeOption extends StatelessWidget {
           children: [
             PhosphorIcon(
               icon,
-              color: active ? section.accent : PfColors.foreground,
+              color: active ? section.accent : pc.foregroundC,
               size: 28,
             ),
             const SizedBox(height: 8),
@@ -625,7 +630,7 @@ class _ThemeOption extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 13,
-                color: active ? section.accent : PfColors.mutedForeground,
+                color: active ? section.accent : pc.mutedForegroundC,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w400,
               ),
             ),

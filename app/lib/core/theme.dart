@@ -322,16 +322,20 @@ class AppTheme {
   static ThemeData of({
     required ThemeMode mode,
     SectionTheme section = SectionTheme.home,
+    Brightness platformBrightness = Brightness.dark,
   }) {
-    switch (mode) {
+    final effectiveMode = mode == ThemeMode.system
+        ? (platformBrightness == Brightness.light
+            ? ThemeMode.light
+            : ThemeMode.dark)
+        : mode;
+    switch (effectiveMode) {
       case ThemeMode.light:
         return lightTheme(section: section);
       case ThemeMode.dark:
         return darkTheme(section: section);
       case ThemeMode.system:
-        // WidgetsBinding.instance.window.platformBrightness недоступен
-        // в изолированном контексте — используй MediaQuery в рантайме
-        return darkTheme(section: section);
+        return darkTheme(section: section); // unreachable
     }
   }
 }
