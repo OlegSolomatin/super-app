@@ -23,7 +23,6 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
-  String? _errorMessage;
 
   @override
   void dispose() {
@@ -36,7 +35,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _isLoading = true; _errorMessage = null; });
+    setState(() => _isLoading = true);
     try {
       final storage = SecureStorage();
       final dioClient = DioClient(storage);
@@ -50,23 +49,30 @@ class _RegisterPageState extends State<RegisterPage> {
       await storage.saveRefreshToken(tokens.refreshToken);
       if (mounted) context.go('/');
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = _extractErrorMessage(e));
+      _logError(e);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _extractErrorMessage(Object e) {
+  void _logError(Object e) {
+    String message;
     if (e is DioException) {
       if (e.response?.data is Map) {
         final data = e.response!.data as Map;
-        if (data.containsKey('detail')) return data['detail'].toString();
+        if (data.containsKey('detail')) message = data['detail'].toString();
+        else message = 'Статус: ${e.response?.statusCode}';
+      } else if (e.response?.data is String) {
+        message = 'Статус: ${e.response?.statusCode}, тело: ${e.response?.data}';
+      } else if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.connectionError) {
+        message = 'Таймаут соединения';
+      } else {
+        message = e.toString();
       }
-      if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.connectionError) {
-        return 'Не удалось подключиться к серверу. Проверьте соединение.';
-      }
+    } else {
+      message = e.toString();
     }
-    return 'Произошла ошибка. Попробуйте позже.';
+    debugPrint('[REGISTER ERROR] $message');
   }
 
   @override
@@ -114,29 +120,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
                 ),
                 const SizedBox(height: 32),
-
-                // ── Error message ──
-                if (_errorMessage != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFECACA)),
-                    ),
-                    child: Row(
-                      children: [
-                        const PhosphorIcon(PhosphorIconsFill.warningCircle, size: 18, color: Color(0xFFDC2626)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(_errorMessage!, style: const TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
 
                 // ── Registration form ──
                 Container(
