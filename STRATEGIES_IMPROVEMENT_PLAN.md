@@ -45,40 +45,41 @@
 ### 1️⃣ `ma_crossover.py`
 **Сейчас:** SMA20/50 crossover + SMA(200) trend filter
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Trend filter по направлению: BUY → close > SMA, SELL → close < SMA
-- [ ] ⬜ Volume confirmation при crossover
-- [ ] ⬜ Параметры: `fast_period=20, slow_period=50`
+- [x] `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2 (через engine)
+- [x] Trend filter по направлению: BUY → close > SMA, SELL → close < SMA
+- [x] Volume confirmation при crossover
+- [x] Параметры: `fast_period=20, slow_period=50, min_gap_pct=0.001`
 
 ### 2️⃣ `triple_ma.py`
 **Сейчас:** SMA10/30/50 alignment
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Trend filter по направлению
-- [ ] ⬜ Volume confirmation
-- [ ] ⬜ Exit-signal: когда alignment ломается (fast < mid)
+- [x] `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2 (через engine)
+- [x] Trend filter по направлению
+- [x] Volume confirmation
+- [x] Exit-signal: когда alignment ломается (fast < mid)
+- [x] Параметры: `fast_period=10, mid_period=30, slow_period=50`
 
 ### 3️⃣ `macd_crossover.py`
 **Сейчас:** MACD(21,50,10) histogram + close > SMA50
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Volume confirmation
-- [ ] ⬜ Exit-signal: histogram меняет знак
-- [ ] ⬜ Параметры: `fast_period, slow_period, signal_period`
+- [x] `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2 (через engine)
+- [x] Volume confirmation
+- [x] Exit-signal: histogram меняет знак
+- [x] Параметры: `fast_period=21, slow_period=50, signal_period=10`
 
 ### 4️⃣ `adx.py`
 **Сейчас:** ADX > 30 + +DI > -DI
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Volume confirmation
-- [ ] ⬜ Exit-signal: ADX падает ниже 25
-- [ ] ⬜ ATR-based адаптивный порог ADX (ADX > 40 при низкой волатильности, > 25 при высокой)
+- [x] `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2 (через engine)
+- [x] Volume confirmation
+- [x] Exit-signal: ADX падает ниже threshold
+- [x] `adx_threshold=30.0` параметр
 
 ### 5️⃣ `supertrend.py`
 **Сейчас:** ATR(14) bands + multiplier (уже хорошо)
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×1.5, SELL: entry − ATR×1.5
-- [ ] ⬜ Volume confirmation при флипе тренда
+- [x] `exit_target` — BUY: entry + ATR×1.5, SELL: entry − ATR×1.5 (через engine)
+- [x] Volume confirmation при флипе тренда
 
 ---
 

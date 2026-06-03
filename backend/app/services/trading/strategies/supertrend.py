@@ -50,15 +50,21 @@ class SupertrendStrategy(AbstractStrategy):
 
         current = candles[-1]
 
-        # Trend filter: only BUY if price is above long-term SMA
+        # Trend filter SMA
+        tf_val: Optional[float] = None
         if self.trend_filter_enabled:
             sma_tf = SMA(period=self.trend_filter_period)
             tf_vals = sma_tf.compute(candles)
             tf_val = tf_vals[-1]
-            if tf_val != tf_val:
+            if tf_val is not None and tf_val != tf_val:
                 return signals
-            if current.close <= tf_val:
-                return signals
+
+        # Volume confirmation
+        if len(candles) >= 6:
+            avg_vol = sum(c.volume for c in candles[-6:-1]) / 5.0
+            volume_ok = current.volume > avg_vol
+        else:
+            volume_ok = True
 
         # Compute Supertrend
         trend_direction, upper_bands, lower_bands = self._compute_supertrend(candles)
@@ -75,6 +81,11 @@ class SupertrendStrategy(AbstractStrategy):
         # BUY: trend flipped from downtrend (-1) to uptrend (+1)
         # Require close to be 0.5% above lower band for confirmation
         if curr_direction == 1 and prev_direction == -1 and current.close > lower_bands[-1] * 1.003:
+            # Directional trend filter: only BUY if close > SMA
+            if tf_val is not None and current.close <= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
             confidence = self._compute_confidence(current.close, lower_bands[-1])
             signals.append(
                 Signal(
@@ -89,6 +100,11 @@ class SupertrendStrategy(AbstractStrategy):
         # SELL: trend flipped from uptrend (+1) to downtrend (-1)
         # Require close to be 0.5% below upper band for confirmation
         elif curr_direction == -1 and prev_direction == 1 and current.close < upper_bands[-1] * 0.997:
+            # Directional trend filter: only SELL if close < SMA
+            if tf_val is not None and current.close >= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
             confidence = self._compute_confidence(upper_bands[-1], current.close)
             signals.append(
                 Signal(

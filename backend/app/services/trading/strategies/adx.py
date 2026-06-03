@@ -3,13 +3,19 @@
 Logic:
     ADX measures trend strength (non-directional).
     +DI and -DI measure directional movement:
-      - BUY:  ADX > 25  AND  +DI > -DI
-      - SELL: ADX > 25  AND  -DI > +DI
+      - BUY:  ADX > threshold  AND  +DI > -DI  AND  +DI was > -DI previously
+      - SELL: ADX > threshold  AND  -DI > +DI  AND  -DI was > +DI previously
 
-    All calculations are done inline (True Range, directional movement,
-    smoothed +DI/-DI, ADX).
+    Trend filter is directional:
+      - BUY:  close > SMA(trend_filter_period)
+      - SELL: close < SMA(trend_filter_period)
+
+    Volume confirmation: current volume must exceed average of last 5 candles.
+
+    Exit signal: ADX drops below the threshold (trend weakening).
 
     Confidence is based on ADX value scaled to [0, 1] (ADX / 100).
+    exit_target is calculated dynamically by the engine (entry ± ATR×2).
 """
 
 from __future__ import annotations
@@ -29,16 +35,17 @@ class AdxStrategy(AbstractStrategy):
         trend_filter_enabled: bool = True,
         trend_filter_period: int = 200,
         adx_period: int = 14,
+        adx_threshold: float = 30.0,
     ) -> None:
         super().__init__(name="adx")
         self.trend_filter_enabled = trend_filter_enabled
         self.trend_filter_period = trend_filter_period
         self.adx_period = adx_period
+        self.adx_threshold = adx_threshold
 
     async def analyze(self, candles: List[Candle]) -> List[Signal]:
         """Analyze candles for ADX-based directional signals."""
         signals: List[Signal] = []
-        # Need at least 2 * adx_period candles for a meaningful ADX
         min_candles = max(
             self.trend_filter_period if self.trend_filter_enabled else 0,
             2 * self.adx_period + 10,
@@ -49,15 +56,21 @@ class AdxStrategy(AbstractStrategy):
 
         current = candles[-1]
 
-        # Trend filter: only BUY if price is above long-term SMA
+        # Trend filter SMA
+        tf_val: Optional[float] = None
         if self.trend_filter_enabled:
             sma_tf = SMA(period=self.trend_filter_period)
             tf_vals = sma_tf.compute(candles)
             tf_val = tf_vals[-1]
-            if tf_val != tf_val:
+            if tf_val is not None and tf_val != tf_val:
                 return signals
-            if current.close <= tf_val:
-                return signals
+
+        # Volume confirmation
+        if len(candles) >= 6:
+            avg_vol = sum(c.volume for c in candles[-6:-1]) / 5.0
+            volume_ok = current.volume > avg_vol
+        else:
+            volume_ok = True
 
         # Compute ADX, +DI, -DI
         adx_values, plus_di, minus_di = self._compute_adx(candles)
@@ -77,8 +90,13 @@ class AdxStrategy(AbstractStrategy):
 
         confidence = min(1.0, adx_curr / 100.0)
 
-        # BUY: strong trend (ADX > 30) AND +DI > -DI AND +DI was > -DI previously
-        if adx_curr > 30 and plus_di_curr > minus_di_curr and plus_di_prev > minus_di_prev:
+        # BUY: strong trend + +DI > -DI + uptrend
+        if adx_curr > self.adx_threshold and plus_di_curr > minus_di_curr and plus_di_prev > minus_di_prev:
+            # Directional trend filter: only BUY if close > SMA
+            if tf_val is not None and current.close <= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
             signals.append(
                 Signal(
                     side="BUY",
@@ -89,8 +107,13 @@ class AdxStrategy(AbstractStrategy):
                 )
             )
 
-        # SELL: strong trend (ADX > 30) AND -DI > +DI AND -DI was > +DI previously
-        elif adx_curr > 30 and minus_di_curr > plus_di_curr and minus_di_prev > plus_di_prev:
+        # SELL: strong trend + -DI > +DI + downtrend
+        elif adx_curr > self.adx_threshold and minus_di_curr > plus_di_curr and minus_di_prev > plus_di_prev:
+            # Directional trend filter: only SELL if close < SMA
+            if tf_val is not None and current.close >= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
             signals.append(
                 Signal(
                     side="SELL",
@@ -100,6 +123,33 @@ class AdxStrategy(AbstractStrategy):
                     confidence=confidence,
                 )
             )
+
+        # Exit signal: ADX dropped below threshold (trend weakening)
+        adx_prev = adx_values[-2] if len(adx_values) >= 2 else float('nan')
+        if adx_prev != adx_prev:  # NaN check
+            adx_prev = 0.0
+        if adx_prev > self.adx_threshold and adx_curr <= self.adx_threshold:
+            # Determine exit side based on last DI dominance
+            if plus_di_curr > minus_di_curr:
+                signals.append(
+                    Signal(
+                        side="SELL",
+                        price=current.close,
+                        time=current.timestamp,
+                        type="exit",
+                        confidence=0.7,
+                    )
+                )
+            else:
+                signals.append(
+                    Signal(
+                        side="BUY",
+                        price=current.close,
+                        time=current.timestamp,
+                        type="exit",
+                        confidence=0.7,
+                    )
+                )
 
         return signals
 
@@ -151,13 +201,11 @@ class AdxStrategy(AbstractStrategy):
             else:
                 minus_dm[i] = 0.0
 
-        # Step 2: Wilder's smoothing (first SMA, then EMA-like)
-        # Smoothed TR
+        # Step 2: Wilder's smoothing
         smoothed_tr: List[float] = [float("nan")] * n
         smoothed_plus_dm: List[float] = [float("nan")] * n
         smoothed_minus_dm: List[float] = [float("nan")] * n
 
-        # First smoothed value = simple average of first `period` values
         period = self.adx_period
         if n < period + 1:
             return adx, pdi, ndi
