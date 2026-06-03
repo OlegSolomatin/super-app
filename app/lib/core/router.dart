@@ -24,20 +24,21 @@ class AppRouter {
   }
 
   late final GoRouter router = GoRouter(
-    initialLocation: '/login',
     redirect: (context, state) async {
       final isLoggedIn = await _isAuthenticated();
       final isAuthRoute = state.matchedLocation == '/login' ||
           state.matchedLocation == '/register';
+      final isPublicRoute = state.matchedLocation == '/';
 
-      if (!isLoggedIn && !isAuthRoute) {
-        return '/login';
+      if (!isLoggedIn && !isAuthRoute && !isPublicRoute) {
+        return '/';
       }
       if (isLoggedIn && isAuthRoute) {
         return '/';
       }
       return null;
     },
+    initialLocation: '/',
     routes: [
       GoRoute(
         path: '/login',

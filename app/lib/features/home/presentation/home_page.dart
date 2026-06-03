@@ -227,6 +227,19 @@ class _HomePageState extends State<HomePage> {
 
   // ─── Nav Destinations ──────────────────────────────────────────────
   List<NavDestination> _buildNavDestinations(bool isAdmin) {
+    // For unauthenticated users, only show Главная
+    if (_user == null) {
+      return [
+        NavDestination(
+          icon: PhosphorIconsFill.house,
+          label: 'Главная',
+          path: '/',
+          isActive: true,
+          section: SectionTheme.home,
+        ),
+      ];
+    }
+
     final destinations = <NavDestination>[
       NavDestination(
         icon: PhosphorIconsFill.house,
