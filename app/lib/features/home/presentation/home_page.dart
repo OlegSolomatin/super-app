@@ -53,6 +53,17 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isLoading = true);
     try {
       final storage = SecureStorage();
+      final token = await storage.getAccessToken();
+
+      // ── No token → guest, no error ─────────────────
+      if (token == null || token.isEmpty) {
+        if (mounted) {
+          context.read<UserProvider>().clear();
+          setState(() => _user = null);
+        }
+        return;
+      }
+
       final dioClient = DioClient(storage);
       final userRepository = UserRepository(dioClient.dio);
       final user = await userRepository.getMe();
@@ -63,12 +74,9 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       if (mounted) {
         context.read<UserProvider>().clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Не удалось загрузить профиль: $e'),
-            backgroundColor: PfColors.destructive,
-          ),
-        );
+        // Silent fail — no unauthorised user sees red error
+        debugPrint('HomePage._loadUser: $e');
+        setState(() => _user = null);
       }
     } finally {
       if (mounted) {
