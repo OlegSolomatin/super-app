@@ -122,6 +122,7 @@ class _TradingPageState extends State<TradingPage>
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     return AdaptiveScaffold(
       title: 'Трейдинг',
       currentPath: '/trading',
@@ -136,7 +137,7 @@ class _TradingPageState extends State<TradingPage>
                 Expanded(
                   child: Text(
                     'Торговые стратегии',
-                    style: PfTypography.displayMd.copyWith(color: PfColors.foreground),
+                    style: PfTypography.displayMd.copyWith(color: pc.foregroundC),
                   ),
                 ),
                 PfButton(
@@ -156,7 +157,7 @@ class _TradingPageState extends State<TradingPage>
             margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: PfColors.surface,
+              color: pc.surfaceC,
               borderRadius: PfRadius.borderRadiusPill,
             ),
             child: Row(
@@ -217,6 +218,7 @@ class _TradingPageState extends State<TradingPage>
     required String emptySubtext,
     required TradingRepository repository,
   }) {
+    final pc = PfColors.of(context);
     if (loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -229,17 +231,17 @@ class _TradingPageState extends State<TradingPage>
             PhosphorIcon(
               emptyIcon,
               size: 48,
-              color: PfColors.mutedForeground.withValues(alpha: 0.3),
+              color: pc.mutedForegroundC.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
               emptyText,
-              style: PfTypography.titleMd.copyWith(color: PfColors.mutedForeground),
+              style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC),
             ),
             const SizedBox(height: 4),
             Text(
               emptySubtext,
-              style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground.withValues(alpha: 0.6)),
+              style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC.withValues(alpha: 0.6)),
             ),
           ],
         ),
@@ -283,6 +285,7 @@ class _PillTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -302,7 +305,7 @@ class _PillTab extends StatelessWidget {
               style: PfTypography.button.copyWith(
                 color: isActive
                     ? const Color(0xFF181A20)
-                    : PfColors.mutedForeground,
+                    : pc.mutedForegroundC,
               ),
             ),
             const SizedBox(width: 6),
@@ -311,7 +314,7 @@ class _PillTab extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isActive
                     ? const Color(0xFF181A20).withValues(alpha: 0.15)
-                    : PfColors.muted,
+                    : pc.mutedC,
                 borderRadius: PfRadius.borderRadiusPill,
               ),
               child: Text(
@@ -319,7 +322,7 @@ class _PillTab extends StatelessWidget {
                 style: PfTypography.caption.copyWith(
                   color: isActive
                       ? const Color(0xFF181A20)
-                      : PfColors.mutedForeground,
+                      : pc.mutedForegroundC,
                   fontSize: 11,
                 ),
               ),
@@ -345,6 +348,7 @@ class _TradingRunCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     final isActive = run.status == 'running' || run.status == 'pending';
     final isError = run.status == 'error';
     final isDone = run.status == 'done';
@@ -370,7 +374,7 @@ class _TradingRunCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   run.strategyName ?? run.config['strategy'] ?? 'Стратегия',
-                  style: PfTypography.titleMd.copyWith(color: PfColors.foreground),
+                  style: PfTypography.titleMd.copyWith(color: pc.foregroundC),
                 ),
               ),
               statusBadge,
@@ -400,7 +404,7 @@ class _TradingRunCard extends StatelessWidget {
                   children: [
                     Text(
                       'PnL',
-                      style: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+                      style: PfTypography.caption.copyWith(color: pc.mutedForegroundC),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -417,11 +421,11 @@ class _TradingRunCard extends StatelessWidget {
           // ── Progress bar for active runs ───────────────
           if (isActive) ...[
             if (run.isScanner && scanProgress != null && scanProgress!['status'] == 'scanning')
-              _buildScanProgress(scanProgress!)
+              _buildScanProgress(scanProgress!, pc)
             else if (run.isVirtual && run.progressPercent != null)
-              _buildTimeProgress(run)
+              _buildTimeProgress(run, pc)
             else if (!run.isScanner && !run.isVirtual)
-              _buildEstimatedTime(run),
+              _buildEstimatedTime(run, pc),
           ],
         ],
       ),
@@ -429,7 +433,7 @@ class _TradingRunCard extends StatelessWidget {
   }
 
   /// Scan progress — for all_pairs_hammer / all_pairs_inverse_hammer
-  Widget _buildScanProgress(Map<String, dynamic> progress) {
+  Widget _buildScanProgress(Map<String, dynamic> progress, PfColors pc) {
     final total = (progress['total_pairs'] as num?)?.toInt() ?? 0;
     final scanned = (progress['scanned_pairs'] as num?)?.toInt() ?? 0;
     final currentPair = (progress['current_pair'] as String?) ?? '';
@@ -467,7 +471,7 @@ class _TradingRunCard extends StatelessWidget {
               Text(
                 '$scanned / $total',
                 style: PfTypography.caption.copyWith(
-                  color: PfColors.mutedForeground,
+                  color: pc.mutedForegroundC,
                 ),
               ),
             ],
@@ -478,7 +482,7 @@ class _TradingRunCard extends StatelessWidget {
             borderRadius: PfRadius.borderRadiusPill,
             child: LinearProgressIndicator(
               value: pct.clamp(0.0, 1.0),
-              backgroundColor: PfColors.surface,
+              backgroundColor: pc.surfaceC,
               valueColor: AlwaysStoppedAnimation(PfColors.accentTrading),
               minHeight: 6,
             ),
@@ -488,7 +492,7 @@ class _TradingRunCard extends StatelessWidget {
             Text(
               'Осталось: $etaLabel',
               style: PfTypography.caption.copyWith(
-                color: PfColors.mutedForeground.withValues(alpha: 0.7),
+                color: pc.mutedForegroundC.withValues(alpha: 0.7),
               ),
             ),
           ],
@@ -498,7 +502,7 @@ class _TradingRunCard extends StatelessWidget {
   }
 
   /// Time-based progress — for virtual/real mode with duration
-  Widget _buildTimeProgress(TradingRun run) {
+  Widget _buildTimeProgress(TradingRun run, PfColors pc) {
     final progress = (run.progressPercent ?? 0.0) / 100.0;
     final remaining = run.timeRemainingLabel;
 
@@ -521,7 +525,7 @@ class _TradingRunCard extends StatelessWidget {
               Text(
                 '${(progress * 100).toStringAsFixed(1)}%',
                 style: PfTypography.caption.copyWith(
-                  color: PfColors.mutedForeground,
+                  color: pc.mutedForegroundC,
                 ),
               ),
             ],
@@ -531,7 +535,7 @@ class _TradingRunCard extends StatelessWidget {
             borderRadius: PfRadius.borderRadiusPill,
             child: LinearProgressIndicator(
               value: progress.clamp(0.0, 1.0),
-              backgroundColor: PfColors.surface,
+              backgroundColor: pc.surfaceC,
               valueColor: AlwaysStoppedAnimation(PfColors.accentTrading),
               minHeight: 6,
             ),
@@ -542,7 +546,7 @@ class _TradingRunCard extends StatelessWidget {
   }
 
   /// Estimated time text — for fast history mode runs
-  Widget _buildEstimatedTime(TradingRun run) {
+  Widget _buildEstimatedTime(TradingRun run, PfColors pc) {
     final label = run.estimatedTimeLabel ?? '~7 сек';
     return Padding(
       padding: const EdgeInsets.only(top: PfSpacing.sm),
@@ -551,13 +555,13 @@ class _TradingRunCard extends StatelessWidget {
           PhosphorIcon(
             PhosphorIconsFill.clock,
             size: 14,
-            color: PfColors.mutedForeground.withValues(alpha: 0.6),
+            color: pc.mutedForegroundC.withValues(alpha: 0.6),
           ),
           const SizedBox(width: 6),
           Text(
             'Примерное время расчёта: $label',
             style: PfTypography.caption.copyWith(
-              color: PfColors.mutedForeground.withValues(alpha: 0.7),
+              color: pc.mutedForegroundC.withValues(alpha: 0.7),
             ),
           ),
         ],
@@ -580,19 +584,20 @@ class _InfoCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: PfTypography.caption.copyWith(color: PfColors.mutedForeground),
+          style: PfTypography.caption.copyWith(color: pc.mutedForegroundC),
         ),
         const SizedBox(height: 2),
         Text(
           value,
           style: mono
-              ? PfTypography.number.copyWith(color: PfColors.foreground)
-              : PfTypography.bodyMd.copyWith(color: PfColors.foreground),
+              ? PfTypography.number.copyWith(color: pc.foregroundC)
+              : PfTypography.bodyMd.copyWith(color: pc.foregroundC),
         ),
       ],
     );

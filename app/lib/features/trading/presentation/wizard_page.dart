@@ -337,7 +337,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       padding: const EdgeInsets.symmetric(vertical: PfSpacing.md, horizontal: PfSpacing.sm),
       margin: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
       decoration: BoxDecoration(
-        color: PfColors.card,
+        color: Theme.of(context).cardTheme.color ?? PfColors.cardLight,
         borderRadius: PfRadius.borderRadiusLg,
         border: Border.all(color: PfColors.border),
       ),
@@ -616,7 +616,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.2) ?? Colors.grey.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -668,14 +668,14 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.2) ?? Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
+              ),
               ),
               const SizedBox(height: 16),
               Text(
@@ -1710,8 +1710,6 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         ),
         const SizedBox(height: 24),
         _summaryRow(theme, 'Режим', _modeLabel(_runMode!)),
-        const Divider(
-            color: Colors.white24, height: 1, indent: 0, endIndent: 0),
         const SizedBox(height: 12),
         if (_runMode == RunMode.real)
           _summaryRow(theme, 'Биржа', _selectedExchange?.displayName ?? '—')
@@ -1908,7 +1906,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       padding: const EdgeInsets.all(PfSpacing.md),
       margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
       decoration: BoxDecoration(
-        color: PfColors.card,
+        color: Theme.of(context).cardTheme.color ?? PfColors.cardLight,
         borderRadius: PfRadius.borderRadiusXl,
         border: const Border(
           top: BorderSide(color: PfColors.border),
@@ -1974,7 +1972,7 @@ class _PairTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
-              : PfColors.card,
+              : Theme.of(context).cardTheme.color ?? PfColors.cardLight,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
@@ -2039,7 +2037,7 @@ class _PairTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: isSelected
             ? theme.colorScheme.primary.withValues(alpha: 0.2)
-            : Colors.white.withValues(alpha: 0.05),
+            : theme.disabledColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(
@@ -2048,7 +2046,7 @@ class _PairTile extends StatelessWidget {
           style: TextStyle(
             color: isSelected
                 ? theme.colorScheme.primary
-                : Colors.white70,
+                : theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
             fontWeight: FontWeight.bold,
             fontSize: 16,
           ),

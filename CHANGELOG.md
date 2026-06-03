@@ -114,6 +114,11 @@
   — obv: направленный trend filter, 2-candle confirmation, confidence через normalised OBV/volume, параметр lookback | Hermes
 | 2026-06-01 23:20 | feat | Фаза 7: VWAP — финальная стратегия
   — vwap: exit_target=VWAP (mean reversion), направленный trend filter (SELL fix), volume confirm, exit при возврате к VWAP, параметр deviation_pct | Hermes
+| 2026-06-01 23:45 | fix | Светлая тема в трейдинге — все страницы
+  — trading_page: все PfColors.foreground/mutedForeground/surface → pc.*C (темо-зависимые)
+  — wizard_page: _PairTile фон через cardTheme, _coinLetterBox через theme (вместо Colors.white), Divider fix, bottom sheet handle через Theme.of
+  — run_detail_page: все цвета через pc.* (theme-aware), все build-методы получили pc
+  — rebuild: v61 → Flutter web build (56s) | Hermes
 
 - _locked_pairs инициализация в __init__
 - min_confidence фильтр (сигналы < 0.3 отсеиваются при entry)
