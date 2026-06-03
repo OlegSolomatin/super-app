@@ -22,7 +22,7 @@ class AllPairsInverseHammerStrategy(AbstractStrategy):
     def __init__(
         self,
         trend_filter_enabled: bool = True,
-        trend_filter_period: int = 200,
+        trend_filter_period: int = 50,
     ) -> None:
         super().__init__(name="all_pairs_inverse_hammer")
         self.trend_filter_enabled = trend_filter_enabled
@@ -70,7 +70,7 @@ class AllPairsInverseHammerStrategy(AbstractStrategy):
 
         if (
             body > 0
-            and upper_shadow >= 2.5 * body
+            and upper_shadow >= 2.0 * body
             and lower_shadow <= 0.3 * body
         ):
             entry_price = current.close

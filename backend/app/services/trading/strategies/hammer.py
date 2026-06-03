@@ -28,7 +28,7 @@ class HammerStrategy(AbstractStrategy):
     def __init__(
         self,
         trend_filter_enabled: bool = True,
-        trend_filter_period: int = 200,
+        trend_filter_period: int = 50,
     ) -> None:
         super().__init__(name="hammer")
         self.trend_filter_enabled = trend_filter_enabled
@@ -60,17 +60,16 @@ class HammerStrategy(AbstractStrategy):
         """
         signals: List[Signal] = []
 
-        if len(candles) < 5:
+        if len(candles) < 4:
             return signals
 
-        # Get the current and three prior candles
+        # Get the current and two prior candles
         current = candles[-1]
         c2 = candles[-2]
         c3 = candles[-3]
-        c4 = candles[-4]
 
-        # Check prior downtrend: 3 prior candles must all be bearish
-        if not (c4.close < c4.open and c3.close < c3.open and c2.close < c2.open):
+        # Check prior downtrend: 2 prior candles must be bearish (was 3)
+        if not (c3.close < c3.open and c2.close < c2.open):
             return signals
 
         # Trend filter: only BUY if price is above SMA
@@ -84,12 +83,12 @@ class HammerStrategy(AbstractStrategy):
 
         # Criteria:
         # 1. Small body (not a doji — body > 0)
-        # 2. Lower shadow >= 3x body length
-        # 3. Upper shadow <= 0.1x body (little to no upper wick)
+        # 2. Lower shadow >= 2x body length (was 3x)
+        # 3. Upper shadow <= 0.3x body (was 0.1x — little to no upper wick)
         if (
             body > 0
-            and lower_shadow >= 3.0 * body
-            and upper_shadow <= 0.1 * body
+            and lower_shadow >= 2.0 * body
+            and upper_shadow <= 0.3 * body
         ):
             # Volume filter: volume must be above average of last 10 candles
             if len(candles) >= 11:

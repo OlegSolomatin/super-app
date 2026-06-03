@@ -75,7 +75,7 @@ class TradingConfig(BaseModel):
         default=True, description="Enable trend filter (price above SMA)"
     )
     trend_filter_period: int = Field(
-        default=200, ge=10, le=500, description="SMA period for trend filter"
+        default=50, ge=10, le=500, description="SMA period for trend filter"
     )
 
 
