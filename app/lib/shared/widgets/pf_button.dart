@@ -47,6 +47,7 @@ class PfButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     final isDisabled = onPressed == null || isLoading;
 
     // ─── Colors by variant ────────────────────────────────────────────
@@ -61,17 +62,17 @@ class PfButton extends StatelessWidget {
         fgColor = Theme.of(context).colorScheme.onPrimary;
         borderRadius = PfRadius.borderRadiusPill;
       case 'secondary':
-        bgColor = PfColors.surface;
-        fgColor = PfColors.foreground;
+        bgColor = pc.surfaceC;
+        fgColor = pc.foregroundC;
         borderRadius = PfRadius.borderRadiusLg;
       case 'ghost':
         bgColor = Colors.transparent;
-        fgColor = PfColors.foreground;
+        fgColor = pc.foregroundC;
         borderRadius = PfRadius.borderRadiusLg;
       case 'outline':
         bgColor = Colors.transparent;
-        fgColor = PfColors.foreground;
-        borderColor = PfColors.border;
+        fgColor = pc.foregroundC;
+        borderColor = pc.borderC;
         borderRadius = PfRadius.borderRadiusLg;
       case 'destructive':
         bgColor = PfColors.destructive;

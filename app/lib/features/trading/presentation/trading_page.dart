@@ -304,7 +304,7 @@ class _PillTab extends StatelessWidget {
               label,
               style: PfTypography.button.copyWith(
                 color: isActive
-                    ? const Color(0xFF181A20)
+                    ? pc.foregroundC
                     : pc.mutedForegroundC,
               ),
             ),
@@ -313,7 +313,7 @@ class _PillTab extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
                 color: isActive
-                    ? const Color(0xFF181A20).withValues(alpha: 0.15)
+                    ? pc.foregroundC.withValues(alpha: 0.12)
                     : pc.mutedC,
                 borderRadius: PfRadius.borderRadiusPill,
               ),
@@ -321,7 +321,7 @@ class _PillTab extends StatelessWidget {
                 '$count',
                 style: PfTypography.caption.copyWith(
                   color: isActive
-                      ? const Color(0xFF181A20)
+                      ? pc.foregroundC.withValues(alpha: 0.8)
                       : pc.mutedForegroundC,
                   fontSize: 11,
                 ),

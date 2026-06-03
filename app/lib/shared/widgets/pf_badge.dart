@@ -26,6 +26,7 @@ class PfBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     Color bgColor;
     Color fgColor;
 
@@ -43,8 +44,8 @@ class PfBadge extends StatelessWidget {
         bgColor = PfColors.accentAdmin.withValues(alpha: 0.15);
         fgColor = PfColors.accentAdmin;
       default:
-        bgColor = PfColors.muted;
-        fgColor = PfColors.mutedForeground;
+        bgColor = pc.mutedC;
+        fgColor = pc.mutedForegroundC;
     }
 
     final isSmall = size == 'sm';

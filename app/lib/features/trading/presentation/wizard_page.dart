@@ -333,13 +333,15 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   }
 
   Widget _buildProgressBar() {
+    final pc = PfColors.of(context);
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: PfSpacing.md, horizontal: PfSpacing.sm),
       margin: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color ?? PfColors.cardLight,
+        color: theme.cardTheme.color ?? PfColors.cardLight,
         borderRadius: PfRadius.borderRadiusLg,
-        border: Border.all(color: PfColors.border),
+        border: Border.all(color: pc.borderC),
       ),
       child: Row(
         children: List.generate(9, (index) {
@@ -362,22 +364,22 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                         color: isDone
                             ? PfColors.success
                             : isActive
-                                ? Theme.of(context).colorScheme.primary
-                                : PfColors.muted,
+                                ? theme.colorScheme.primary
+                                : pc.mutedC,
                       ),
                       child: Center(
                         child: isDone
-                            ? const PhosphorIcon(
+                            ? PhosphorIcon(
                                 PhosphorIconsFill.check,
                                 size: 14,
-                                color: Color(0xFF181A20),
+                                color: theme.colorScheme.onPrimary,
                               )
                             : Text(
                                 '${index + 1}',
                                 style: PfTypography.caption.copyWith(
                                   color: isActive
-                                      ? const Color(0xFF181A20)
-                                      : PfColors.mutedForeground,
+                                      ? theme.colorScheme.onPrimary
+                                      : pc.mutedForegroundC,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -501,6 +503,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     required String subtitle,
     required RunMode mode,
   }) {
+    final pc = PfColors.of(context);
     final isSelected = _runMode == mode;
 
     return GestureDetector(
@@ -557,9 +560,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.black.withValues(alpha: 0.05),
+                    color: pc.mutedC.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: PhosphorIcon(
@@ -1477,6 +1478,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   }
 
   Widget _buildStep8Period(ThemeData theme, bool isDark) {
+    final pc = PfColors.of(context);
     if (_runMode == RunMode.historical) {
       final start = _dateRange?.start;
       final end = _dateRange?.end;
@@ -1701,6 +1703,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   // ─── Step 9: Summary ─────────────────────────────────────────────
 
   Widget _buildStep9Summary(ThemeData theme, bool isDark) {
+    final pc = PfColors.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1798,12 +1801,12 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                       height: 22,
                       decoration: BoxDecoration(
                         color: _notifyTrades
-                            ? const Color(0xFF181A20)
-                            : PfColors.mutedForeground,
+                            ? Theme.of(context).colorScheme.primary
+                            : pc.mutedForegroundC,
                         borderRadius: PfRadius.borderRadiusPill,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: pc.foregroundC.withValues(alpha: 0.15),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1829,7 +1832,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
               child: Text(
                 'Нет доступных Telegram ботов. Добавьте бота в настройках.',
                 style: TextStyle(
-                  color: Colors.orange.shade300,
+                  color: pc.warningC,
                   fontSize: 13,
                 ),
               ),
@@ -1843,9 +1846,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.15)
-                        : Colors.black.withValues(alpha: 0.12),
+                    color: pc.borderC,
                   ),
                 ),
               ),

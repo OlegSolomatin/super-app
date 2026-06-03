@@ -128,3 +128,25 @@
 
 - ma_crossover: направленный trend filter (BUY/SMA, SELL/SMA), volume confirm, параметры fast/slow_period
 - triple_ma: направленный trend filter, volume confirm, exit-signal при развале alignment, параметры period\ов | Hermes
+- `infra` Telegram Mini App: добавил роуты в super-app proxy на :8790
+
+Mini App URL в BotFather: https://pfumiko.ru/telegram-mini-app.html
+- proxy_server.py: маршруты для Mini App HTML из ~/.hermes/hermes-agent/hermes_cli/web_dist/
+- Flutter root (/) и assets не затронуты
+- BotFather: setChatMenuButton URL обновлён на /telegram-mini-app.html | Hermes
+- `fix` HomePage: не показывать красную ошибку 'Не удалось загрузить профиль' для гостей
+
+- _loadUser(): проверяет наличие access_token ДО вызова API
+- Если токена нет → сразу гостевой экран, без запроса к API
+- Если API вернул ошибку → silent fail (debugPrint), а не красный SnackBar
+- build v62 | Hermes
+- `fix` Light theme: исправил хардкодные тёмные цвета в общих виджетах и страницах трейдинга
+
+- PfCard: PfColors.card/border → pc.cardC/pc.borderC
+- PfDivider: PfColors.border → pc.borderC
+- PfBadge: PfColors.muted/mutedForeground → pc.mutedC/pc.mutedForegroundC
+- PfButton: PfColors.surface/foreground/border → pc.surfaceC/pc.foregroundC/pc.borderC
+- Trading pill tabs: Color(0xFF181A20) → pc.foregroundC
+- Wizard progress bar: Color(0xFF181A20) → theme.colorScheme.onPrimary, PfColors.muted → pc.mutedC
+- Wizard mode cards, notifications, toggles: isDark ? white : black → pc.mutedC/pc.borderC
+- build v63 | Hermes

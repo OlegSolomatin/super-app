@@ -39,6 +39,7 @@ class PfCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     final isTrading = variant == 'trading';
     final effectivePadding = isTrading
         ? const EdgeInsets.all(PfSpacing.md)
@@ -46,10 +47,10 @@ class PfCard extends StatelessWidget {
 
     final card = Container(
       decoration: BoxDecoration(
-        color: PfColors.card,
+        color: pc.cardC,
         borderRadius: PfRadius.borderRadiusXl,
         border: Border.all(
-          color: PfColors.border,
+          color: pc.borderC,
           width: 1,
         ),
       ),

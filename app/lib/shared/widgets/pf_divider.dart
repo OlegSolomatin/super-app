@@ -21,13 +21,14 @@ class PfDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     return Container(
       height: thickness,
       margin: EdgeInsets.only(
         left: indent,
         right: endIndent,
       ),
-      color: color ?? PfColors.border,
+      color: color ?? pc.borderC,
     );
   }
 }
@@ -47,10 +48,11 @@ class PfVerticalDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     return Container(
       width: thickness,
       height: height,
-      color: color ?? PfColors.border,
+      color: color ?? pc.borderC,
     );
   }
 }
