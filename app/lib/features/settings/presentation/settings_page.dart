@@ -419,21 +419,14 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () => _showMobileDrawer(context, isDark, surface, textColor, subColor),
           ),
           const SizedBox(width: 4),
-          Text(
-            'Настройки',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Spacer(),
-          // Section indicator on mobile
-          Text(
-            _sectionLabel(),
-            style: TextStyle(
-              color: subColor,
-              fontSize: 13,
+          // Section indicator on mobile (no duplicate title - AppBar already shows it)
+          Expanded(
+            child: Text(
+              _sectionLabel(),
+              style: TextStyle(
+                color: subColor,
+                fontSize: 14,
+              ),
             ),
           ),
           const SizedBox(width: 12),

@@ -1830,38 +1830,6 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             ),
         ],
         const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton.icon(
-            onPressed: _loadingStep ? null : _submitRun,
-            icon: _loadingStep
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const PhosphorIcon(
-                    PhosphorIconsFill.rocket,
-                    size: 22,
-                  ),
-            label: Text(
-              _loadingStep ? 'Запуск...' : 'Запустить',
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.accentColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
