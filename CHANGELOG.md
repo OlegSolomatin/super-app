@@ -1,6 +1,42 @@
 # Changelog
 
-## 2026-06-01 — Фаза 3: Редизайн страниц трейдинга
+## 2026-06-01 — 🎯 Все 7 фаз улучшения торговых стратегий завершены
+
+**Полный аудит и переработка 17 стратегий + engine (19 файлов)**
+
+**Фаза 1 — Engine (engine.py):**
+- ATR-based SL в virtual_live режиме (ранее был только фикс.%)
+- `_locked_pairs` инициализация (чинит `AttributeError`)
+- `min_confidence = 0.3` фильтр при entry
+- ATR-based дефолтный exit_target (entry ± ATR×2), если стратегия не задала свой
+
+**Фаза 2 — Trend-following (5 стратегий):**
+- ma_crossover, triple_ma, macd_crossover, adx, supertrend
+- 🐛 Критический баг: trend filter для SELL требовал `close > SMA` (SELL никогда не срабатывал)
+- Добавлены: направленный trend filter, volume confirmation, exit-signals, параметры в __init__
+
+**Фаза 3 — Momentum/Осцилляторы (4 стратегии):**
+- rsi_oversold, stochastic, rsi_ma_combo, parabolic_sar
+- 🐛 rsi_ma_combo: trend_filter_period (SMA200) был в __init__ но НЕ ИСПОЛЬЗОВАЛСЯ в analyze()
+- Добавлены: направленный trend filter, volume confirmation, exit-signals
+
+**Фаза 4 — Breakout/Volatility (4 стратегии):**
+- atr_breakout, bollinger_bands, keltner_channels, donchian
+- 2-candle confirmation для breakout, exit при возврате в канал/к middle
+- ATR filter вынесен в отдельный метод (donchian)
+
+**Фаза 5 — Candlestick Patterns (3 стратегии) — по образу молота:**
+- engulfing, doji, three_soldiers
+- exit_target = candle_range (как в Hammer)
+- Направленный trend filter, volume confirmation
+
+**Фаза 6 — Volume (1 стратегия):**
+- obv: 🐛 confidence = `strength / 100000` заменён на нормализацию OBV/volume
+- 2-candle confirmation дивергенции
+
+**Фаза 7 — VWAP (1 стратегия):**
+- 🐛 SELL не имел никакого trend filter
+- exit_target = VWAP (mean reversion), exit при возврате к VWAP
 
 - **Редизайн `TradingPage`** — AdaptiveScaffold с trading skin, pill-табы (Active/History), карточки запусков через PfCard + PfBadge, PnL цветом success/destructive, pair в JetBrains Mono, пустые состояния с иконкой
 - **Редизайн `WizardPage`** — AdaptiveScaffold, степпер через Card с hairline, шаги цветом success/primary/muted, кнопки навигации через PfButton (outline/primary), setSection(trading) при входе
