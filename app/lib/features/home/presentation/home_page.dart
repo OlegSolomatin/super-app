@@ -125,12 +125,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSectionHeader(String text) {
+    final pc = PfColors.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           text,
-          style: PfTypography.displayMd.copyWith(color: PfColors.foreground),
+          style: PfTypography.displayMd.copyWith(color: pc.foregroundC),
         ),
         const SizedBox(height: 6),
         Container(
@@ -147,6 +148,7 @@ class _HomePageState extends State<HomePage> {
 
   // ─── Guest View ────────────────────────────────────────────────────
   Widget _buildGuestView(BuildContext context) {
+    final pc = PfColors.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -156,14 +158,14 @@ class _HomePageState extends State<HomePage> {
             PhosphorIcon(
               PhosphorIconsFill.lockKey,
               size: 56,
-              color: PfColors.mutedForeground.withValues(alpha: 0.5),
+              color: pc.mutedForegroundC.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 24),
             Text(
-              'Для того чтобы открыть контент\nавторизируйтесь или зарегистрируйтесь',
+              'Для того чтобы открыть контент\\nавторизируйтесь или зарегистрируйтесь',
               textAlign: TextAlign.center,
               style: PfTypography.bodyLg.copyWith(
-                color: PfColors.mutedForeground,
+                color: pc.mutedForegroundC,
                 height: 1.5,
               ),
             ),
@@ -194,10 +196,11 @@ class _HomePageState extends State<HomePage> {
 
   // ─── Auth actions (unauthenticated header) ─────────────────────────
   Widget _buildAuthActions(BuildContext context) {
+    final pc = PfColors.of(context);
     return PopupMenuButton<String>(
       icon: PhosphorIcon(
         PhosphorIconsFill.userCircle,
-        color: PfColors.foreground,
+        color: pc.foregroundC,
         size: 22,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -239,11 +239,12 @@ class AdaptiveScaffold extends StatelessWidget {
     final isAdmin = userProvider.isAdmin;
     final nav = navDestinations ?? _defaultNavDestinations(isLoggedIn, isAdmin);
     final path = GoRouterState.of(context).uri.toString();
+    final pc = PfColors.of(context);
     final sidebarWidth = isCompact ? 64.0 : 240.0;
 
     Widget sidebar = Container(
       width: isCompact ? 64 : 240,
-      color: PfColors.sidebar,
+      color: pc.sidebarC,
       child: Column(
         children: [
           // Logo / Wordmark
@@ -270,7 +271,7 @@ class AdaptiveScaffold extends StatelessWidget {
                       Text(
                         'Super App',
                         style: TextStyle(
-                          color: PfColors.sidebarForeground,
+                          color: pc.sidebarForegroundC,
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.3,
@@ -280,7 +281,7 @@ class AdaptiveScaffold extends StatelessWidget {
                   ),
           ),
 
-          const PfDivider(color: PfColors.sidebarHairline),
+          PfDivider(color: pc.sidebarHairlineC),
 
           // Navigation items
           Expanded(
@@ -312,7 +313,7 @@ class AdaptiveScaffold extends StatelessWidget {
           ),
 
           // Bottom section: Settings + Theme + User
-          const PfDivider(color: PfColors.sidebarHairline),
+          PfDivider(color: pc.sidebarHairlineC),
 
           if (!isCompact) _buildUserSection(context, section),
           if (isCompact) _buildCompactUserSection(context),
@@ -332,6 +333,7 @@ class AdaptiveScaffold extends StatelessWidget {
   // ─── User Section (full sidebar) ───────────────────────────────────
   Widget _buildUserSection(BuildContext context, SectionTheme section) {
     final userProvider = context.watch<UserProvider>();
+    final pc = PfColors.of(context);
     final displayUsername = username ?? userProvider.username;
     final displayInitials = userInitials ?? userProvider.initials;
 
@@ -378,7 +380,7 @@ class AdaptiveScaffold extends StatelessWidget {
                   child: Text(
                     displayUsername,
                     style: PfTypography.bodySm.copyWith(
-                      color: PfColors.sidebarForeground,
+                      color: pc.sidebarForegroundC,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -412,6 +414,7 @@ class AdaptiveScaffold extends StatelessWidget {
 
   // ─── User Section (compact sidebar) ────────────────────────────────
   Widget _buildCompactUserSection(BuildContext context) {
+    final pc = PfColors.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: PfSpacing.sm),
       child: Column(
@@ -593,6 +596,7 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
@@ -613,9 +617,9 @@ class _SidebarItem extends StatelessWidget {
                   : Colors.transparent,
               borderRadius: PfRadius.borderRadiusLg,
               border: isActive
-                  ? const Border(
+                  ? Border(
                       left: BorderSide(
-                        color: Color(0xFF5E6AD2),
+                        color: pc.sidebarForegroundC,
                         width: 3,
                       ),
                     )
@@ -625,7 +629,7 @@ class _SidebarItem extends StatelessWidget {
                 ? Center(
                     child: PhosphorIcon(
                       icon,
-                      color: isActive ? section.accent : PfColors.mutedForeground,
+                      color: isActive ? section.accent : pc.mutedForegroundC,
                       size: 22,
                     ),
                   )
@@ -634,14 +638,14 @@ class _SidebarItem extends StatelessWidget {
                       const SizedBox(width: 4),
                       PhosphorIcon(
                         icon,
-                        color: isActive ? section.accent : PfColors.mutedForeground,
+                        color: isActive ? section.accent : pc.mutedForegroundC,
                         size: 20,
                       ),
                       const SizedBox(width: 14),
                       Text(
                         label,
                         style: TextStyle(
-                          color: isActive ? PfColors.sidebarForeground : PfColors.mutedForeground,
+                          color: isActive ? pc.sidebarForegroundC : pc.mutedForegroundC,
                           fontSize: 14,
                           fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                         ),

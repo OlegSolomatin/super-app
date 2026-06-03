@@ -76,6 +76,7 @@ class _DashboardTileState extends State<DashboardTile>
   Widget build(BuildContext context) {
     final d = widget.data;
     final isAdmin = d.isHighlighted;
+    final pc = PfColors.of(context);
 
     return FadeTransition(
       opacity: _fadeAnim,
@@ -95,12 +96,12 @@ class _DashboardTileState extends State<DashboardTile>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               decoration: BoxDecoration(
-                color: PfColors.card,
+                color: pc.cardC,
                 borderRadius: PfRadius.borderRadiusXxl,
                 border: Border.all(
                   color: isAdmin
                       ? d.color.withValues(alpha: 0.4)
-                      : PfColors.border,
+                      : pc.borderC,
                   width: isAdmin ? 1.5 : 1,
                 ),
                 boxShadow: isAdmin
@@ -134,7 +135,7 @@ class _DashboardTileState extends State<DashboardTile>
                         Text(
                           d.title,
                           style: PfTypography.titleMd.copyWith(
-                            color: PfColors.foreground,
+                            color: pc.foregroundC,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -144,7 +145,7 @@ class _DashboardTileState extends State<DashboardTile>
                         Text(
                           d.subtitle,
                           style: PfTypography.caption.copyWith(
-                            color: PfColors.mutedForeground,
+                            color: pc.mutedForegroundC,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,

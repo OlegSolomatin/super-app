@@ -37,6 +37,9 @@ class PfColors {
   static const Color surfaceLight = Color(0xFFF0F0F0);
   static const Color mutedForegroundLight = Color(0xFF6B7280);
   static const Color borderLight = Color(0xFFEAECEF);
+  static const Color sidebarLight = Color(0xFFFFFFFF);
+  static const Color sidebarForegroundLight = Color(0xFF181A20);
+  static const Color sidebarHairlineLight = Color(0xFFEAECEF);
 
   // ─── Section accent colors (skins) ───────────────────────────────────
   static const Color accentTrading = Color(0xFFFCD535);
@@ -75,6 +78,9 @@ class PfColors {
   late final Color successC;
   late final Color destructiveC;
   late final Color warningC;
+  late final Color sidebarC;
+  late final Color sidebarForegroundC;
+  late final Color sidebarHairlineC;
 
   PfColors._({
     required this.backgroundC,
@@ -90,6 +96,9 @@ class PfColors {
     required this.successC,
     required this.destructiveC,
     required this.warningC,
+    required this.sidebarC,
+    required this.sidebarForegroundC,
+    required this.sidebarHairlineC,
   });
 
   static final PfColors _dark = PfColors._(
@@ -106,6 +115,9 @@ class PfColors {
     successC: Color(0xFF0ECB81),
     destructiveC: Color(0xFFF6465D),
     warningC: Color(0xFFF0B90B),
+    sidebarC: Color(0xFF010102),
+    sidebarForegroundC: Color(0xFFD0D6E0),
+    sidebarHairlineC: Color(0xFF23252A),
   );
 
   static final PfColors _light = PfColors._(
@@ -122,6 +134,9 @@ class PfColors {
     successC: Color(0xFF0ECB81),
     destructiveC: Color(0xFFF6465D),
     warningC: Color(0xFFF0B90B),
+    sidebarC: Color(0xFFFFFFFF),
+    sidebarForegroundC: Color(0xFF181A20),
+    sidebarHairlineC: Color(0xFFEAECEF),
   );
 
   /// Получить цвета под текущую тему.
