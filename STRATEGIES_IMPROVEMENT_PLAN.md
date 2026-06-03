@@ -88,30 +88,32 @@
 ### 6️⃣ `rsi_oversold.py`
 **Сейчас:** RSI < 25/>75 + exit при RSI > 60/<40
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2
-- [ ] ⬜ Параметры: `rsi_oversold=25, rsi_overbought=75, rsi_exit_buy=60, rsi_exit_sell=40`
+- [x] `exit_target` — BUY: entry + ATR×2 (через engine)
+- [x] Параметры: `oversold=25, overbought=75, exit_buy=60, exit_sell=40`
+- [x] Направленный trend filter + volume confirm
 
 ### 7️⃣ `stochastic.py`
 **Сейчас:** %K < 15/>85 + %K/%D crossover
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Trend filter по направлению
-- [ ] ⬜ Volume confirmation
-- [ ] ⬜ Параметры: `k_period=14, oversold=15, overbought=85`
+- [x] `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2 (через engine)
+- [x] Направленный trend filter
+- [x] Volume confirmation
+- [x] Параметры: `k_period=14, oversold=15, overbought=85`
 
 ### 8️⃣ `rsi_ma_combo.py`
 **Сейчас:** RSI < 45 + close > SMA20 / RSI > 55 + close < SMA20
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2
-- [ ] ⬜ Добавить долгосрочный SMA(200) trend filter поверх
-- [ ] ⬜ Volume confirmation
+- [x] `exit_target` — BUY: entry + ATR×2, SELL: entry − ATR×2 (через engine)
+- [x] Добавлен долгосрочный SMA(200) trend filter (был баг — не использовался)
+- [x] Volume confirmation
+- [x] Exit при пересечении RSI=50
 
 ### 9️⃣ `parabolic_sar.py`
 **Сейчас:** SAR flip detection (уже ускорение 0.03, max 0.10)
 
-- [ ] ⬜ `exit_target` — BUY: entry + ATR×1.5, SELL: entry − ATR×1.5
-- [ ] ⬜ ATR-based адаптивный acceleration factor
-- [ ] ⬜ Параметры уже есть
+- [x] `exit_target` — BUY: entry + ATR×1.5, SELL: entry − ATR×1.5 (через engine)
+- [x] Направленный trend filter
+- [x] Volume confirmation при флипе
 
 ---
 

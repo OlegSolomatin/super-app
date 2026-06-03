@@ -60,6 +60,11 @@
   — macd_crossover: направленный trend filter, volume confirm, exit-signal при смене знака гистограммы
   — adx: направленный trend filter, volume confirm, exit-signal при падении ADX, adx_threshold
   — supertrend: направленный trend filter (фикс бага SELL), volume confirm при флипе | Hermes
+| 2026-06-01 22:30 | feat | Фаза 3: Momentum/Осцилляторы — 4 стратегии улучшены
+  — rsi_oversold: направленный trend filter, volume confirm, параметры порогов (oversold/overbought/exit)
+  — stochastic: направленный trend filter, volume confirm, параметры k_period/oversold/overbought
+  — rsi_ma_combo: направленный trend filter (был баг — SMA200 не использовался), volume confirm, exit при RSI=50
+  — parabolic_sar: направленный trend filter, volume confirm при флипе SAR | Hermes
 
 - _locked_pairs инициализация в __init__
 - min_confidence фильтр (сигналы < 0.3 отсеиваются при entry)

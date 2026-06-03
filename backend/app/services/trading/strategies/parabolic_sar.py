@@ -48,15 +48,21 @@ class ParabolicSarStrategy(AbstractStrategy):
 
         current = candles[-1]
 
-        # Trend filter: only BUY if price is above long-term SMA
+        # Trend filter SMA
+        tf_val: Optional[float] = None
         if self.trend_filter_enabled:
             sma_tf = SMA(period=self.trend_filter_period)
             tf_vals = sma_tf.compute(candles)
             tf_val = tf_vals[-1]
-            if tf_val != tf_val:
+            if tf_val is not None and tf_val != tf_val:
                 return signals
-            if current.close <= tf_val:
-                return signals
+
+        # Volume confirmation
+        if len(candles) >= 6:
+            avg_vol = sum(c.volume for c in candles[-6:-1]) / 5.0
+            volume_ok = current.volume > avg_vol
+        else:
+            volume_ok = True
 
         # Compute SAR values for the full candle series
         sar_values = self._compute_sar(candles)
@@ -81,6 +87,11 @@ class ParabolicSarStrategy(AbstractStrategy):
 
         # BUY: both previous and current candles in uptrend (2-candle confirmation)
         if curr_uptrend and prev_uptrend:
+            # Directional trend filter: only BUY if close > SMA
+            if tf_val is not None and current.close <= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
             signals.append(
                 Signal(
                     side="BUY",
@@ -93,6 +104,11 @@ class ParabolicSarStrategy(AbstractStrategy):
 
         # SELL: both previous and current candles in downtrend (2-candle confirmation)
         elif not curr_uptrend and not prev_uptrend:
+            # Directional trend filter: only SELL if close < SMA
+            if tf_val is not None and current.close >= tf_val:
+                return signals
+            if not volume_ok:
+                return signals
             signals.append(
                 Signal(
                     side="SELL",
