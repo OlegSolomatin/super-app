@@ -270,18 +270,19 @@ class _BrainPageState extends State<BrainPage>
                     ? _buildError()
                     : _graph == null
                         ? const Center(child: Text('Нет данных'))
-                        : TabBarView(
-                            controller: _tabCtrl,
-                            children: [
-                              _BrainGraphView(
-                                graph: _graph!,
-                                onNodeTap: _showStatusDialog,
-                              ),
-                              _BrainTimelineView(
-                                graph: _graph!,
-                                onNodeTap: _showStatusDialog,
-                              ),
-                            ],
+                        : AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _tabCtrl.index == 0
+                                ? _BrainGraphView(
+                                    key: const ValueKey('graph'),
+                                    graph: _graph!,
+                                    onNodeTap: _showStatusDialog,
+                                  )
+                                : _BrainTimelineView(
+                                    key: const ValueKey('timeline'),
+                                    graph: _graph!,
+                                    onNodeTap: _showStatusDialog,
+                                  ),
                           ),
           ),
         ],
@@ -385,7 +386,7 @@ class _BrainGraphView extends StatefulWidget {
   final BrainGraph graph;
   final void Function(BrainNode node) onNodeTap;
 
-  const _BrainGraphView({required this.graph, required this.onNodeTap});
+  const _BrainGraphView({super.key, required this.graph, required this.onNodeTap});
 
   @override
   State<_BrainGraphView> createState() => _BrainGraphViewState();
@@ -853,7 +854,7 @@ class _BrainTimelineView extends StatefulWidget {
   final BrainGraph graph;
   final void Function(BrainNode node) onNodeTap;
 
-  const _BrainTimelineView({required this.graph, required this.onNodeTap});
+  const _BrainTimelineView({super.key, required this.graph, required this.onNodeTap});
 
   @override
   State<_BrainTimelineView> createState() => _BrainTimelineViewState();

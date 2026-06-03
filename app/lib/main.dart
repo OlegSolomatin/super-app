@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/secure_storage.dart';
 import 'core/theme_provider.dart';
+import 'core/user_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,8 +24,15 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(prefs),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(prefs),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => UserProvider(),
+        ),
+      ],
       child: SuperApp(storage: storage),
     ),
   );

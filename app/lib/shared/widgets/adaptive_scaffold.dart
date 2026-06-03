@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:app/core/theme_provider.dart';
+import 'package:app/core/user_provider.dart';
 import 'package:app/core/section_theme.dart';
 import 'package:app/shared/tokens/pf_colors.dart';
 import 'package:app/shared/tokens/pf_radius.dart';
@@ -95,7 +96,13 @@ class AdaptiveScaffold extends StatelessWidget {
                   color: PfColors.foreground,
                   size: 22,
                 ),
-                onPressed: () => context.pop(),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/');
+                  }
+                },
               )
             : Builder(
                 builder: (ctx) => IconButton(
@@ -250,6 +257,10 @@ class AdaptiveScaffold extends StatelessWidget {
 
   // ─── User Section (full sidebar) ───────────────────────────────────
   Widget _buildUserSection(BuildContext context, SectionTheme section) {
+    final userProvider = context.watch<UserProvider>();
+    final displayUsername = username ?? userProvider.username;
+    final displayInitials = userInitials ?? userProvider.initials;
+
     return Padding(
       padding: const EdgeInsets.all(PfSpacing.sm),
       child: Column(
@@ -281,7 +292,7 @@ class AdaptiveScaffold extends StatelessWidget {
                   radius: 16,
                   backgroundColor: section.accent.withValues(alpha: 0.2),
                   child: Text(
-                    userInitials ?? '?',
+                    displayInitials,
                     style: PfTypography.caption.copyWith(
                       color: section.accent,
                       fontWeight: FontWeight.w600,
@@ -291,7 +302,7 @@ class AdaptiveScaffold extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    username ?? 'Пользователь',
+                    displayUsername,
                     style: PfTypography.bodySm.copyWith(
                       color: PfColors.sidebarForeground,
                     ),
@@ -383,7 +394,13 @@ class AdaptiveScaffold extends StatelessWidget {
                 color: PfColors.foreground,
                 size: 20,
               ),
-              onPressed: () => context.pop(),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/');
+                }
+              },
               visualDensity: VisualDensity.compact,
               tooltip: 'Назад',
             ),

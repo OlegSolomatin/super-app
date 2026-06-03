@@ -6,6 +6,7 @@ import 'package:app/core/theme_provider.dart';
 import 'package:app/core/section_theme.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
+import 'package:app/core/user_provider.dart';
 import 'package:app/features/home/data/user_repository.dart';
 import 'package:app/models/user.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
@@ -56,10 +57,12 @@ class _HomePageState extends State<HomePage> {
       final userRepository = UserRepository(dioClient.dio);
       final user = await userRepository.getMe();
       if (mounted) {
+        context.read<UserProvider>().setUser(user);
         setState(() => _user = user);
       }
     } catch (e) {
       if (mounted) {
+        context.read<UserProvider>().clear();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Не удалось загрузить профиль: $e'),
