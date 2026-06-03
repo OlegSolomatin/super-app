@@ -193,19 +193,19 @@ class AdaptiveScaffold extends StatelessWidget {
           path: '/admin/deepseek',
           section: SectionTheme.admin,
         ),
+        const NavDestination(
+          icon: PhosphorIconsFill.brain,
+          label: 'Мозг',
+          path: '/brain',
+          section: SectionTheme.home,
+        ),
+        const NavDestination(
+          icon: PhosphorIconsFill.chartBar,
+          label: 'Трейдинг',
+          path: '/trading',
+          section: SectionTheme.trading,
+        ),
       ],
-      const NavDestination(
-        icon: PhosphorIconsFill.brain,
-        label: 'Мозг',
-        path: '/brain',
-        section: SectionTheme.home,
-      ),
-      const NavDestination(
-        icon: PhosphorIconsFill.chartBar,
-        label: 'Трейдинг',
-        path: '/trading',
-        section: SectionTheme.trading,
-      ),
       const NavDestination(
         icon: PhosphorIconsFill.musicNotes,
         label: 'Музыка',
