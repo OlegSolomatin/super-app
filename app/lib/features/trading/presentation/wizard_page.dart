@@ -1771,15 +1771,49 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                   ],
                 ),
               ),
-              Switch(
-                value: _notifyTrades,
-                activeColor: PfColors.accentTrading,
-                onChanged: (v) {
-                  setState(() => _notifyTrades = v);
-                  if (v && _bots.isEmpty) {
+              // ── Custom toggle вместо стандартного Switch ──
+              GestureDetector(
+                onTap: () {
+                  setState(() => _notifyTrades = !_notifyTrades);
+                  if (_notifyTrades && _bots.isEmpty) {
                     _loadBots();
                   }
                 },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 48,
+                  height: 28,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: _notifyTrades
+                        ? PfColors.accentTrading
+                        : PfColors.muted,
+                    borderRadius: PfRadius.borderRadiusPill,
+                  ),
+                  child: AnimatedAlign(
+                    duration: const Duration(milliseconds: 200),
+                    alignment: _notifyTrades
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: _notifyTrades
+                            ? const Color(0xFF181A20)
+                            : PfColors.mutedForeground,
+                        borderRadius: PfRadius.borderRadiusPill,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
