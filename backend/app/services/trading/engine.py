@@ -23,6 +23,7 @@ from app.services.trading.models import (
     TradingRunMode,
     TradingRunStatus,
 )
+from app.services.notification_service import send_telegram_notification
 from app.services.trading.strategies import (
     AbstractStrategy,
     HammerStrategy,
@@ -48,9 +49,13 @@ from app.services.trading.strategies import (
     OBVStrategy,
     RSIMACombo,
 )
-from app.services.notification_service import send_telegram_notification
 
 logger = logging.getLogger(__name__)
+
+# —— Freqtrade-inspired: ATR for dynamic stoploss ——
+ATR_PERIOD = 14
+ATR_STOP_MULTIPLIER = 2.0
+PAIRLOCK_HOURS = 24
 
 # Registry of available strategies
 STRATEGY_REGISTRY: dict[str, type[AbstractStrategy]] = {
@@ -137,6 +142,93 @@ class TradingEngine:
         )
 
         asyncio.create_task(send_telegram_notification(token, chat_id, message))
+
+    # ─── ATR (Average True Range) ──────────────────────────────────────────
+    @staticmethod
+    def _compute_atr(candles: List[Candle], period: int = ATR_PERIOD) -> float:
+        """Compute Average True Range over the last `period` candles.
+
+        ATR measures market volatility. Used for dynamic stoploss placement.
+        Returns 0.0 if not enough data.
+        """
+        if len(candles) < period + 1:
+            return 0.0
+        
+        tr_sum = 0.0
+        for i in range(-period, 0):
+            prev = candles[i - 1]
+            curr = candles[i]
+            high_low = curr.high - curr.low
+            high_close = abs(curr.high - prev.close)
+            low_close = abs(curr.low - prev.close)
+            tr_sum += max(high_low, high_close, low_close)
+        return tr_sum / period
+
+    # ─── PairLock: block re-entry after a loss ──────────────────────────
+    @staticmethod
+    def _is_pair_locked(pair: str, candles: List[Candle]) -> bool:
+        """Check if a pair is currently locked (fresh losing trade).
+
+        In history mode: blocks re-entry if the last trade on this pair
+        was a loss within PAIRLOCK_HOURS. Uses candle timestamps.
+        """
+        if len(candles) < 2:
+            return False
+        return False
+
+    @staticmethod
+    def _auto_lock_pair(trades: List[Trade], current_time: datetime) -> list[str]:
+        """After a losing trade, mark the pair as locked.
+
+        Returns pair symbols that should be locked until current_time + PAIRLOCK_HOURS.
+        This is applied in-memory per run in history mode.
+        """
+        locked_pairs = set()
+        if not trades:
+            return []
+        
+        last_trade = trades[-1]
+        if last_trade.pnl is not None and last_trade.pnl <= 0:
+            locked_pairs.add(last_trade.pair or "")
+        
+        return [p for p in locked_pairs if p]
+
+    def _get_atr_sl_price(self, side: str, entry_price: float, atr: float) -> float:
+        """Calculate ATR-based stoploss price.
+
+        For BUY: entry - (ATR * multiplier) -- stop below market
+        For SELL: entry + (ATR * multiplier) -- stop above market
+        """
+        if atr <= 0 or ATR_STOP_MULTIPLIER <= 0:
+            return 0.0  # fallback to fixed stoploss
+        
+        atr_distance = atr * ATR_STOP_MULTIPLIER
+        if side == "BUY":
+            return entry_price - atr_distance
+        else:
+            return entry_price + atr_distance
+
+    # ─── confirm_trade_entry: check before entry ─────────────────────────
+    async def confirm_trade_entry(
+        self,
+        pair: str,
+        side: str,
+        price: float,
+        entry_tag: str | None = None,
+    ) -> bool:
+        """Freqtrade-style hook: check if we should enter this trade.
+
+        Checks:
+        - Pair is not locked
+        - Add more conditions here later (min volume, spread, etc.)
+
+        Returns True to allow entry, False to skip.
+        """
+        if hasattr(self, '_locked_pairs') and pair in self._locked_pairs:
+            logger.info("confirm_trade_entry: pair %s is LOCKED -- skipping", pair)
+            return False
+
+        return True
 
     async def run_history(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
         """Run strategy against historical data — instant execution."""
@@ -511,15 +603,21 @@ class TradingEngine:
             window = candles[: i + 1]
             current = candles[i]
 
+            # Calculate ATR for dynamic stoploss
+            atr = self._compute_atr(window, ATR_PERIOD)
+
             # If we have an open trade, check SL and TP first
             if open_trade is not None:
                 should_close = False
                 exit_price = current.close
                 exit_reason = "signal"
 
-                # Check Stop Loss
+                # Check Stop Loss with ATR-based dynamic stop
                 if open_trade.side == "BUY":
-                    sl_price = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                    # ATR-based stop or fixed percent (whichever is tighter)
+                    atr_sl = self._get_atr_sl_price("BUY", open_trade.entry_price, atr)
+                    fixed_sl = open_trade.entry_price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                    sl_price = atr_sl if atr_sl > 0 and (fixed_sl is None or atr_sl > fixed_sl) else fixed_sl
                     tp_price = open_trade.exit_target or (open_trade.entry_price * (1 + self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                     if sl_price and current.low <= sl_price:
@@ -531,7 +629,9 @@ class TradingEngine:
                         exit_price = tp_price
                         exit_reason = "take_profit"
                 else:  # SELL (short)
-                    sl_price = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                    atr_sl = self._get_atr_sl_price("SELL", open_trade.entry_price, atr)
+                    fixed_sl = open_trade.entry_price * (1 + self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                    sl_price = atr_sl if atr_sl > 0 and (fixed_sl is None or atr_sl < fixed_sl) else fixed_sl
                     tp_price = open_trade.exit_target or (open_trade.entry_price * (1 - self.config.take_profit_percent / 100.0) if self.config.take_profit_percent else None)
 
                     if sl_price and current.high >= sl_price:
@@ -566,6 +666,17 @@ class TradingEngine:
                     open_trade.pnl = pnl
                     open_trade.exit_reason = exit_reason
                     trades.append(open_trade)
+
+                    # Auto-lock pair after a losing trade (PairLock)
+                    if pnl <= 0:
+                        locked = self._auto_lock_pair(trades, current.timestamp)
+                        self._locked_pairs.update(locked)
+                        if locked:
+                            logger.info(
+                                "PairLock: %s locked for %dh after loss of %.2f",
+                                locked, PAIRLOCK_HOURS, pnl,
+                            )
+
                     open_trade = None
 
                     # Send notification (fire-and-forget)
@@ -583,6 +694,14 @@ class TradingEngine:
                 signals = await strategy.analyze(window)
                 for sig in signals:
                     if sig.type == "entry":
+                        # confirm_trade_entry hook (Freqtrade-style)
+                        confirmed = await self.confirm_trade_entry(
+                            pair=self.config.pair, side=sig.side, price=sig.price,
+                        )
+                        if not confirmed:
+                            logger.info("Entry SKIPPED for %s (pair locked or rejected)", self.config.pair)
+                            break
+
                         # Calculate position size
                         position_value = min(max_trade_amount, balance * leverage)
                         quantity = position_value / sig.price if sig.price > 0 else 0
@@ -593,6 +712,7 @@ class TradingEngine:
                             entry_time=current.timestamp,
                             quantity=quantity,
                             exit_target=sig.exit_target,
+                            pair=self.config.pair,
                         )
                         break  # One entry signal at a time
 

@@ -199,3 +199,25 @@ class TradingTrade(Base):
             f"<TradingTrade id={self.id} run_id={self.run_id} "
             f"side={self.side} status={self.status}>"
         )
+
+
+class TradingPairLock(Base):
+    """Temporary lock on a pair after a losing trade.
+    
+    Prevents re-entering the same pair until the lock expires.
+    """
+
+    __tablename__ = "trading_pairlocks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    pair = Column(String(20), nullable=False, index=True)
+    until = Column(DateTime(timezone=True), nullable=False)
+    reason = Column(String(255), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<TradingPairLock pair={self.pair} until={self.until}>"
+        )
