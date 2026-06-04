@@ -270,20 +270,17 @@ class _BrainPageState extends State<BrainPage>
                     ? _buildError()
                     : _graph == null
                         ? const Center(child: Text('Нет данных'))
-                        : AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
-                            child: _tabCtrl.index == 0
-                                ? _BrainGraphView(
-                                    key: const ValueKey('graph'),
-                                    graph: _graph!,
-                                    onNodeTap: _showStatusDialog,
-                                  )
-                                : _BrainTimelineView(
-                                    key: const ValueKey('timeline'),
-                                    graph: _graph!,
-                                    onNodeTap: _showStatusDialog,
-                                  ),
-                          ),
+                        : _tabCtrl.index == 0
+                            ? _BrainGraphView(
+                                key: const ValueKey('graph'),
+                                graph: _graph!,
+                                onNodeTap: _showStatusDialog,
+                              )
+                            : _BrainTimelineView(
+                                key: const ValueKey('timeline'),
+                                graph: _graph!,
+                                onNodeTap: _showStatusDialog,
+                              ),
           ),
         ],
       ),
@@ -425,8 +422,8 @@ class _BrainGraphViewState extends State<_BrainGraphView>
     )..addListener(_simulate);
     // Run initial simulation iterations
     _runInitialLayout();
-    // Start animation
-    _animCtrl.repeat();
+    // Don't auto-start animation — keep graph static after initial layout.
+    // User can resume via the Play button.
   }
 
   void _runInitialLayout() {
