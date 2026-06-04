@@ -1,6 +1,6 @@
 # Changelog
 
-| 2026-06-04 | feat | Фаза 2-3 OB System: AbstractOrderBookStrategy + ImbalanceScalpingStrategy (3-тик подтверждение, iceberg guard) | Hermes
+| 2026-06-04 | feat | Фаза 4 OB System: ProtectionManager (4 защиты: Cooldown, LowProfit, MaxDrawdown, StoplossGuard) + Wallets + PairLock | Hermes
 | 2026-06-04 | feat | Фаза 0 OB System: модели данных (OrderBookSnapshot, Signal, Trade, ExitType, Cache, Config) + структура папок | Hermes
 | 2026-06-04 | fix | Login: очистка токенов при ошибке загрузки профиля + UserProvider.clear() в logout. build v65 | Hermes
 | 2026-06-04 | fix | BrainPage: отключена бесконечная анимация force-directed графа, AnimatedSwitcher→условный рендеринг. Чинит: белый экран + неработающую кнопку переключения табов. build v64 | Hermes
