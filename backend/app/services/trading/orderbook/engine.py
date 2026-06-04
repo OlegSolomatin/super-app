@@ -1,0 +1,394 @@
+"""Order Book Engine — главный цикл для стаканных стратегий.
+
+freqtrade: FreqtradeBot.process() — основной цикл.
+ccxt: Client.on_message_callback — тики из WS.
+
+Отличие от свечного engine.py:
+- Работает на тиках стакана (100ms), не на свечах
+- Только virtual mode
+- Свой lifecycle: Fetcher -> Cache -> Strategy -> [Gatekeeper -> Risk -> Trade]
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from app.services.trading.orderbook.exchange.binance_stream import (
+    BinanceOrderBookStream,
+)
+from app.services.trading.orderbook.models import (
+    ExitType,
+    OrderBookCache,
+    OrderBookConfig,
+    OrderBookSnapshot,
+    Trade,
+)
+from app.services.trading.orderbook.risk.pairlock import PairLockManager
+from app.services.trading.orderbook.risk.protection_manager import (
+    ProtectionManager,
+)
+from app.services.trading.orderbook.risk.wallets import Wallets
+from app.services.trading.orderbook.strategies.base import (
+    AbstractOrderBookStrategy,
+)
+from app.services.trading.orderbook.strategies.imbalance_scalping import (
+    ImbalanceScalpingStrategy,
+)
+
+logger = logging.getLogger(__name__)
+
+STRATEGY_REGISTRY = {
+    "imbalance_scalping": ImbalanceScalpingStrategy,
+}
+
+
+def load_strategy(config: OrderBookConfig) -> AbstractOrderBookStrategy:
+    """Factory: загрузить стратегию по имени.
+
+    freqtrade: StrategyResolver.load_strategy()
+    """
+    cls = STRATEGY_REGISTRY.get(config.strategy_name)
+    if cls is None:
+        raise ValueError(
+            f"Unknown: {config.strategy_name}. "
+            f"Available: {list(STRATEGY_REGISTRY.keys())}"
+        )
+    return cls(config)
+
+
+class OrderBookEngine:
+    """Главный движок Order Book стратегий.
+
+    Один инстанс = один запуск для одной пары.
+    """
+
+    def __init__(self, config: OrderBookConfig):
+        self.config = config
+        self.strategy = load_strategy(config)
+        self.cache = OrderBookCache()
+        self.wallets = Wallets(
+            initial_balance=config.initial_balance,
+            max_open_trades=config.max_open_trades,
+        )
+        self.protection = ProtectionManager(config)
+        self.pairlock = PairLockManager()
+
+        self._trades: dict[str, Trade] = {}
+        self._trade_history: list[Trade] = []
+        self._fetch_task: Optional[asyncio.Task] = None
+        self._manage_task: Optional[asyncio.Task] = None
+        self._lock = asyncio.Lock()
+        self._running = False
+
+        self.metrics = {
+            "signals_generated": 0,
+            "trades_opened": 0,
+            "trades_closed": 0,
+            "total_pnl": 0.0,
+            "win_count": 0,
+            "loss_count": 0,
+            "max_drawdown": 0.0,
+            "peak_balance": config.initial_balance,
+        }
+
+    async def start(self):
+        """Запустить движок.
+
+        1. WS fetcher в фоне
+        2. Фоновый цикл управления позициями
+        """
+        if self._running:
+            logger.warning("[OBEngine] Already running")
+            return
+
+        self._running = True
+        logger.info(
+            f"[OBEngine] Start: {self.config.pairs[0]} -> "
+            f"{self.strategy.name}"
+        )
+
+        fetcher = BinanceOrderBookStream(
+            pairs=self.config.pairs,
+            on_snapshot=self._on_snapshot,
+        )
+        self._fetch_task = asyncio.create_task(fetcher.start())
+        self._manage_task = asyncio.create_task(self._manage_loop())
+
+    async def stop(self):
+        """Остановить движок и закрыть позиции."""
+        self._running = False
+        if self._fetch_task:
+            self._fetch_task.cancel()
+        if self._manage_task:
+            self._manage_task.cancel()
+
+        for pair, trade in list(self._trades.items()):
+            now = datetime.now(timezone.utc)
+            snap = self.cache.latest()
+            trade.close(
+                exit_price=snap.mid_price if snap else trade.entry_price,
+                exit_time=now,
+                exit_type=ExitType.FORCE_EXIT.value,
+                exit_reason="engine_stop",
+            )
+            self._trade_history.append(trade)
+        self._trades.clear()
+        logger.info(
+            f"[OBEngine] Stopped. "
+            f"Trades: {len(self._trade_history)}, "
+            f"PnL: ${self.metrics['total_pnl']:.2f}"
+        )
+
+    async def _on_snapshot(self, snap: OrderBookSnapshot):
+        """Callback от WebSocket.
+
+        freqtrade: FreqtradeBot.process() — одна итерация.
+        ccxt: Client.on_message_callback.
+        """
+        if not self._running:
+            return
+
+        self.cache.push(snap)
+        if not self.cache.is_warm:
+            return
+
+        # Protection: global stop
+        if self.protection.global_stop():
+            logger.warning("[OBEngine] Global stop triggered")
+            await self.stop()
+            return
+
+        # Protection: per pair
+        if self.protection.stop_per_pair(snap.pair):
+            return
+
+        # PairLock
+        if self.pairlock.is_locked(snap.pair):
+            return
+
+        # Already has a position on this pair?
+        if snap.pair in self._trades:
+            return
+
+        # Strategy
+        async with self._lock:
+            signal = self.strategy.analyze(snap, self.cache)
+
+        if signal is None:
+            return
+
+        self.metrics["signals_generated"] += 1
+
+        # Gatekeeper
+        if not self.strategy.confirm_trade_entry(signal):
+            return
+
+        # Risk
+        stake = self.wallets.get_trade_stake_amount(signal.pair)
+        if stake <= 0:
+            return
+
+        now = datetime.now(timezone.utc)
+        trade = Trade(
+            pair=signal.pair,
+            side=signal.side,
+            entry_price=signal.price,
+            entry_time=now,
+            stake_amount=stake,
+            amount=stake / signal.price,
+            strategy=signal.strategy_name,
+        )
+        self.wallets.lock_stake(signal.pair, stake)
+        self._trades[signal.pair] = trade
+        self.metrics["trades_opened"] += 1
+
+        self.pairlock.lock(
+            signal.pair,
+            until=now + timedelta(seconds=self.config.min_trade_interval),
+            reason=f"trade:{signal.entry_tag}",
+        )
+
+        logger.info(
+            f"[OBEngine] ENTRY {signal.side} {signal.pair} "
+            f"@{signal.price:.2f} | "
+            f"conf={signal.confidence:.2f} | {signal.reason}"
+        )
+
+    async def _manage_loop(self):
+        """Фоновый цикл: каждую секунду проверяет открытые позиции.
+
+        freqtrade: FreqtradeBot.exit_positions() + handle_trade()
+
+        Exit Pipeline (по приоритету):
+          1. custom_exit() — стратегия
+          2. max_hold_seconds — экстренный
+          3. trailing stop — при профите
+          4. hard stoploss
+        """
+        while self._running:
+            await asyncio.sleep(1)
+            if not self._trades:
+                continue
+
+            snap = self.cache.latest()
+            if snap is None:
+                continue
+
+            now = datetime.now(timezone.utc)
+
+            for pair, trade in list(self._trades.items()):
+                age = trade.age_seconds(now)
+
+                # 1. Custom exit
+                ereason = self.strategy.custom_exit(trade, snap, self.cache)
+                if ereason:
+                    await self._close_trade(
+                        trade, snap, ExitType.EXIT_SIGNAL, ereason
+                    )
+                    continue
+
+                # 2. Max hold
+                if age >= self.config.max_hold_seconds:
+                    await self._close_trade(
+                        trade, snap, ExitType.EMERGENCY_EXIT, "max_hold"
+                    )
+                    continue
+
+                # 3. Trailing stop
+                if self.config.trailing_stop:
+                    sl = self._check_trailing_stop(trade, snap)
+                    if sl:
+                        await self._close_trade(
+                            trade, snap,
+                            ExitType.TRAILING_STOP_LOSS, "trailing"
+                        )
+                        continue
+
+                # 4. Hard stoploss
+                sl = self._check_hard_stop(trade, snap)
+                if sl:
+                    await self._close_trade(
+                        trade, snap, ExitType.STOP_LOSS, "stoploss"
+                    )
+                    continue
+
+    async def _close_trade(self, trade: Trade, snap: OrderBookSnapshot,
+                           exit_type: ExitType, reason: str):
+        """Закрыть сделку.
+
+        freqtrade: FreqtradeBot.execute_trade_exit()
+        """
+        exit_price = (
+            snap.bid_price if trade.side == "BUY" else snap.ask_price
+        )
+        now = datetime.now(timezone.utc)
+
+        trade.close(
+            exit_price=exit_price, exit_time=now,
+            exit_type=exit_type.value, exit_reason=reason,
+        )
+        self.wallets.unlock_stake(trade.pair, trade.pnl)
+        self._trade_history.append(trade)
+        del self._trades[trade.pair]
+
+        self.metrics["trades_closed"] += 1
+        self.metrics["total_pnl"] += trade.pnl
+        if trade.pnl > 0:
+            self.metrics["win_count"] += 1
+        else:
+            self.metrics["loss_count"] += 1
+
+        total = self.wallets.total_balance
+        if total > self.metrics["peak_balance"]:
+            self.metrics["peak_balance"] = total
+        dd = (
+            (self.metrics["peak_balance"] - total)
+            / self.metrics["peak_balance"] * 100
+        )
+        self.metrics["max_drawdown"] = max(self.metrics["max_drawdown"], dd)
+
+        self.protection.on_trade_exit(trade)
+        self.pairlock.lock(
+            trade.pair,
+            until=now + timedelta(seconds=self.config.cooldown_seconds),
+            reason=f"exit:{reason}",
+        )
+
+        logger.info(
+            f"[OBEngine] EXIT {trade.side} {trade.pair} "
+            f"@{exit_price:.2f} | "
+            f"pnl={trade.pnl_pct:+.2f}% | reason={reason}"
+        )
+
+    def _check_trailing_stop(self, trade: Trade,
+                             snap: OrderBookSnapshot) -> Optional[float]:
+        """freqtrade: trailing stop."""
+        curr = (
+            snap.bid_price if trade.side == "BUY" else snap.ask_price
+        )
+        profit = trade.current_profit(curr)
+
+        if trade.side == "BUY":
+            trade.max_rate = max(trade.max_rate or 0, curr)
+        else:
+            trade.min_rate = min(trade.min_rate or float("inf"), curr)
+
+        if profit < self.config.trailing_stop_positive_offset:
+            return None
+
+        dist = self.config.trailing_stop_positive
+
+        if trade.side == "BUY":
+            stop = curr * (1 - dist / 100)
+            if stop >= curr:
+                return None
+            trade.stop_loss = max(trade.stop_loss or 0, stop)
+            if trade.stop_loss >= curr:
+                return trade.stop_loss
+        else:
+            stop = curr * (1 + dist / 100)
+            if stop <= curr:
+                return None
+            trade.stop_loss = min(trade.stop_loss or float("inf"), stop)
+            if trade.stop_loss <= curr:
+                return trade.stop_loss
+        return None
+
+    def _check_hard_stop(self, trade: Trade,
+                         snap: OrderBookSnapshot) -> Optional[float]:
+        """freqtrade: hard stoploss."""
+        curr = snap.mid_price
+        if trade.side == "BUY":
+            stop = trade.entry_price * (1 + self.config.stoploss / 100)
+            if curr <= stop:
+                return stop
+        else:
+            stop = trade.entry_price * (1 - self.config.stoploss / 100)
+            if curr >= stop:
+                return stop
+        return None
+
+    @property
+    def status(self) -> dict:
+        return {
+            "running": self._running,
+            "pair": self.config.pairs[0],
+            "strategy": self.strategy.name,
+            "balance": round(self.wallets.total_balance, 2),
+            "free_balance": round(self.wallets.free_balance, 2),
+            "open_trades": {
+                p: {
+                    "side": t.side,
+                    "entry_price": t.entry_price,
+                    "age_seconds": int(t.age_seconds()),
+                }
+                for p, t in self._trades.items()
+            },
+            "metrics": {
+                k: round(v, 2) if isinstance(v, float) else v
+                for k, v in self.metrics.items()
+            },
+            "active_locks": self.pairlock.active_locks,
+        }

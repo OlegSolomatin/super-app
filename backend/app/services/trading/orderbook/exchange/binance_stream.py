@@ -13,7 +13,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Any, Callable, Coroutine, Optional
 
 import aiohttp
 
@@ -39,7 +39,8 @@ class BinanceOrderBookStream:
     """
 
     def __init__(self, pairs: list[str],
-                 on_snapshot: Callable[[OrderBookSnapshot], None]):
+                 on_snapshot: Callable[[OrderBookSnapshot],
+                                       Coroutine[Any, Any, None]]):
         self._pairs = pairs
         self._callback = on_snapshot
         self._ws = None
@@ -88,12 +89,12 @@ class BinanceOrderBookStream:
                     if not self._running:
                         break
                     if msg.type == aiohttp.WSMsgType.TEXT:
-                        self._on_message(msg.data)
+                        await self._on_message(msg.data)
                     elif msg.type in (aiohttp.WSMsgType.CLOSED,
                                       aiohttp.WSMsgType.ERROR):
                         break
 
-    def _on_message(self, raw: str):
+    async def _on_message(self, raw: str):
         """Парсинг сообщения -> OrderBookSnapshot.
 
         ccxt: parse_order_book()
@@ -114,7 +115,7 @@ class BinanceOrderBookStream:
                 bids=bids,
                 asks=asks,
             )
-            self._callback(snap)
+            await self._callback(snap)
         except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             logger.debug(f"[OBFetcher] Parse error: {e}")
 
