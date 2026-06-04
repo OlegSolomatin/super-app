@@ -76,12 +76,14 @@ class _LoginPageState extends State<LoginPage> {
 
   void _showThemeSheet() {
     final provider = context.read<ThemeProvider>();
+    final pc = PfColors.of(context);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: PfColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: pc.cardC,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: pc.borderC, width: 1),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
@@ -93,14 +95,14 @@ class _LoginPageState extends State<LoginPage> {
                 width: 32,
                 height: 3,
                 decoration: BoxDecoration(
-                  color: PfColors.mutedForeground,
+                  color: pc.mutedForegroundC,
                   borderRadius: PfRadius.borderRadiusPill,
                 ),
               ),
               const SizedBox(height: 20),
               Text(
                 'Тема оформления',
-                style: PfTypography.titleLg.copyWith(color: PfColors.foreground),
+                style: PfTypography.titleLg.copyWith(color: pc.foregroundC),
               ),
               const SizedBox(height: 24),
               Row(
@@ -111,6 +113,7 @@ class _LoginPageState extends State<LoginPage> {
                     label: 'Тёмная',
                     active: provider.mode == ThemeModePreference.dark,
                     color: PfColors.accentLogin,
+                    pc: pc,
                     onTap: () {
                       provider.setMode(ThemeModePreference.dark);
                       Navigator.pop(ctx);
@@ -121,6 +124,7 @@ class _LoginPageState extends State<LoginPage> {
                     label: 'Системная',
                     active: provider.mode == ThemeModePreference.system,
                     color: PfColors.accentLogin,
+                    pc: pc,
                     onTap: () {
                       provider.setMode(ThemeModePreference.system);
                       Navigator.pop(ctx);
@@ -131,6 +135,7 @@ class _LoginPageState extends State<LoginPage> {
                     label: 'Светлая',
                     active: provider.mode == ThemeModePreference.light,
                     color: PfColors.accentLogin,
+                    pc: pc,
                     onTap: () {
                       provider.setMode(ThemeModePreference.light);
                       Navigator.pop(ctx);
@@ -147,8 +152,10 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: pc.backgroundC,
       body: SafeArea(
         child: Stack(
           children: [
@@ -181,10 +188,10 @@ class _LoginPageState extends State<LoginPage> {
                       Text(
                         'Super App',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF181A20),
+                          color: pc.foregroundC,
                           letterSpacing: -0.3,
                         ),
                       ),
@@ -194,7 +201,7 @@ class _LoginPageState extends State<LoginPage> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
-                          color: const Color(0xFF6B7280),
+                          color: pc.mutedForegroundC,
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -202,9 +209,9 @@ class _LoginPageState extends State<LoginPage> {
                       // ── Login form ──
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: pc.cardC,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                          border: Border.all(color: pc.borderC),
                         ),
                         padding: const EdgeInsets.all(24),
                         child: Form(
@@ -217,25 +224,25 @@ class _LoginPageState extends State<LoginPage> {
                                 controller: _usernameController,
                                 textCapitalization: TextCapitalization.none,
                                 textInputAction: TextInputAction.next,
-                                style: const TextStyle(fontSize: 15, color: Color(0xFF181A20)),
+                                style: TextStyle(fontSize: 15, color: pc.foregroundC),
                                 decoration: InputDecoration(
                                   labelText: 'Имя пользователя',
-                                  labelStyle: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
-                                  prefixIcon: const PhosphorIcon(
+                                  labelStyle: TextStyle(fontSize: 14, color: pc.mutedForegroundC),
+                                  prefixIcon: PhosphorIcon(
                                     PhosphorIconsFill.user,
                                     size: 18,
-                                    color: Color(0xFF9CA3AF),
+                                    color: pc.mutedForegroundC,
                                   ),
                                   filled: true,
-                                  fillColor: const Color(0xFFF9FAFB),
+                                  fillColor: pc.surfaceC,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                    borderSide: BorderSide(color: pc.borderC),
                                   ),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                    borderSide: BorderSide(color: pc.borderC),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
@@ -254,33 +261,33 @@ class _LoginPageState extends State<LoginPage> {
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
                                 textInputAction: TextInputAction.done,
-                                style: const TextStyle(fontSize: 15, color: Color(0xFF181A20)),
+                                style: TextStyle(fontSize: 15, color: pc.foregroundC),
                                 decoration: InputDecoration(
                                   labelText: 'Пароль',
-                                  labelStyle: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
-                                  prefixIcon: const PhosphorIcon(
+                                  labelStyle: TextStyle(fontSize: 14, color: pc.mutedForegroundC),
+                                  prefixIcon: PhosphorIcon(
                                     PhosphorIconsFill.lock,
                                     size: 18,
-                                    color: Color(0xFF9CA3AF),
+                                    color: pc.mutedForegroundC,
                                   ),
                                   suffixIcon: IconButton(
                                     icon: PhosphorIcon(
                                       _obscurePassword ? PhosphorIconsFill.eyeSlash : PhosphorIconsFill.eye,
                                       size: 18,
-                                      color: const Color(0xFF9CA3AF),
+                                      color: pc.mutedForegroundC,
                                     ),
                                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                   ),
                                   filled: true,
-                                  fillColor: const Color(0xFFF9FAFB),
+                                  fillColor: pc.surfaceC,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                    borderSide: BorderSide(color: pc.borderC),
                                   ),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                    borderSide: BorderSide(color: pc.borderC),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
@@ -306,22 +313,23 @@ class _LoginPageState extends State<LoginPage> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    disabledBackgroundColor: const Color(0xFF9CA3AF),
+                                    disabledBackgroundColor: pc.mutedForegroundC,
                                   ),
                                   child: _isLoading
-                                      ? const SizedBox(
+                                      ? SizedBox(
                                           width: 20,
                                           height: 20,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            color: Colors.white,
+                                            color: pc.foregroundC,
                                           ),
                                         )
-                                      : const Text(
+                                      : Text(
                                           'Войти',
                                           style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
+                                            color: Colors.white,
                                           ),
                                         ),
                                 ),
@@ -340,7 +348,7 @@ class _LoginPageState extends State<LoginPage> {
                             'Нет аккаунта? ',
                             style: TextStyle(
                               fontSize: 14,
-                              color: const Color(0xFF6B7280),
+                              color: pc.mutedForegroundC,
                             ),
                           ),
                           GestureDetector(
@@ -374,7 +382,7 @@ class _LoginPageState extends State<LoginPage> {
                           ? PhosphorIconsFill.moon
                           : PhosphorIconsFill.desktop,
                   size: 20,
-                  color: const Color(0xFF6B7280),
+                  color: pc.mutedForegroundC,
                 ),
                 onPressed: _showThemeSheet,
                 tooltip: 'Тема оформления',
@@ -393,6 +401,7 @@ class _ThemeOption extends StatelessWidget {
   final String label;
   final bool active;
   final Color color;
+  final PfColors pc;
   final VoidCallback onTap;
 
   const _ThemeOption({
@@ -400,6 +409,7 @@ class _ThemeOption extends StatelessWidget {
     required this.label,
     required this.active,
     required this.color,
+    required this.pc,
     required this.onTap,
   });
 
@@ -414,20 +424,20 @@ class _ThemeOption extends StatelessWidget {
           color: active ? color.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: active ? color.withValues(alpha: 0.4) : const Color(0xFFE5E7EB),
+            color: active ? color.withValues(alpha: 0.4) : pc.borderC,
             width: active ? 1.5 : 1,
           ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            PhosphorIcon(icon, size: 24, color: active ? color : const Color(0xFF6B7280)),
+            PhosphorIcon(icon, size: 24, color: active ? color : pc.mutedForegroundC),
             const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: active ? color : const Color(0xFF6B7280),
+                color: active ? color : pc.mutedForegroundC,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
