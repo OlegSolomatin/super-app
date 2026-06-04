@@ -51,8 +51,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadUser() async {
     setState(() => _isLoading = true);
+    final storage = SecureStorage();
     try {
-      final storage = SecureStorage();
       final token = await storage.getAccessToken();
 
       // ── No token → guest, no error ─────────────────
@@ -73,6 +73,8 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (e) {
       if (mounted) {
+        // Token is stale/invalid — wipe it so GoRouter allows re-login
+        await storage.clearTokens();
         context.read<UserProvider>().clear();
         // Silent fail — no unauthorised user sees red error
         debugPrint('HomePage._loadUser: $e');
@@ -89,6 +91,7 @@ class _HomePageState extends State<HomePage> {
     final storage = SecureStorage();
     await storage.clearTokens();
     if (mounted) {
+      context.read<UserProvider>().clear();
       context.go('/login');
     }
   }
