@@ -1,6 +1,6 @@
 # Changelog
 
-| 2026-06-04 | fix | LoginPage: хардкодные цвета заменены на PfColors.of(context) — theme-aware. Чинит: смена темы не работала на странице логина. build v66 | Hermes
+| 2026-06-04 | feat | Фаза 0 OB System: модели данных (OrderBookSnapshot, Signal, Trade, ExitType, Cache, Config) + структура папок | Hermes
 | 2026-06-04 | fix | Login: очистка токенов при ошибке загрузки профиля + UserProvider.clear() в logout. build v65 | Hermes
 | 2026-06-04 | fix | BrainPage: отключена бесконечная анимация force-directed графа, AnimatedSwitcher→условный рендеринг. Чинит: белый экран + неработающую кнопку переключения табов. build v64 | Hermes
 
