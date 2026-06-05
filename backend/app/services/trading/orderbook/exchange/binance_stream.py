@@ -79,20 +79,30 @@ class BinanceOrderBookStream:
         url = f"{BINANCE_WS_BASE}/stream?streams={'/'.join(streams)}"
         logger.info(f"[OBFetcher] Connecting to {url}")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(url, heartbeat=30.0) as ws:
-                self._ws = ws
-                self._reconnect_delay = 1.0
-                logger.info(f"[OBFetcher] Connected ({len(streams)} streams)")
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+            try:
+                async with session.ws_connect(
+                    url,
+                    heartbeat=30.0,
+                ) as ws:
+                    self._ws = ws
+                    self._reconnect_delay = 1.0
+                    logger.info(f"[OBFetcher] Connected ({len(streams)} streams)")
 
-                async for msg in ws:
-                    if not self._running:
-                        break
-                    if msg.type == aiohttp.WSMsgType.TEXT:
-                        await self._on_message(msg.data)
-                    elif msg.type in (aiohttp.WSMsgType.CLOSED,
-                                      aiohttp.WSMsgType.ERROR):
-                        break
+                    async for msg in ws:
+                        if not self._running:
+                            break
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            await self._on_message(msg.data)
+                        elif msg.type in (aiohttp.WSMsgType.CLOSED,
+                                          aiohttp.WSMsgType.ERROR):
+                            break
+            except asyncio.TimeoutError:
+                logger.warning("[OBFetcher] WS connection timeout, will reconnect")
+                raise
+            except Exception as e:
+                logger.warning(f"[OBFetcher] WS connection error: {e}")
+                raise
 
     async def _on_message(self, raw: str):
         """Парсинг сообщения -> OrderBookSnapshot.
