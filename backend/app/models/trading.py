@@ -256,6 +256,10 @@ class OrderBookRun(Base):
     loss_trades = Column(Integer, nullable=True, default=0)
     final_balance = Column(Float, nullable=True)
 
+    # Live-status (обновляются engine в реальном времени)
+    current_balance = Column(Float, nullable=True)
+    open_trade_json = Column(Text, nullable=True)
+
     __table_args__ = (
         Index("ix_ob_runs_user_status", "user_id", "status"),
         Index("ix_ob_runs_started_at", "started_at"),

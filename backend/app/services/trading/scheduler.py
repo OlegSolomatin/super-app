@@ -530,7 +530,17 @@ class TradingScheduler:
 
         try:
             await engine.start()
-            # Auto-stop timer
+            # ── Фоновая задача: live-статус каждые 3 сек ──────────
+            async def _live_status_loop():
+                while True:
+                    await asyncio.sleep(3)
+                    try:
+                        await self._save_ob_live_status(run_id, engine)
+                    except Exception:
+                        pass
+
+            live_task = asyncio.create_task(_live_status_loop())
+            # ── Auto-stop timer ──────────────────────────────────
             if ob_config and ob_config.max_runtime_hours > 0:
                 timeout = ob_config.max_runtime_hours * 3600
                 logger.info(
@@ -554,10 +564,59 @@ class TradingScheduler:
             logger.exception(f"[OBScheduler] Run {run_id} failed")
             await self._save_ob_results(run_id, engine, status="error", error_msg="Engine crashed")
             return
+        finally:
+            live_task.cancel()
 
         # Mark as done and save results
         await self._save_ob_results(run_id, engine, status="done")
         self._tasks.pop(run_id, None)
+
+    async def _save_ob_live_status(
+        self, run_id: int, engine
+    ) -> None:
+        """Сохранить live-статус OrderBook engine в БД."""
+        import json
+        from sqlalchemy import select, update
+
+        from app.core.database import async_session_factory
+        from app.models.trading import OrderBookRun as DBOrderBookRun
+
+        wallets = getattr(engine, "wallets", None)
+        if wallets is None:
+            return
+        current_balance = wallets.total_balance
+
+        # Кэш для real-time PnL
+        cache = getattr(engine, "cache", None)
+        snap = cache.latest() if cache else None
+
+        # Текущая открытая позиция
+        trades = getattr(engine, "_trades", {})
+        open_trade = None
+        for pair, trade in trades.items():
+            open_trade = {
+                "pair": trade.pair,
+                "side": trade.side,
+                "entry_price": trade.entry_price,
+                "quantity": trade.amount if hasattr(trade, "amount") else trade.stake_amount,
+                "stake_amount": trade.stake_amount,
+                "pnl": trade.current_profit(snap.mid_price) / 100 * trade.stake_amount if snap else trade.pnl,
+                "pnl_pct": trade.current_profit(snap.mid_price) if snap else trade.pnl_pct,
+                "entry_time": trade.entry_time.isoformat() if trade.entry_time else None,
+                "age_seconds": trade.age_seconds() if hasattr(trade, "age_seconds") else 0,
+            }
+            break  # только первая открытая позиция
+
+        async with async_session_factory() as session:
+            await session.execute(
+                update(DBOrderBookRun)
+                .where(DBOrderBookRun.id == run_id)
+                .values(
+                    current_balance=current_balance,
+                    open_trade_json=json.dumps(open_trade) if open_trade else None,
+                )
+            )
+            await session.commit()
 
     async def _save_ob_results(
         self, run_id: int, engine, status: str = "done", error_msg: str | None = None

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -98,6 +99,10 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                       _buildBalanceCard(pc),
                       const SizedBox(height: PfSpacing.md),
                       _buildConfigCard(pc),
+                      if (_run!['open_trade_json'] != null) ...[
+                        const SizedBox(height: PfSpacing.md),
+                        _buildCurrentTradeCard(pc, _run!['open_trade_json'] as String),
+                      ],
                     ],
                   ),
                 ),
@@ -159,10 +164,12 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
 
   Widget _buildBalanceCard(PfColors pc) {
     final startBalance = (_run!['initial_balance'] as num?)?.toDouble();
+    final currentBalance = (_run!['current_balance'] as num?)?.toDouble();
     final status = _run!['status'] as String? ?? 'unknown';
     final isActive = status == 'running';
     final totalTrades = (_run!['total_trades'] as num?)?.toInt() ?? 0;
     final totalPnl = (_run!['total_pnl'] as num?)?.toDouble() ?? 0.0;
+    final displayBalance = currentBalance ?? startBalance;
 
     return PfCard(
       child: Column(
@@ -182,8 +189,12 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
           const SizedBox(height: 2),
           _InfoRow(
             label: isActive ? 'Текущий' : 'Итоговый',
-            value: '\$${_fmtBalance(startBalance)}',
-            valueColor: PfColors.success,
+            value: '\$${_fmtBalance(displayBalance)}',
+            valueColor: displayBalance != null && startBalance != null
+                ? (displayBalance >= startBalance
+                    ? PfColors.success
+                    : PfColors.destructive)
+                : null,
           ),
           const SizedBox(height: PfSpacing.sm),
           const PfDivider(),
@@ -243,6 +254,67 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildCurrentTradeCard(PfColors pc, String tradeJson) {
+    try {
+      final trade = jsonDecode(tradeJson) as Map<String, dynamic>;
+      final side = trade['side'] as String? ?? 'BUY';
+      final isBuy = side.toUpperCase() == 'BUY';
+      final entryPrice = (trade['entry_price'] as num?)?.toDouble();
+      final quantity = (trade['quantity'] as num?)?.toDouble();
+      final pnl = (trade['pnl'] as num?)?.toDouble();
+      final pnlPct = (trade['pnl_pct'] as num?)?.toDouble();
+      final pair = trade['pair'] as String? ?? '—';
+      final ageSec = (trade['age_seconds'] as num?)?.toInt() ?? 0;
+      final ageStr = ageSec > 60 ? '${ageSec ~/ 60}м ${ageSec % 60}с' : '${ageSec}с';
+
+      return PfCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                PhosphorIcon(
+                  isBuy ? PhosphorIconsFill.trendUp : PhosphorIconsFill.trendDown,
+                  size: 16,
+                  color: isBuy ? PfColors.success : PfColors.destructive,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Текущая сделка',
+                  style: PfTypography.titleMd.copyWith(
+                    fontSize: 14,
+                    color: pc.foregroundC,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: PfSpacing.sm),
+            const PfDivider(),
+            const SizedBox(height: PfSpacing.sm),
+            _InfoRow(label: 'Пара', value: pair),
+            _InfoRow(
+              label: 'Сторона',
+              value: isBuy ? '🟢 Покупка' : '🔴 Продажа',
+            ),
+            if (entryPrice != null)
+              _InfoRow(label: 'Цена входа', value: '\$${entryPrice.toStringAsFixed(4)}'),
+            if (quantity != null)
+              _InfoRow(label: 'Объём', value: quantity.toStringAsFixed(6)),
+            if (pnl != null)
+              _InfoRow(
+                label: 'Текущий PnL',
+                value: '\$${pnl.toStringAsFixed(2)}${pnlPct != null ? ' (${pnlPct.toStringAsFixed(2)}%)' : ''}',
+                valueColor: pnl >= 0 ? PfColors.success : PfColors.destructive,
+              ),
+            _InfoRow(label: 'В позиции', value: ageStr),
+          ],
+        ),
+      );
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
   }
 
   String _fmtBalance(double? v) => v != null ? v.toStringAsFixed(2) : '—';

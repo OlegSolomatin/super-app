@@ -329,6 +329,8 @@ class OrderBookRunResponse(BaseModel):
     total_trades: int = 0
     total_pnl: float = 0.0
     final_balance: Optional[float] = None
+    current_balance: Optional[float] = None
+    open_trade_json: Optional[str] = None
 
     @field_validator("user_id", mode="before")
     @classmethod
