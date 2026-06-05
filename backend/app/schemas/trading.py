@@ -326,6 +326,9 @@ class OrderBookRunResponse(BaseModel):
     started_at: datetime
     finished_at: Optional[datetime] = None
     error: Optional[str] = None
+    total_trades: int = 0
+    total_pnl: float = 0.0
+    final_balance: Optional[float] = None
 
     @field_validator("user_id", mode="before")
     @classmethod

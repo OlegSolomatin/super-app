@@ -98,10 +98,6 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                       _buildBalanceCard(pc),
                       const SizedBox(height: PfSpacing.md),
                       _buildConfigCard(pc),
-                      if (_run!['current_trade'] != null) ...[
-                        const SizedBox(height: PfSpacing.md),
-                        _buildCurrentTradeCard(pc),
-                      ],
                     ],
                   ),
                 ),
@@ -162,14 +158,11 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
   }
 
   Widget _buildBalanceCard(PfColors pc) {
-    final startBalance = (_run!['starting_balance'] as num?)?.toDouble();
-    final currentBalance = (_run!['current_balance'] as num?)?.toDouble();
-    final result = _run!['result'] as Map<String, dynamic>?;
-    final finalBalance = result != null
-        ? (result['final_balance'] as num?)?.toDouble()
-        : currentBalance;
+    final startBalance = (_run!['initial_balance'] as num?)?.toDouble();
     final status = _run!['status'] as String? ?? 'unknown';
     final isActive = status == 'running';
+    final totalTrades = (_run!['total_trades'] as num?)?.toInt() ?? 0;
+    final totalPnl = (_run!['total_pnl'] as num?)?.toDouble() ?? 0.0;
 
     return PfCard(
       child: Column(
@@ -189,25 +182,18 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
           const SizedBox(height: 2),
           _InfoRow(
             label: isActive ? 'Текущий' : 'Итоговый',
-            value: '\$${_fmtBalance(finalBalance ?? startBalance)}',
-            valueColor: finalBalance != null && startBalance != null
-                ? (finalBalance >= startBalance
-                    ? PfColors.success
-                    : PfColors.destructive)
-                : null,
+            value: '\$${_fmtBalance(startBalance)}',
+            valueColor: PfColors.success,
           ),
-          if (isActive && currentBalance != null) ...[
-            const SizedBox(height: 2),
-            _InfoRow(
-              label: 'Изменение',
-              value: startBalance != null
-                  ? '${currentBalance >= startBalance ? '+' : ''}${((currentBalance - startBalance) / startBalance * 100).toStringAsFixed(2)}%'
-                  : '—',
-              valueColor: currentBalance >= (startBalance ?? 0)
-                  ? PfColors.success
-                  : PfColors.destructive,
-            ),
-          ],
+          const SizedBox(height: PfSpacing.sm),
+          const PfDivider(),
+          const SizedBox(height: PfSpacing.sm),
+          _InfoRow(label: 'Сделок', value: '$totalTrades'),
+          _InfoRow(
+            label: 'Общий PnL',
+            value: totalPnl != 0 ? '\$${totalPnl.toStringAsFixed(2)}' : '—',
+            valueColor: totalPnl >= 0 ? PfColors.success : PfColors.destructive,
+          ),
         ],
       ),
     );
@@ -254,61 +240,6 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                   ],
                 ),
               )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentTradeCard(PfColors pc) {
-    final trade = _run!['current_trade'] as Map<String, dynamic>?;
-    if (trade == null) return const SizedBox.shrink();
-
-    final side = trade['side'] as String? ?? 'BUY';
-    final isBuy = side.toUpperCase() == 'BUY';
-    final entryPrice = (trade['entry_price'] as num?)?.toDouble();
-    final quantity = (trade['quantity'] as num?)?.toDouble();
-    final pnl = (trade['pnl'] as num?)?.toDouble();
-    final pair = trade['pair'] as String? ?? '—';
-
-    return PfCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              PhosphorIcon(
-                isBuy ? PhosphorIconsFill.trendUp : PhosphorIconsFill.trendDown,
-                size: 16,
-                color: isBuy ? PfColors.success : PfColors.destructive,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Текущая сделка',
-                style: PfTypography.titleMd.copyWith(
-                  fontSize: 14,
-                  color: pc.foregroundC,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: PfSpacing.sm),
-          const PfDivider(),
-          const SizedBox(height: PfSpacing.sm),
-          _InfoRow(label: 'Пара', value: pair),
-          _InfoRow(
-            label: 'Сторона',
-            value: isBuy ? '🟢 Покупка' : '🔴 Продажа',
-          ),
-          if (entryPrice != null)
-            _InfoRow(label: 'Цена входа', value: '\$${entryPrice.toStringAsFixed(4)}'),
-          if (quantity != null)
-            _InfoRow(label: 'Объём', value: quantity.toStringAsFixed(6)),
-          if (pnl != null)
-            _InfoRow(
-              label: 'Текущий PnL',
-              value: '\$${pnl.toStringAsFixed(2)}',
-              valueColor: pnl >= 0 ? PfColors.success : PfColors.destructive,
-            ),
         ],
       ),
     );
