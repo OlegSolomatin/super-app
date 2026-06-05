@@ -35,6 +35,10 @@ class _TradingPageState extends State<TradingPage>
   bool _loadingActive = true;
   bool _loadingHistory = true;
   Timer? _pollTimer;
+
+  // OrderBook runs
+  List<Map<String, dynamic>> _obRuns = [];
+  bool _loadingObRuns = false;
   /// Scan progress cache: run_id -> {status, scanned_pairs, total_pairs, ...}
   final Map<String, Map<String, dynamic>> _scanProgress = {};
 
@@ -53,6 +57,7 @@ class _TradingPageState extends State<TradingPage>
     _cleanupStaleRuns();
     _loadActiveRuns();
     _loadHistoryRuns();
+    _loadOrderBookRuns();
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _pollActiveRuns();
     });
@@ -120,10 +125,22 @@ class _TradingPageState extends State<TradingPage>
     }
   }
 
+  Future<void> _loadOrderBookRuns() async {
+    setState(() => _loadingObRuns = true);
+    try {
+      final result = await widget.repository.getOrderBookRuns();
+      if (mounted) {
+        setState(() { _obRuns = result.items; _loadingObRuns = false; });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingObRuns = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pc = PfColors.of(context);
-    final hasRuns = _activeRuns.isNotEmpty || _historyRuns.isNotEmpty;
+    final hasRuns = _activeRuns.isNotEmpty || _historyRuns.isNotEmpty || _obRuns.isNotEmpty;
     return AdaptiveScaffold(
       title: 'Трейдинг',
       currentPath: '/trading',
@@ -202,6 +219,15 @@ class _TradingPageState extends State<TradingPage>
                     isActive: _tabController.index == 1,
                     onTap: () => _tabController.animateTo(1),
                   ),
+                  if (_obRuns.isNotEmpty) ...[
+                    const SizedBox(width: 2),
+                    _PillTab(
+                      label: '📗 OB',
+                      count: _obRuns.length,
+                      isActive: false,
+                      onTap: () => {},
+                    ),
+                  ],
                 ],
               ),
             ),

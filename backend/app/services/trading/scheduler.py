@@ -497,20 +497,22 @@ class TradingScheduler:
             trailing_stop_positive=config.get("trailing_stop", 0.3),
             trailing_stop_positive_offset=config.get("trailing_offset", 0.5),
             cooldown_seconds=config.get("cooldown_seconds", 120),
+            max_runtime_hours=config.get("auto_stop_hours", 0),
         )
 
         engine = OrderBookEngine(ob_config)
 
-        task = asyncio.create_task(self._run_orderbook_engine(run_id, engine))
+        task = asyncio.create_task(self._run_orderbook_engine(run_id, engine, ob_config))
         self._tasks[run_id] = task
 
     async def _run_orderbook_engine(
         self,
         run_id: int,
         engine,
+        ob_config=None,
     ) -> None:
         """Execute OrderBook engine and persist results."""
-        from datetime import datetime, timezone
+        from datetime import datetime, timezone, timedelta
         from sqlalchemy import select
 
         from app.core.database import async_session_factory
@@ -518,9 +520,21 @@ class TradingScheduler:
 
         try:
             await engine.start()
-            # Engine runs until stopped or error
-            # It has its own WS polling loop that blocks
-            await engine._manage_task  # Wait for manage loop to finish
+            # Auto-stop timer
+            if ob_config and ob_config.max_runtime_hours > 0:
+                timeout = ob_config.max_runtime_hours * 3600
+                logger.info(
+                    f"[OBScheduler] Run {run_id} will auto-stop after "
+                    f"{ob_config.max_runtime_hours}h"
+                )
+                try:
+                    await asyncio.wait_for(engine._manage_task, timeout=timeout)
+                except asyncio.TimeoutError:
+                    logger.info(f"[OBScheduler] Run {run_id} auto-stop after {ob_config.max_runtime_hours}h")
+                    await engine.stop()
+            else:
+                # Engine runs until stopped or error
+                await engine._manage_task  # Wait for manage loop to finish
         except asyncio.CancelledError:
             logger.info(f"[OBScheduler] Run {run_id} cancelled, stopping engine...")
             await engine.stop()

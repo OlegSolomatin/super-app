@@ -116,6 +116,24 @@ async def list_orderbook_runs(
     )
 
 
+@router.get("/runs/{run_id}", response_model=OrderBookRunResponse)
+async def get_orderbook_run(
+    run_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> OrderBookRunResponse:
+    """Get a single Order Book run by ID."""
+    stmt = select(DBOrderBookRun).where(
+        DBOrderBookRun.id == run_id,
+        DBOrderBookRun.user_id == current_user.id,
+    )
+    result = await session.execute(stmt)
+    db_run = result.scalar_one_or_none()
+    if not db_run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return OrderBookRunResponse.model_validate(db_run)
+
+
 @router.post("/stop")
 async def stop_orderbook_run(
     run_id: int = Query(..., description="Run ID to stop"),

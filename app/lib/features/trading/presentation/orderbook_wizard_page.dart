@@ -111,8 +111,11 @@ class OrderBookWizardPage extends StatefulWidget {
   State<OrderBookWizardPage> createState() => _OrderBookWizardPageState();
 }
 
-class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
+class _OrderBookWizardPageState extends State<OrderBookWizardPage>
+    with SingleTickerProviderStateMixin {
   int _currentStep = 0;
+  int _previousStep = 0;
+  late final AnimationController _slideCtrl;
   TradingRepository get _repository => widget.repository;
 
   // Step 0: Pair — поиск + infinite scroll
@@ -144,12 +147,23 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
 
   // Step 5: Protections
   int _cooldownSeconds = 120;
+  int _autoStopHours = 0; // 0 = отключено
 
   bool _isLoading = false;
+
+  // Live-статус запуска
+  int? _lastRunId;
+  String _runStatusText = '';
+  Timer? _statusTimer;
+  bool _runStarted = false;
 
   @override
   void initState() {
     super.initState();
+    _slideCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _selectedStrategy = _kObStrategies.firstWhere((s) => s.enabled);
     _loadPairs();
     _pairScrollController.addListener(() {
@@ -171,6 +185,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
 
   @override
   void dispose() {
+    _stopPolling();
+    _slideCtrl.dispose();
     _searchTimer?.cancel();
     _searchPairController.dispose();
     _pairScrollController.dispose();
@@ -276,12 +292,53 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
 
   void _onStepTapped(int index) {
     // Не даём перепрыгивать вперёд больше чем на 1 шаг
-    if (index <= _currentStep + 1) {
+    if (index <= _currentStep + 1 && index != _currentStep) {
+      _previousStep = _currentStep;
       setState(() => _currentStep = index);
+      _slideCtrl.forward(from: 0);
     }
   }
 
-  // ── Загрузка пар ──────────────────────────────────────────────────
+  // ── Polling статуса запуска ──────────────────────────────────────
+  void _startPolling(int runId) {
+    _lastRunId = runId;
+    _runStarted = true;
+    _runStatusText = '⏳ Подключение к Binance...';
+    setState(() {});
+    _statusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _pollRunStatus();
+    });
+  }
+
+  void _stopPolling() {
+    _statusTimer?.cancel();
+    _statusTimer = null;
+  }
+
+  Future<void> _pollRunStatus() async {
+    if (_lastRunId == null) return;
+    try {
+      final run = await _repository.getOrderBookRun(_lastRunId!);
+      if (!mounted) return;
+      final status = run['status'] as String? ?? 'unknown';
+      if (status == 'running') {
+        _runStatusText = '✅ Торгует';
+      } else if (status == 'stopped') {
+        _runStatusText = '⏹️ Остановлен';
+        _stopPolling();
+      } else if (status == 'error') {
+        _runStatusText = '❌ Ошибка';
+        _stopPolling();
+      } else {
+        _runStatusText = '🔄 Статус: $status';
+      }
+      setState(() {});
+    } catch (_) {
+      // ignore polling errors silently
+    }
+  }
+
+  // ── Animated Step Content ────────────────────────────────────────
 
   Future<void> _loadPairs({bool refresh = false}) async {
     if (_loadingPairs) return;
@@ -364,9 +421,27 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
 
   // ── Step Content Router ────────────────────────────────────────────
   Widget _buildStepContent(ThemeData theme, PfColors pc) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(PfSpacing.lg),
-      child: _buildStepWidget(theme, pc),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      transitionBuilder: (child, animation) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.3, 0.0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          )),
+          child: child,
+        );
+      },
+      child: SingleChildScrollView(
+        key: ValueKey('step_$_currentStep'),
+        padding: const EdgeInsets.all(PfSpacing.lg),
+        child: _buildStepWidget(theme, pc),
+      ),
     );
   }
 
@@ -381,6 +456,42 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
       case 6: return _buildStepSummary(theme, pc);
       default: return const SizedBox();
     }
+  }
+
+  // ── Кастомный слайдер ──────────────────────────────────────────────
+  Widget _buildCustomSlider({
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChange,
+    required ThemeData theme,
+    required PfColors pc,
+    String? label,
+    bool destructive = false,
+  }) {
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 6,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 22),
+        activeTrackColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
+        inactiveTrackColor: pc.mutedC,
+        thumbColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
+        overlayColor: (destructive ? PfColors.destructive : theme.colorScheme.primary)
+            .withValues(alpha: 0.12),
+        valueIndicatorColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
+        valueIndicatorTextStyle: PfTypography.caption.copyWith(color: Colors.white),
+      ),
+      child: Slider(
+        value: value,
+        min: min,
+        max: max,
+        divisions: divisions,
+        label: label ?? value.toStringAsFixed(value < 1 ? 2 : 0),
+        onChanged: onChange,
+      ),
+    );
   }
 
   // ── Step 0: Pair ──────────────────────────────────────────────────
@@ -676,14 +787,13 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
                 ),
               ],
             ),
-            Slider(
+            _buildCustomSlider(
               value: param.defaultValue,
               min: param.min,
               max: param.max,
               divisions: param.divisions,
-              activeColor: theme.colorScheme.primary,
-              inactiveColor: pc.mutedC,
-              onChanged: (_) {}, // MVP — readonly пока
+              theme: theme, pc: pc,
+              onChange: (_) {}, // MVP — readonly пока
             ),
           ],
         ),
@@ -721,14 +831,14 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
           ),
         ),
         const SizedBox(height: 16),
-        Slider(
+        _buildCustomSlider(
           value: _balance,
           min: 100,
           max: 10000,
           divisions: 99,
-          activeColor: theme.colorScheme.primary,
-          inactiveColor: pc.mutedC,
-          onChanged: (v) => setState(() => _balance = v),
+          label: '\$${_balance.toStringAsFixed(0)}',
+          theme: theme, pc: pc,
+          onChange: (v) => setState(() => _balance = v),
         ),
         const SizedBox(height: 12),
         // Быстрые пресеты
@@ -920,14 +1030,13 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
     required ThemeData theme,
     required PfColors pc,
   }) {
-    return Slider(
+    return _buildCustomSlider(
       value: value,
       min: min,
       max: max,
       divisions: divisions,
-      activeColor: theme.colorScheme.primary,
-      inactiveColor: pc.mutedC,
-      onChanged: onChange,
+      theme: theme, pc: pc,
+      onChange: onChange,
     );
   }
 
@@ -982,12 +1091,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
                 ],
               ),
               const SizedBox(height: 8),
-              Slider(
+              _buildCustomSlider(
                 value: _confirmationTicks.toDouble(),
                 min: 1, max: 10, divisions: 9,
-                activeColor: theme.colorScheme.primary,
-                inactiveColor: pc.mutedC,
-                onChanged: (v) => setState(() => _confirmationTicks = v.round()),
+                label: '$_confirmationTicks тиков',
+                theme: theme, pc: pc,
+                onChange: (v) => setState(() => _confirmationTicks = v.round()),
               ),
               const SizedBox(height: 16),
               // Текстовая подсказка
@@ -1038,12 +1147,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
                 ],
               ),
               const SizedBox(height: 8),
-              Slider(
+              _buildCustomSlider(
                 value: _maxSpread,
                 min: 0.01, max: 0.5, divisions: 49,
-                activeColor: theme.colorScheme.primary,
-                inactiveColor: pc.mutedC,
-                onChanged: (v) => setState(() => _maxSpread = v),
+                label: '${(_maxSpread * 100).toStringAsFixed(1)}%',
+                theme: theme, pc: pc,
+                onChange: (v) => setState(() => _maxSpread = v),
               ),
             ],
           ),
@@ -1110,12 +1219,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
               Row(
                 children: [
                   Expanded(
-                    child: Slider(
+                    child: _buildCustomSlider(
                       value: _cooldownSeconds.toDouble(),
                       min: 10, max: 600, divisions: 59,
-                      activeColor: theme.colorScheme.primary,
-                      inactiveColor: pc.mutedC,
-                      onChanged: (v) => setState(() => _cooldownSeconds = v.round()),
+                      label: '${_cooldownSeconds}s',
+                      theme: theme, pc: pc,
+                      onChange: (v) => setState(() => _cooldownSeconds = v.round()),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1135,6 +1244,96 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
                   ),
                 ],
               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Auto-stop
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _autoStopHours > 0
+                          ? PfColors.destructive.withValues(alpha: 0.12)
+                          : pc.mutedC,
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Center(
+                      child: PhosphorIcon(
+                        PhosphorIconsFill.timer,
+                        size: 18,
+                        color: _autoStopHours > 0
+                            ? PfColors.destructive
+                            : pc.mutedForegroundC,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Автостоп по времени', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                        const SizedBox(height: 2),
+                        Text('Автоматическая остановка стратегии через N часов', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildCustomSlider(
+                      value: _autoStopHours.toDouble(),
+                      min: 0, max: 24, divisions: 24,
+                      label: _autoStopHours > 0 ? '$_autoStopHours ч.' : 'Выкл',
+                      destructive: true,
+                      theme: theme, pc: pc,
+                      onChange: (v) => setState(() => _autoStopHours = v.round()),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _autoStopHours > 0
+                          ? PfColors.destructive.withValues(alpha: 0.12)
+                          : pc.mutedC,
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Text(
+                      _autoStopHours > 0 ? '${_autoStopHours}ч' : 'Выкл',
+                      style: PfTypography.titleMd.copyWith(
+                        color: _autoStopHours > 0 ? PfColors.destructive : pc.mutedForegroundC,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_autoStopHours > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      PhosphorIcon(PhosphorIconsFill.info, size: 12, color: PfColors.destructive.withValues(alpha: 0.7)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Стратегия остановится через $_autoStopHours ч.',
+                        style: PfTypography.bodySm.copyWith(color: PfColors.destructive.withValues(alpha: 0.7)),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -1242,6 +1441,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
               const PfDivider(indent: 0),
               _summaryRow(pc, 'Cooldown', '${_cooldownSeconds}s', PfColors.warning),
               const PfDivider(indent: 0),
+              _summaryRow(pc, 'Автостоп', _autoStopHours > 0 ? '$_autoStopHours ч.' : 'Выкл', _autoStopHours > 0 ? PfColors.destructive : pc.mutedForegroundC),
+              const PfDivider(indent: 0),
               _summaryRow(pc, 'Точность', '$_confirmationTicks тиков / spread ${(_maxSpread * 100).toStringAsFixed(1)}%', pc.foregroundC),
             ],
           ),
@@ -1286,6 +1487,67 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
             ],
           ),
         ),
+        // ── Live-статус запуска ──
+        if (_runStarted)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: PfCard(
+              variant: 'trading',
+              padding: const EdgeInsets.all(PfSpacing.lg),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: _runStatusText.contains('✅')
+                              ? PfColors.success
+                              : _runStatusText.contains('❌')
+                                  ? PfColors.destructive
+                                  : PfColors.warning,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _runStatusText,
+                        style: PfTypography.titleMd.copyWith(
+                          color: _runStatusText.contains('✅')
+                              ? PfColors.success
+                              : _runStatusText.contains('❌')
+                                  ? PfColors.destructive
+                                  : PfColors.warning,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (!_runStatusText.contains('❌') && !_runStatusText.contains('⏹️'))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Стратегия работает в фоне. Вы можете вернуться на Trading Page и следить за статусом.',
+                        style: PfTypography.bodySm.copyWith(
+                          color: pc.mutedForegroundC,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  PfButton(
+                    variant: 'primary',
+                    size: 'md',
+                    label: 'На Trading Page',
+                    onPressed: () => context.go('/trading'),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1315,6 +1577,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
 
   // ── Navigation ────────────────────────────────────────────────────
   Widget _buildNavigation(ThemeData theme, PfColors pc) {
+    // Когда запуск выполнен — скрываем навигацию
+    if (_runStarted) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(PfSpacing.lg),
       decoration: BoxDecoration(
@@ -1329,7 +1593,11 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
                   variant: 'outline',
                   size: 'lg',
                   label: 'Назад',
-                  onPressed: () => setState(() => _currentStep--),
+                  onPressed: () {
+                    _previousStep = _currentStep;
+                    setState(() => _currentStep--);
+                    _slideCtrl.forward(from: 0);
+                  },
                 ),
               ),
             if (_currentStep > 0) const SizedBox(width: 12),
@@ -1340,7 +1608,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
                 label: _currentStep < 6 ? 'Далее' : '🚀 Запустить',
                 onPressed: _isLoading ? null : () {
                   if (_currentStep < 6) {
+                    _previousStep = _currentStep;
                     setState(() => _currentStep++);
+                    _slideCtrl.forward(from: 0);
                   } else {
                     _startEngine();
                   }
@@ -1356,7 +1626,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
   Future<void> _startEngine() async {
     setState(() => _isLoading = true);
     try {
-      await _repository.startOrderBookRun({
+      final response = await _repository.startOrderBookRun({
         'pair': _selectedPairSymbol,
         'strategy': _selectedStrategy?.name ?? 'imbalance_scalping',
         'initial_balance': _balance,
@@ -1371,7 +1641,10 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
       });
       if (mounted) {
         setState(() => _isLoading = false);
-        context.go('/trading');
+        final runId = response['id'] as int?;
+        if (runId != null) {
+          _startPolling(runId);
+        }
       }
     } catch (e) {
       debugPrint('[OB START ERROR] $e');

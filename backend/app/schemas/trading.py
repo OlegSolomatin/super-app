@@ -296,6 +296,9 @@ class OrderBookStartRequest(BaseModel):
     confirmation_ticks: int = Field(default=3, ge=1, le=10)
     max_spread: float = Field(default=0.05, ge=0.01, le=0.5)
     cooldown_seconds: int = Field(default=120, ge=10, le=600)
+    auto_stop_hours: int = Field(
+        default=0, ge=0, le=72, description="Auto-stop after N hours (0 = unlimited)"
+    )
 
 
 class OrderBookRunResponse(BaseModel):

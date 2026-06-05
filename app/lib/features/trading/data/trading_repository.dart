@@ -134,6 +134,11 @@ class TradingRepository {
     return response.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getOrderBookRun(int runId) async {
+    final response = await _dio.get('/orderbook/runs/$runId');
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<({List<Map<String, dynamic>> items, int total})> getOrderBookRuns({
     String? status,
     int page = 1,

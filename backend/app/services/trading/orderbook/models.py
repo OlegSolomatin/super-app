@@ -175,6 +175,7 @@ class OrderBookConfig:
     # Protections
     cooldown_seconds: int = 120
     min_trade_interval: int = 10
+    max_runtime_hours: int = 0  # 0 = unlimited
 
 
 class OrderBookCache:
