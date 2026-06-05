@@ -25,6 +25,8 @@ from app.services.trading.orderbook.strategies.base import (
     AbstractOrderBookStrategy,
 )
 
+_BURST_RESET_TICKS = 5  # сброс счётчика burst если столько тиков без активности
+
 
 class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
     """Стратегия торговли по потоку агрессивных ордеров."""
@@ -33,9 +35,10 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
 
     def __init__(self, config: OrderBookConfig):
         super().__init__(config)
-        self._flow_bursts_buy: int = 0
-        self._flow_bursts_sell: int = 0
-        self._last_burst_tick: int = 0
+        self._buy_burst_count: int = 0
+        self._sell_burst_count: int = 0
+        self._buy_tick_since_burst: int = 0
+        self._sell_tick_since_burst: int = 0
 
     def analyze(self, snap: OrderBookSnapshot,
                 cache: OrderBookCache) -> Optional[OrderBookSignal]:
@@ -49,11 +52,10 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
         if len(window) < 5:
             return None
 
-        # Определяем агрессивные объёмы
         top_bid_vol = snap.bids[0][1] if snap.bids else 0.0
         top_ask_vol = snap.asks[0][1] if snap.asks else 0.0
-        best_bid_price = snap.bid_price
         best_ask_price = snap.ask_price
+        best_bid_price = snap.bid_price
 
         # Сравниваем с предыдущим тиком
         prev = window[-2] if len(window) >= 2 else None
@@ -63,68 +65,69 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
         prev_top_bid = prev.bids[0][1] if prev.bids else 0.0
         prev_top_ask = prev.asks[0][1] if prev.asks else 0.0
 
-        # Market buy detected: ask объём на лучшей цене резко упал
-        # (агрессивный покупатель снёс ликвидность на ask)
-        bid_drop = prev_top_ask - top_ask_vol
+        # Market buy = ask объём на лучшей цене резко упал
+        ask_vol_consumed = prev_top_ask - top_ask_vol
         has_buy_burst = (
-            bid_drop > c.flow_threshold_volume
-            and best_ask_price > best_bid_price  # рынок не перевёрнут
-        )
-
-        # Market sell detected: bid объём на лучшей цене резко упал
-        ask_drop = prev_top_bid - top_bid_vol
-        has_sell_burst = (
-            ask_drop > c.flow_threshold_volume
+            ask_vol_consumed > c.flow_threshold_volume
             and best_ask_price > best_bid_price
         )
 
-        # Счётчик тиков
-        self._last_burst_tick += 1
+        # Market sell = bid объём на лучшей цене резко упал
+        bid_vol_consumed = prev_top_bid - top_bid_vol
+        has_sell_burst = (
+            bid_vol_consumed > c.flow_threshold_volume
+            and best_ask_price > best_bid_price
+        )
 
+        # Buy burst: счётчик + таймер
         if has_buy_burst:
-            self._flow_bursts_buy += 1
-            self._last_burst_tick = 0
+            self._buy_burst_count += 1
+            self._buy_tick_since_burst = 0
         else:
-            # Сбрасываем счётчик если давно не было burst
-            if self._last_burst_tick > 5:
-                self._flow_bursts_buy = 0
+            self._buy_tick_since_burst += 1
+            if self._buy_tick_since_burst > _BURST_RESET_TICKS:
+                self._buy_burst_count = 0
 
+        # Sell burst: счётчик + таймер
         if has_sell_burst:
-            self._flow_bursts_sell += 1
-            self._last_burst_tick = 0
+            self._sell_burst_count += 1
+            self._sell_tick_since_burst = 0
         else:
-            if self._last_burst_tick > 5:
-                self._flow_bursts_sell = 0
+            self._sell_tick_since_burst += 1
+            if self._sell_tick_since_burst > _BURST_RESET_TICKS:
+                self._sell_burst_count = 0
 
         # Сигнал BUY: N buy bursts подряд
-        if has_buy_burst and self._flow_bursts_buy >= c.min_flow_signals:
-            self._flow_bursts_buy = 0  # сброс после сигнала
+        if has_buy_burst and self._buy_burst_count >= c.min_flow_signals:
+            burst_count = self._buy_burst_count
+            self._buy_burst_count = 0
             return OrderBookSignal(
                 pair=snap.pair,
                 side="BUY",
                 price=snap.ask_price,
                 strategy_name=self.name,
-                confidence=min(bid_drop / c.flow_threshold_volume, 0.95),
+                confidence=min(ask_vol_consumed / c.flow_threshold_volume, 0.95),
                 reason=(
-                    f"buy_flow={bid_drop:.0f} "
-                    f"bursts={self._flow_bursts_buy + 1}"
+                    f"ask_flow={ask_vol_consumed:.0f} "
+                    f"bursts={burst_count}"
                 ),
                 exit_after_seconds=c.flow_exit_seconds,
                 entry_tag="flow_momentum_buy",
             )
 
         # Сигнал SELL: N sell bursts подряд
-        if has_sell_burst and self._flow_bursts_sell >= c.min_flow_signals:
-            self._flow_bursts_sell = 0  # сброс после сигнала
+        if has_sell_burst and self._sell_burst_count >= c.min_flow_signals:
+            burst_count = self._sell_burst_count
+            self._sell_burst_count = 0
             return OrderBookSignal(
                 pair=snap.pair,
                 side="SELL",
                 price=snap.bid_price,
                 strategy_name=self.name,
-                confidence=min(ask_drop / c.flow_threshold_volume, 0.95),
+                confidence=min(bid_vol_consumed / c.flow_threshold_volume, 0.95),
                 reason=(
-                    f"sell_flow={ask_drop:.0f} "
-                    f"bursts={self._flow_bursts_sell + 1}"
+                    f"bid_flow={bid_vol_consumed:.0f} "
+                    f"bursts={burst_count}"
                 ),
                 exit_after_seconds=c.flow_exit_seconds,
                 entry_tag="flow_momentum_sell",
@@ -139,16 +142,15 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
         if len(window) < 5:
             return None
 
-        # Проверяем последние 5 тиков — был ли хоть один burst
         recent = window[-5:]
         bursts_found = 0
         for i in range(1, len(recent)):
             prev = recent[i - 1]
             curr = recent[i]
-            pbid = prev.bids[0][1] if prev.bids else 0.0
             pask = prev.asks[0][1] if prev.asks else 0.0
-            cbid = curr.bids[0][1] if curr.bids else 0.0
+            pbid = prev.bids[0][1] if prev.bids else 0.0
             cask = curr.asks[0][1] if curr.asks else 0.0
+            cbid = curr.bids[0][1] if curr.bids else 0.0
 
             if trade.side == "BUY":
                 if (pask - cask) > self.config.flow_threshold_volume:
@@ -157,7 +159,6 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
                 if (pbid - cbid) > self.config.flow_threshold_volume:
                     bursts_found += 1
 
-        # Если за последние 5 тиков нет burst — поток затух
         if bursts_found == 0:
             return "flow_dried_up"
         return None

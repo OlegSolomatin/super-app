@@ -248,6 +248,14 @@ class OrderBookRun(Base):
     finished_at = Column(DateTime(timezone=True), nullable=True)
     error = Column(Text, nullable=True)
 
+    # Результаты (заполняются после остановки engine)
+    metrics_json = Column(Text, nullable=True)
+    total_pnl = Column(Float, nullable=True, default=0.0)
+    total_trades = Column(Integer, nullable=True, default=0)
+    win_trades = Column(Integer, nullable=True, default=0)
+    loss_trades = Column(Integer, nullable=True, default=0)
+    final_balance = Column(Float, nullable=True)
+
     __table_args__ = (
         Index("ix_ob_runs_user_status", "user_id", "status"),
         Index("ix_ob_runs_started_at", "started_at"),

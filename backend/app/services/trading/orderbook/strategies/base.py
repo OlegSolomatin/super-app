@@ -65,3 +65,21 @@ class AbstractOrderBookStrategy(ABC):
     def custom_stake_amount(self, proposed_stake: float,
                             free_balance: float) -> float:
         return proposed_stake
+
+    # ── Helpers (общие для всех стратегий) ───────────────────────────
+
+    _ICEBERG_RATIO: float = 5.0  # порог для детекции iceberg ордеров
+
+    def is_iceberg(self, snap: "OrderBookSnapshot") -> bool:
+        """Проверить, есть ли iceberg-ордер в стакане."""
+        if len(snap.bids) >= 2:
+            top_bid_qty = snap.bids[0][1]
+            next_bid_qty = snap.bids[1][1]
+            if top_bid_qty > next_bid_qty * self._ICEBERG_RATIO and next_bid_qty > 0:
+                return True
+        if len(snap.asks) >= 2:
+            top_ask_qty = snap.asks[0][1]
+            next_ask_qty = snap.asks[1][1]
+            if top_ask_qty > next_ask_qty * self._ICEBERG_RATIO and next_ask_qty > 0:
+                return True
+        return False

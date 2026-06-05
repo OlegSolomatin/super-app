@@ -37,34 +37,6 @@ class IProtection:
         return None
 
 
-class CooldownProtection(IProtection):
-    """Защита 1: пауза после выхода из сделки.
-
-    freqtrade: CooldownProtection
-    """
-    has_local_stop = True
-
-    def __init__(self, config: OrderBookConfig):
-        self._cooldown = config.cooldown_seconds
-        self._last_exit: dict[str, datetime] = {}
-
-    def on_trade(self, trade: Trade) -> None:
-        if trade.exit_time:
-            self._last_exit[trade.pair] = trade.exit_time
-
-    def stop_per_pair(self, pair: str) -> Optional[ProtectionReturn]:
-        now = datetime.now(timezone.utc)
-        last = self._last_exit.get(pair)
-        if last and (now - last).total_seconds() < self._cooldown:
-            return ProtectionReturn(
-                stop=True,
-                until=last + timedelta(seconds=self._cooldown),
-                reason=f"Cooldown ({self._cooldown}s)",
-                pair=pair,
-            )
-        return None
-
-
 class LowProfitProtection(IProtection):
     """Защита 2: блокировка пары если средний профит низкий.
 
@@ -178,7 +150,6 @@ class ProtectionManager:
 
     def __init__(self, config: OrderBookConfig):
         self._protections = [
-            CooldownProtection(config),
             LowProfitProtection(),
             MaxDrawdownProtection(),
             StoplossGuardProtection(),

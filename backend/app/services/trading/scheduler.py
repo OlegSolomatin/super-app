@@ -7,6 +7,7 @@ or queried for status. Runs are executed as asyncio tasks.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -446,9 +447,10 @@ class TradingScheduler:
 
         Cancels the asyncio task and removes it from the tracking dict.
         """
-        task = self._tasks.get(run_id)
+        task = self._tasks.pop(run_id, None)
         if task is None:
-            raise KeyError(f"Run {run_id} is not active or does not exist.")
+            logger.warning(f"Run {run_id}: not active, nothing to stop")
+            return
         task.cancel()
         logger.info("Run %d: stop requested", run_id)
 
@@ -536,40 +538,79 @@ class TradingScheduler:
                     f"{ob_config.max_runtime_hours}h"
                 )
                 try:
-                    await asyncio.wait_for(engine._manage_task, timeout=timeout)
+                    if engine._manage_task is not None:
+                        await asyncio.wait_for(engine._manage_task, timeout=timeout)
                 except asyncio.TimeoutError:
                     logger.info(f"[OBScheduler] Run {run_id} auto-stop after {ob_config.max_runtime_hours}h")
                     await engine.stop()
             else:
                 # Engine runs until stopped or error
-                await engine._manage_task  # Wait for manage loop to finish
+                if engine._manage_task is not None:
+                    await engine._manage_task
         except asyncio.CancelledError:
             logger.info(f"[OBScheduler] Run {run_id} cancelled, stopping engine...")
             await engine.stop()
         except Exception:
             logger.exception(f"[OBScheduler] Run {run_id} failed")
-            async with async_session_factory() as session:
-                stmt = select(DBOrderBookRun).where(DBOrderBookRun.id == run_id)
-                result = await session.execute(stmt)
-                db_run = result.scalar_one_or_none()
-                if db_run:
-                    db_run.status = "error"
-                    db_run.error = "Engine crashed"
-                    db_run.finished_at = datetime.now(timezone.utc)
-                    await session.commit()
+            await self._save_ob_results(run_id, engine, status="error", error_msg="Engine crashed")
             return
 
-        # Mark as done
+        # Mark as done and save results
+        await self._save_ob_results(run_id, engine, status="done")
+        self._tasks.pop(run_id, None)
+
+    async def _save_ob_results(
+        self, run_id: int, engine, status: str = "done", error_msg: str | None = None
+    ) -> None:
+        """Сохранить метрики и трейды OrderBook engine в БД."""
+        from datetime import datetime, timezone
+        from sqlalchemy import select
+
+        from app.core.database import async_session_factory
+        from app.models.trading import OrderBookRun as DBOrderBookRun
+
+        metrics = getattr(engine, "metrics", {})
+        trade_history = getattr(engine, "_trade_history", [])
+        total_pnl = metrics.get("total_pnl", 0.0)
+
+        # Сериализуем трейды для сохранения
+        trades_json = []
+        for t in trade_history:
+            trades_json.append({
+                "pair": t.pair,
+                "side": t.side,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "pnl": t.pnl,
+                "pnl_pct": t.pnl_pct,
+                "exit_type": t.exit_type,
+                "exit_reason": t.exit_reason,
+            })
+
         async with async_session_factory() as session:
             stmt = select(DBOrderBookRun).where(DBOrderBookRun.id == run_id)
             result = await session.execute(stmt)
             db_run = result.scalar_one_or_none()
             if db_run:
-                db_run.status = "done"
+                db_run.status = status
                 db_run.finished_at = datetime.now(timezone.utc)
+                if error_msg:
+                    db_run.error = error_msg
+                async with session.begin_nested():
+                    from sqlalchemy import update
+                    await session.execute(
+                        update(DBOrderBookRun)
+                        .where(DBOrderBookRun.id == run_id)
+                        .values(
+                            metrics_json=json.dumps(metrics),
+                            total_pnl=total_pnl,
+                            total_trades=len(trade_history),
+                            win_trades=metrics.get("win_count", 0),
+                            loss_trades=metrics.get("loss_count", 0),
+                            final_balance=metrics.get("peak_balance", 0.0),
+                        )
+                    )
                 await session.commit()
-
-        self._tasks.pop(run_id, None)
 
 
 # Singleton scheduler instance

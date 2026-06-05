@@ -9,7 +9,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 
 @dataclass
@@ -76,7 +76,7 @@ class OrderBookSignal:
     freqtrade: enter_long/enter_short колонки + enter_tag
     """
     pair: str
-    side: str                     # BUY / SELL
+    side: Literal["BUY", "SELL"]   # BUY / SELL
     price: float                  # Цена входа
     strategy_name: str
     confidence: float             # 0.0..1.0
@@ -107,7 +107,7 @@ class Trade:
     freqtrade: Trade model (persistence/trade_model.py)
     """
     pair: str
-    side: str
+    side: Literal["BUY", "SELL"]
     entry_price: float
     entry_time: datetime
     stake_amount: float
@@ -190,6 +190,10 @@ class OrderBookConfig:
     flow_exit_seconds: int = 30
 
 
+CACHE_MAXLEN = 100
+WARMUP_THRESHOLD = 10
+
+
 class OrderBookCache:
     """Кольцевой буфер снапшотов.
 
@@ -197,7 +201,7 @@ class OrderBookCache:
     Используется стратегиями для анализа тренда за окно.
     """
 
-    def __init__(self, maxlen: int = 100):
+    def __init__(self, maxlen: int = CACHE_MAXLEN):
         self._buf: deque[OrderBookSnapshot] = deque(maxlen=maxlen)
 
     def push(self, snap: OrderBookSnapshot) -> None:
@@ -211,7 +215,7 @@ class OrderBookCache:
 
     @property
     def is_warm(self) -> bool:
-        return len(self._buf) >= 10
+        return len(self._buf) >= WARMUP_THRESHOLD
 
     @property
     def count(self) -> int:

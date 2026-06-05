@@ -461,6 +461,26 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     );
   }
 
+  // ── Иконка криптопары ────────────────────────────────────────────
+  Widget _pairIcon(String base, ThemeData theme) {
+    final symbol = base.toLowerCase();
+    // Пробуем загрузить из assets, fallback на первую букву
+    return Image.asset(
+      'assets/icons/crypto/$symbol.png',
+      width: 40,
+      height: 40,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Center(
+        child: Text(
+          base.isNotEmpty ? base[0].toUpperCase() : '?',
+          style: PfTypography.titleMd.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Step Content Router ────────────────────────────────────────────
   Widget _buildStepContent(ThemeData theme, PfColors pc) {
     return AnimatedSwitcher(
@@ -616,16 +636,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                         : pc.mutedC,
                     borderRadius: PfRadius.borderRadiusMd,
                   ),
-                  child: Center(
-                    child: Text(
-                      pair.base.isNotEmpty ? pair.base[0] : '?',
-                      style: PfTypography.titleMd.copyWith(
-                        color: _selectedPairSymbol == pair.symbol
-                            ? theme.colorScheme.primary
-                            : pc.mutedForegroundC,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  child: ClipRRect(
+                    borderRadius: PfRadius.borderRadiusMd,
+                    child: _pairIcon(pair.base, theme),
                   ),
                 ),
                 const SizedBox(width: 12),

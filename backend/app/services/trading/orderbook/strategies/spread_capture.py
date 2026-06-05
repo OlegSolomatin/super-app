@@ -54,7 +54,7 @@ class SpreadCaptureStrategy(AbstractOrderBookStrategy):
             return None
 
         # Защита: iceberg
-        if self._is_iceberg(snap):
+        if self.is_iceberg(snap):
             return None
 
         window = cache.window(c.spread_baseline_window)
@@ -115,14 +115,3 @@ class SpreadCaptureStrategy(AbstractOrderBookStrategy):
         if trade.side == "SELL" and abs(deviation) < c.spread_exit_threshold:
             return "spread_normalized"
         return None
-
-    def _is_iceberg(self, snap: OrderBookSnapshot) -> bool:
-        if len(snap.bids) >= 2:
-            if (snap.bids[0][1] > snap.bids[1][1] * 5
-                    and snap.bids[1][1] > 0):
-                return True
-        if len(snap.asks) >= 2:
-            if (snap.asks[0][1] > snap.asks[1][1] * 5
-                    and snap.asks[1][1] > 0):
-                return True
-        return False

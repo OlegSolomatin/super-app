@@ -44,7 +44,7 @@ class ImbalanceScalpingStrategy(AbstractOrderBookStrategy):
             return None
 
         # Защита: iceberg
-        if self._is_iceberg(snap):
+        if self.is_iceberg(snap):
             return None
 
         window = cache.window(c.confirmation_ticks + 2)
@@ -99,17 +99,6 @@ class ImbalanceScalpingStrategy(AbstractOrderBookStrategy):
         if trade.side == "SELL" and imb > 0.45:
             return "imbalance_normalized"
         return None
-
-    def _is_iceberg(self, snap: OrderBookSnapshot) -> bool:
-        if len(snap.bids) >= 2:
-            if (snap.bids[0][1] > snap.bids[1][1] * 5
-                    and snap.bids[1][1] > 0):
-                return True
-        if len(snap.asks) >= 2:
-            if (snap.asks[0][1] > snap.asks[1][1] * 5
-                    and snap.asks[1][1] > 0):
-                return True
-        return False
 
     def _volume_surge(self, window: list, side: str) -> float:
         if len(window) < 2:

@@ -51,6 +51,8 @@ STRATEGY_REGISTRY = {
     "order_flow_momentum": OrderFlowMomentumStrategy,
 }
 
+MANAGE_LOOP_INTERVAL = 0.5  # проверка позиций каждые 500ms
+
 
 def load_strategy(config: OrderBookConfig) -> AbstractOrderBookStrategy:
     """Factory: загрузить стратегию по имени.
@@ -72,7 +74,8 @@ class OrderBookEngine:
     Один инстанс = один запуск для одной пары.
     """
 
-    def __init__(self, config: OrderBookConfig):
+    def __init__(self, config: OrderBookConfig,
+                 fetcher: Optional[BinanceOrderBookStream] = None):
         self.config = config
         self.strategy = load_strategy(config)
         self.cache = OrderBookCache()
@@ -89,6 +92,9 @@ class OrderBookEngine:
         self._manage_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._running = False
+
+        # Внешний fetcher или создаём свой
+        self._fetcher: Optional[BinanceOrderBookStream] = fetcher
 
         self.metrics = {
             "signals_generated": 0,
@@ -117,32 +123,50 @@ class OrderBookEngine:
             f"{self.strategy.name}"
         )
 
-        fetcher = BinanceOrderBookStream(
-            pairs=self.config.pairs,
-            on_snapshot=self._on_snapshot,
-        )
-        self._fetch_task = asyncio.create_task(fetcher.start())
+        if self._fetcher is None:
+            self._fetcher = BinanceOrderBookStream(
+                pairs=self.config.pairs,
+                on_snapshot=self._on_snapshot,
+            )
+        self._fetch_task = asyncio.create_task(self._fetcher.start())
         self._manage_task = asyncio.create_task(self._manage_loop())
 
     async def stop(self):
         """Остановить движок и закрыть позиции."""
+        if not self._running:
+            return
         self._running = False
-        if self._fetch_task:
+
+        # 1. Остановить fetcher (закрыть WS)
+        if self._fetcher:
+            await self._fetcher.stop()
+
+        # 2. Отменить фоновые задачи
+        if self._fetch_task and not self._fetch_task.done():
             self._fetch_task.cancel()
-        if self._manage_task:
+        if self._manage_task and not self._manage_task.done():
             self._manage_task.cancel()
 
-        for pair, trade in list(self._trades.items()):
-            now = datetime.now(timezone.utc)
-            snap = self.cache.latest()
-            trade.close(
-                exit_price=snap.mid_price if snap else trade.entry_price,
-                exit_time=now,
-                exit_type=ExitType.FORCE_EXIT.value,
-                exit_reason="engine_stop",
-            )
-            self._trade_history.append(trade)
-        self._trades.clear()
+        # 3. Закрыть открытые позиции (под блокировкой)
+        async with self._lock:
+            for pair, trade in list(self._trades.items()):
+                now = datetime.now(timezone.utc)
+                snap = self.cache.latest()
+                exit_price = snap.mid_price if snap else trade.entry_price
+                if snap:
+                    if trade.side == "BUY":
+                        exit_price = snap.bid_price or snap.mid_price
+                    else:
+                        exit_price = snap.ask_price or snap.mid_price
+                trade.close(
+                    exit_price=exit_price,
+                    exit_time=now,
+                    exit_type=ExitType.FORCE_EXIT.value,
+                    exit_reason="engine_stop",
+                )
+                self._trade_history.append(trade)
+            self._trades.clear()
+
         logger.info(
             f"[OBEngine] Stopped. "
             f"Trades: {len(self._trade_history)}, "
@@ -168,11 +192,7 @@ class OrderBookEngine:
             await self.stop()
             return
 
-        # Protection: per pair
-        if self.protection.stop_per_pair(snap.pair):
-            return
-
-        # PairLock
+        # PairLock (единственный источник cooldown)
         if self.pairlock.is_locked(snap.pair):
             return
 
@@ -199,6 +219,8 @@ class OrderBookEngine:
             return
 
         now = datetime.now(timezone.utc)
+        if signal.price <= 0:
+            return
         trade = Trade(
             pair=signal.pair,
             side=signal.side,
@@ -225,7 +247,7 @@ class OrderBookEngine:
         )
 
     async def _manage_loop(self):
-        """Фоновый цикл: каждую секунду проверяет открытые позиции.
+        """Фоновый цикл: каждые 500ms проверяет открытые позиции.
 
         freqtrade: FreqtradeBot.exit_positions() + handle_trade()
 
@@ -236,7 +258,7 @@ class OrderBookEngine:
           4. hard stoploss
         """
         while self._running:
-            await asyncio.sleep(1)
+            await asyncio.sleep(MANAGE_LOOP_INTERVAL)
             if not self._trades:
                 continue
 
@@ -246,41 +268,42 @@ class OrderBookEngine:
 
             now = datetime.now(timezone.utc)
 
-            for pair, trade in list(self._trades.items()):
-                age = trade.age_seconds(now)
+            async with self._lock:
+                for pair, trade in list(self._trades.items()):
+                    age = trade.age_seconds(now)
 
-                # 1. Custom exit
-                ereason = self.strategy.custom_exit(trade, snap, self.cache)
-                if ereason:
-                    await self._close_trade(
-                        trade, snap, ExitType.EXIT_SIGNAL, ereason
-                    )
-                    continue
-
-                # 2. Max hold
-                if age >= self.config.max_hold_seconds:
-                    await self._close_trade(
-                        trade, snap, ExitType.EMERGENCY_EXIT, "max_hold"
-                    )
-                    continue
-
-                # 3. Trailing stop
-                if self.config.trailing_stop:
-                    sl = self._check_trailing_stop(trade, snap)
-                    if sl:
+                    # 1. Custom exit
+                    ereason = self.strategy.custom_exit(trade, snap, self.cache)
+                    if ereason:
                         await self._close_trade(
-                            trade, snap,
-                            ExitType.TRAILING_STOP_LOSS, "trailing"
+                            trade, snap, ExitType.EXIT_SIGNAL, ereason
                         )
                         continue
 
-                # 4. Hard stoploss
-                sl = self._check_hard_stop(trade, snap)
-                if sl:
-                    await self._close_trade(
-                        trade, snap, ExitType.STOP_LOSS, "stoploss"
-                    )
-                    continue
+                    # 2. Max hold
+                    if age >= self.config.max_hold_seconds:
+                        await self._close_trade(
+                            trade, snap, ExitType.EMERGENCY_EXIT, "max_hold"
+                        )
+                        continue
+
+                    # 3. Trailing stop
+                    if self.config.trailing_stop:
+                        sl = self._check_trailing_stop(trade, snap)
+                        if sl:
+                            await self._close_trade(
+                                trade, snap,
+                                ExitType.TRAILING_STOP_LOSS, "trailing"
+                            )
+                            continue
+
+                    # 4. Hard stoploss
+                    sl = self._check_hard_stop(trade, snap)
+                    if sl:
+                        await self._close_trade(
+                            trade, snap, ExitType.STOP_LOSS, "stoploss"
+                        )
+                        continue
 
     async def _close_trade(self, trade: Trade, snap: OrderBookSnapshot,
                            exit_type: ExitType, reason: str):
@@ -288,9 +311,15 @@ class OrderBookEngine:
 
         freqtrade: FreqtradeBot.execute_trade_exit()
         """
+        # Защита от double-close
+        if trade.pair not in self._trades:
+            return
+
         exit_price = (
             snap.bid_price if trade.side == "BUY" else snap.ask_price
         )
+        if not exit_price:
+            exit_price = snap.mid_price or trade.entry_price
         now = datetime.now(timezone.utc)
 
         trade.close(
@@ -314,7 +343,7 @@ class OrderBookEngine:
         dd = (
             (self.metrics["peak_balance"] - total)
             / self.metrics["peak_balance"] * 100
-        )
+        ) if self.metrics["peak_balance"] > 0 else 0.0
         self.metrics["max_drawdown"] = max(self.metrics["max_drawdown"], dd)
 
         self.protection.on_trade_exit(trade)
@@ -339,9 +368,13 @@ class OrderBookEngine:
         profit = trade.current_profit(curr)
 
         if trade.side == "BUY":
-            trade.max_rate = max(trade.max_rate or 0, curr)
+            trade.max_rate = max(
+                (trade.max_rate if trade.max_rate is not None else 0), curr
+            )
         else:
-            trade.min_rate = min(trade.min_rate or float("inf"), curr)
+            trade.min_rate = min(
+                (trade.min_rate if trade.min_rate is not None else float("inf")), curr
+            )
 
         if profit < self.config.trailing_stop_positive_offset:
             return None
@@ -352,29 +385,39 @@ class OrderBookEngine:
             stop = curr * (1 - dist / 100)
             if stop >= curr:
                 return None
-            trade.stop_loss = max(trade.stop_loss or 0, stop)
+            trade.stop_loss = max(
+                (trade.stop_loss if trade.stop_loss is not None else 0), stop
+            )
             if trade.stop_loss >= curr:
                 return trade.stop_loss
         else:
             stop = curr * (1 + dist / 100)
             if stop <= curr:
                 return None
-            trade.stop_loss = min(trade.stop_loss or float("inf"), stop)
+            trade.stop_loss = min(
+                (trade.stop_loss if trade.stop_loss is not None else float("inf")), stop
+            )
             if trade.stop_loss <= curr:
                 return trade.stop_loss
         return None
 
     def _check_hard_stop(self, trade: Trade,
                          snap: OrderBookSnapshot) -> Optional[float]:
-        """freqtrade: hard stoploss."""
-        curr = snap.mid_price
+        """freqtrade: hard stoploss.
+        
+        Используем execution price (bid для BUY, ask для SELL),
+        а не mid_price (консистентно с _close_trade).
+        """
+        curr = (
+            snap.bid_price if trade.side == "BUY" else snap.ask_price
+        )
         if trade.side == "BUY":
             stop = trade.entry_price * (1 + self.config.stoploss / 100)
-            if curr <= stop:
+            if curr <= stop and stop > 0:
                 return stop
         else:
             stop = trade.entry_price * (1 - self.config.stoploss / 100)
-            if curr >= stop:
+            if curr >= stop and stop > 0:
                 return stop
         return None
 
