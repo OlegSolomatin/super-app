@@ -22,14 +22,20 @@ from app.services.trading.orderbook.models import OrderBookSnapshot
 logger = logging.getLogger(__name__)
 
 BINANCE_WS_BASE = "wss://stream.binance.com:9443"
+DEPTH_STREAM_TEMPLATE = "{symbol}@depth20@100ms"
 
-SYMBOL_TO_STREAM = {
-    "BTCUSDT": "btcusdt@depth20@100ms",
-    "ETHUSDT": "ethusdt@depth20@100ms",
-    "SOLUSDT": "solusdt@depth20@100ms",
-    "TONUSDT": "tonusdt@depth20@100ms",
-    "BNBUSDT": "bnbusdt@depth20@100ms",
-}
+
+# Known stream names (used for logging/diagnostic only; generation is dynamic)
+# Any symbol is supported via DEPTH_STREAM_TEMPLATE
+SUPPORTED_STREAMS = frozenset({
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "TONUSDT", "BNBUSDT",
+    "NEARUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT",
+    "DOTUSDT", "LTCUSDT", "LINKUSDT", "UNIUSDT", "ATOMUSDT",
+    "TRXUSDT", "XLMUSDT", "ALGOUSDT", "FTMUSDT", "SANDUSDT",
+    "SHIBUSDT", "MATICUSDT", "APTUSDT", "ARBUSDT", "OPUSDT",
+    "SUIUSDT", "SEIUSDT", "INJUSDT", "TIAUSDT", "PEPEUSDT",
+    "WIFUSDT", "BONKUSDT", "AAVEUSDT", "FILUSDT", "ETCUSDT",
+})
 
 
 class BinanceOrderBookStream:
@@ -47,12 +53,30 @@ class BinanceOrderBookStream:
         self._running = False
         self._reconnect_delay = 1.0
 
+    def _stream_for_pair(self, pair: str) -> str:
+        """Генерирует stream name для любой пары Binance."""
+        return DEPTH_STREAM_TEMPLATE.format(symbol=pair.lower())
+
     async def start(self):
         """Запустить WS и слушать до остановки.
 
         ccxt Pro: Client.connect() + watch()
         """
         self._running = True
+
+        # Проверка: есть ли хоть одна пара для подключения
+        if not self._pairs:
+            logger.error("[OBFetcher] No pairs configured, cannot start")
+            return
+
+        unsupported = [p for p in self._pairs if p.upper() not in SUPPORTED_STREAMS]
+        if unsupported:
+            logger.warning(
+                f"[OBFetcher] Pairs {unsupported} are not in KNOWN set. "
+                f"They are dynamically generated via Binance stream template "
+                f"and may not have data for all snapshots/depths."
+            )
+
         while self._running:
             try:
                 await self._connect_and_listen()
@@ -67,17 +91,17 @@ class BinanceOrderBookStream:
                 self._reconnect_delay = min(self._reconnect_delay * 2, 60.0)
 
     async def _connect_and_listen(self):
-        streams = [
-            SYMBOL_TO_STREAM[p.upper()]
-            for p in self._pairs
-            if p.upper() in SYMBOL_TO_STREAM
-        ]
+        """Подключиться к Binance WS и слушать поток стакана."""
+        # Всегда генерируем stream name динамически — любая пара работает
+        streams = [self._stream_for_pair(p) for p in self._pairs]
+
         if not streams:
-            logger.error(f"[OBFetcher] No known pairs: {self._pairs}")
-            return
+            logger.error(f"[OBFetcher] No pairs configured: {self._pairs}")
+            # Бросаем исключение, чтобы start() сделал паузу с backoff
+            raise ValueError("No pairs configured for Binance stream")
 
         url = f"{BINANCE_WS_BASE}/stream?streams={'/'.join(streams)}"
-        logger.info(f"[OBFetcher] Connecting to {url}")
+        logger.info(f"[OBFetcher] Connecting to Binance WS ({len(streams)} stream(s))")
 
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             try:
