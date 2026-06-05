@@ -147,38 +147,38 @@ class _TradingPageState extends State<TradingPage>
           const SizedBox(height: PfSpacing.lg),
 
           // ── Mode Selector ──────────────────────────────
-          if (!hasRuns)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _ModeCard(
-                      icon: PhosphorIconsFill.chartBar,
-                      title: 'Стратегии\nпо свечам',
-                      subtitle: 'RSI, MACD, ADX,\nсвечные паттерны',
-                      badge: '17 стратегий',
-                      badgeColor: Color(0xFFFCD535),
-                      onTap: () => context.go('/trading/wizard'),
-                    ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ModeCard(
+                    icon: PhosphorIconsFill.chartBar,
+                    title: 'Стратегии\nпо свечам',
+                    subtitle: 'RSI, MACD, ADX,\nсвечные паттерны',
+                    badge: '17 стратегий',
+                    badgeColor: Color(0xFFFCD535),
+                    onTap: () => context.go('/trading/wizard'),
                   ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: _ModeCard(
-                      icon: PhosphorIconsFill.stack,
-                      title: 'Стратегии\nпо ордербуку',
-                      subtitle: 'Дисбаланс стакана,\nспред, моментум',
-                      badge: 'Скоро',
-                      badgeColor: Color(0xFF5E6AD2),
-                      onTap: () => context.go('/trading/orderbook-wizard'),
-                    ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: _ModeCard(
+                    icon: PhosphorIconsFill.stack,
+                    title: 'Стратегии\nпо ордербуку',
+                    subtitle: 'Дисбаланс стакана,\nспред, моментум',
+                    badge: 'Скоро',
+                    badgeColor: Color(0xFF5E6AD2),
+                    onTap: () => context.go('/trading/orderbook-wizard'),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+          const SizedBox(height: PfSpacing.lg),
 
           // ── Pill Tabs ─────────────────────────────────
-          if (hasRuns)
+          if (hasRuns) ...[
             Container(
               margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
               padding: const EdgeInsets.all(3),
@@ -205,10 +205,9 @@ class _TradingPageState extends State<TradingPage>
                 ],
               ),
             ),
-          if (hasRuns) const SizedBox(height: PfSpacing.md),
+            const SizedBox(height: PfSpacing.md),
 
-          // ── Tab Content ───────────────────────────────
-          if (hasRuns)
+            // ── Tab Content ─────────────────────────────
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -232,6 +231,7 @@ class _TradingPageState extends State<TradingPage>
                 ],
               ),
             ),
+          ],
 
           // ── Empty state ───────────────────────────────
           if (!hasRuns) ...[
