@@ -469,6 +469,86 @@ class TradingScheduler:
         """Return a mapping of run_id -> status for all active runs."""
         return {rid: (await self.get_status(rid) or "unknown") for rid in self._tasks}
 
+    async def start_orderbook_run(
+        self,
+        run_id: int,
+        config: dict,  # OrderBookStartRequest as dict
+    ) -> None:
+        """Start an Order Book engine run as an asyncio task.
+
+        Creates OrderBookConfig + Engine, starts it, and tracks the task.
+        The engine creates its own WS stream internally.
+        """
+        from app.services.trading.orderbook.engine import OrderBookEngine
+        from app.services.trading.orderbook.models import OrderBookConfig
+
+        ob_config = OrderBookConfig(
+            pairs=[config.get("pair", "BTCUSDT")],
+            strategy_name=config.get("strategy", "imbalance_scalping"),
+            initial_balance=config.get("initial_balance", 1000.0),
+            max_open_trades=config.get("max_open_trades", 1),
+            imbalance_threshold=0.65,
+            surge_pct=config.get("surge_pct", 20.0),
+            confirmation_ticks=config.get("confirmation_ticks", 3),
+            max_spread_pct=config.get("max_spread", 0.05),
+            max_hold_seconds=config.get("max_hold_seconds", 120),
+            stoploss=config.get("stoploss", -1.0),
+            trailing_stop=True,
+            trailing_stop_positive=config.get("trailing_stop", 0.3),
+            trailing_stop_positive_offset=config.get("trailing_offset", 0.5),
+            cooldown_seconds=config.get("cooldown_seconds", 120),
+        )
+
+        engine = OrderBookEngine(ob_config)
+
+        task = asyncio.create_task(self._run_orderbook_engine(run_id, engine))
+        self._tasks[run_id] = task
+
+    async def _run_orderbook_engine(
+        self,
+        run_id: int,
+        engine,
+    ) -> None:
+        """Execute OrderBook engine and persist results."""
+        from datetime import datetime, timezone
+        from sqlalchemy import select
+
+        from app.core.database import async_session_factory
+        from app.models.trading import OrderBookRun as DBOrderBookRun
+
+        try:
+            await engine.start()
+            # Engine runs until stopped or error
+            # It has its own WS polling loop that blocks
+            await engine._manage_task  # Wait for manage loop to finish
+        except asyncio.CancelledError:
+            logger.info(f"[OBScheduler] Run {run_id} cancelled, stopping engine...")
+            await engine.stop()
+        except Exception:
+            logger.exception(f"[OBScheduler] Run {run_id} failed")
+            async with async_session_factory() as session:
+                stmt = select(DBOrderBookRun).where(DBOrderBookRun.id == run_id)
+                result = await session.execute(stmt)
+                db_run = result.scalar_one_or_none()
+                if db_run:
+                    db_run.status = "error"
+                    db_run.error = "Engine crashed"
+                    db_run.finished_at = datetime.now(timezone.utc)
+                    await session.commit()
+            return
+
+        # Mark as done
+        async with async_session_factory() as session:
+            stmt = select(DBOrderBookRun).where(DBOrderBookRun.id == run_id)
+            result = await session.execute(stmt)
+            db_run = result.scalar_one_or_none()
+            if db_run:
+                db_run.status = "done"
+                db_run.finished_at = datetime.now(timezone.utc)
+                await session.commit()
+
+        self._tasks.pop(run_id, None)
+
 
 # Singleton scheduler instance
 scheduler = TradingScheduler()

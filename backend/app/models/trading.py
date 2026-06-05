@@ -221,3 +221,40 @@ class TradingPairLock(Base):
         return (
             f"<TradingPairLock pair={self.pair} until={self.until}>"
         )
+
+
+class OrderBookRun(Base):
+    """Order Book strategy execution session (imbalance scalping etc.)."""
+
+    __tablename__ = "orderbook_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status = Column(
+        String(20), nullable=False, default="running", index=True
+    )  # running, done, stopped, error
+    pair = Column(String(20), nullable=False, default="BTCUSDT")
+    strategy = Column(String(50), nullable=False, default="imbalance_scalping")
+    initial_balance = Column(Float, nullable=False, default=1000.0)
+    max_open_trades = Column(Integer, nullable=False, default=1)
+    started_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    error = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_ob_runs_user_status", "user_id", "status"),
+        Index("ix_ob_runs_started_at", "started_at"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<OrderBookRun id={self.id} user_id={self.user_id} "
+            f"status={self.status} pair={self.pair} strategy={self.strategy}>"
+        )

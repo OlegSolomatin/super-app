@@ -271,3 +271,73 @@ class TradeListResponse(BaseModel):
 
 # Rebuild models with forward references and __future__ annotations
 TradingRunResponse.model_rebuild()
+
+
+# ── Order Book schemas ───────────────────────────────────────────────
+
+
+class OrderBookStartRequest(BaseModel):
+    """Request body for starting an Order Book strategy run."""
+
+    pair: str = Field(default="BTCUSDT", description="Trading pair")
+    strategy: str = Field(
+        default="imbalance_scalping", description="OB strategy name"
+    )
+    initial_balance: float = Field(
+        default=1000.0, ge=100, le=1_000_000, description="Virtual balance"
+    )
+    max_open_trades: int = Field(
+        default=1, ge=1, le=10, description="Max concurrent trades"
+    )
+    stoploss: float = Field(default=-1.0, ge=-5.0, le=0.0, description="Stop loss %")
+    trailing_stop: float = Field(default=0.3, ge=0, le=2.0, description="Trailing stop %")
+    trailing_offset: float = Field(default=0.5, ge=0, le=2.0, description="Trailing offset %")
+    max_hold_seconds: int = Field(default=120, ge=10, le=600, description="Max hold time")
+    confirmation_ticks: int = Field(default=3, ge=1, le=10)
+    max_spread: float = Field(default=0.05, ge=0.01, le=0.5)
+    cooldown_seconds: int = Field(default=120, ge=10, le=600)
+
+
+class OrderBookRunResponse(BaseModel):
+    """Response model for an Order Book run."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: UUID
+    status: TradingRunStatus
+    pair: str
+    strategy: str
+    initial_balance: float
+    max_open_trades: int
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    error: Optional[str] = None
+
+    @field_validator("user_id", mode="before")
+    @classmethod
+    def coerce_user_id(cls, v: Any) -> UUID:
+        if isinstance(v, UUID):
+            return v
+        if isinstance(v, str):
+            return UUID(v)
+        return v
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def coerce_status(cls, v: Any) -> TradingRunStatus:
+        if isinstance(v, TradingRunStatus):
+            return v
+        if isinstance(v, str):
+            return TradingRunStatus(v)
+        return v
+
+
+class OrderBookRunListResponse(BaseModel):
+    """Paginated list of order book runs."""
+
+    items: List[OrderBookRunResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

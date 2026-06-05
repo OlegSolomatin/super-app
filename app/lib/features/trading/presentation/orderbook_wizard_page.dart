@@ -11,6 +11,7 @@ import 'package:app/shared/widgets/pf_button.dart';
 import 'package:app/shared/widgets/pf_badge.dart';
 import 'package:app/shared/widgets/pf_divider.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
+import 'package:app/features/trading/data/trading_repository.dart';
 
 /// Cтатичные модели данных Order Book визарда.
 
@@ -99,7 +100,9 @@ const _kStepIcons = [
 ];
 
 class OrderBookWizardPage extends StatefulWidget {
-  const OrderBookWizardPage({super.key});
+  final TradingRepository repository;
+
+  const OrderBookWizardPage({super.key, required this.repository});
 
   @override
   State<OrderBookWizardPage> createState() => _OrderBookWizardPageState();
@@ -107,6 +110,7 @@ class OrderBookWizardPage extends StatefulWidget {
 
 class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
   int _currentStep = 0;
+  TradingRepository get _repository => widget.repository;
 
   // Step 0: Pair
   String _selectedPair = 'BTCUSDT';
@@ -1140,11 +1144,29 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
 
   Future<void> _startEngine() async {
     setState(() => _isLoading = true);
-    // TODO: POST /api/v1/orderbook/start с конфигом
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() => _isLoading = false);
-      context.go('/trading');
+    try {
+      await _repository.startOrderBookRun({
+        'pair': _selectedPair,
+        'strategy': _selectedStrategy?.name ?? 'imbalance_scalping',
+        'initial_balance': _balance,
+        'max_open_trades': _maxOpenTrades,
+        'stoploss': _stoploss,
+        'trailing_stop': _trailingStop,
+        'trailing_offset': _trailingOffset,
+        'max_hold_seconds': _maxHoldSeconds,
+        'confirmation_ticks': _confirmationTicks,
+        'max_spread': _maxSpread,
+        'cooldown_seconds': _cooldownSeconds,
+      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+        context.go('/trading');
+      }
+    } catch (e) {
+      debugPrint('[OB START ERROR] $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 }

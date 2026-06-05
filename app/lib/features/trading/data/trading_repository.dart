@@ -126,4 +126,33 @@ class TradingRepository {
     final data = response.data as Map<String, dynamic>;
     return data['cleaned'] as int? ?? 0;
   }
+
+  // ── Order Book methods ────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> startOrderBookRun(Map<String, dynamic> config) async {
+    final response = await _dio.post('/orderbook/start', data: config);
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<({List<Map<String, dynamic>> items, int total})> getOrderBookRuns({
+    String? status,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final response = await _dio.get('/orderbook/runs', queryParameters: {
+      if (status != null && status.isNotEmpty) 'status': status,
+      'page': page,
+      'page_size': pageSize,
+    });
+    final data = response.data as Map<String, dynamic>;
+    final items = (data['items'] as List)
+        .map((e) => e as Map<String, dynamic>)
+        .toList();
+    final total = data['total'] as int;
+    return (items: items, total: total);
+  }
+
+  Future<void> stopOrderBookRun(int runId) async {
+    await _dio.post('/orderbook/stop', queryParameters: {'run_id': runId});
+  }
 }

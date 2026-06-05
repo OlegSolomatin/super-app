@@ -83,7 +83,9 @@ class AppRouter {
       ),
       GoRoute(
         path: '/trading/orderbook-wizard',
-        builder: (context, state) => const OrderBookWizardPage(),
+        builder: (context, state) => OrderBookWizardPage(
+          repository: _tradingRepository,
+        ),
       ),
       GoRoute(
         path: '/trading/run/:id',
