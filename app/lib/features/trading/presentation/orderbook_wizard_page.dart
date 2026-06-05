@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,7 @@ import 'package:app/shared/widgets/pf_badge.dart';
 import 'package:app/shared/widgets/pf_divider.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
+import 'package:app/features/trading/data/models/trading_pair.dart';
 
 /// Cтатичные модели данных Order Book визарда.
 
@@ -112,9 +115,15 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
   int _currentStep = 0;
   TradingRepository get _repository => widget.repository;
 
-  // Step 0: Pair
-  String _selectedPair = 'BTCUSDT';
-  final _pairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'TONUSDT', 'BNBUSDT'];
+  // Step 0: Pair — поиск + infinite scroll
+  String _selectedPairSymbol = 'BTCUSDT';
+  final List<TradingPair> _loadedPairs = [];
+  final TextEditingController _searchPairController = TextEditingController();
+  final ScrollController _pairScrollController = ScrollController();
+  Timer? _searchTimer;
+  int _pairPage = 1;
+  bool _hasMorePairs = true;
+  bool _loadingPairs = false;
 
   // Step 1: Strategy
   _ObStrategyOption? _selectedStrategy;
@@ -142,6 +151,30 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
   void initState() {
     super.initState();
     _selectedStrategy = _kObStrategies.firstWhere((s) => s.enabled);
+    _loadPairs();
+    _pairScrollController.addListener(() {
+      if (_pairScrollController.position.pixels >=
+          _pairScrollController.position.maxScrollExtent - 200) {
+        if (_hasMorePairs && !_loadingPairs) {
+          setState(() => _pairPage++);
+          _loadPairs();
+        }
+      }
+    });
+    _searchPairController.addListener(() {
+      _searchTimer?.cancel();
+      _searchTimer = Timer(const Duration(milliseconds: 300), () {
+        _loadPairs(refresh: true);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _searchPairController.dispose();
+    _pairScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -248,6 +281,87 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
     }
   }
 
+  // ── Загрузка пар ──────────────────────────────────────────────────
+
+  Future<void> _loadPairs({bool refresh = false}) async {
+    if (_loadingPairs) return;
+    if (refresh) {
+      _loadedPairs.clear();
+      _pairPage = 1;
+      _hasMorePairs = true;
+    }
+    setState(() => _loadingPairs = true);
+    try {
+      final result = await _repository.getPairs(
+        search: _searchPairController.text.isNotEmpty
+            ? _searchPairController.text
+            : null,
+        page: _pairPage,
+        pageSize: 50,
+      );
+      if (mounted) {
+        setState(() {
+          _loadedPairs.addAll(result.items);
+          _hasMorePairs = _loadedPairs.length < result.total;
+          _loadingPairs = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingPairs = false);
+    }
+  }
+
+  // ── Helper: иконка "?" с подсказкой ──────────────────────────────
+
+  void _showHelp(String title, String body) {
+    final pc = PfColors.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(PfSpacing.lg),
+        decoration: BoxDecoration(
+          color: pc.backgroundC,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: pc.mutedC,
+                  borderRadius: PfRadius.borderRadiusPill,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(title, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Text(body, style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC)),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _helpIcon(String title, String body) {
+    return GestureDetector(
+      onTap: () => _showHelp(title, body),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Icon(
+          Icons.help_outline,
+          size: 16,
+          color: PfColors.mutedForeground.withValues(alpha: 0.6),
+        ),
+      ),
+    );
+  }
+
   // ── Step Content Router ────────────────────────────────────────────
   Widget _buildStepContent(ThemeData theme, PfColors pc) {
     return SingleChildScrollView(
@@ -283,15 +397,60 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Торговая пара для Order Book стратегии',
+          'Поиск и выбор торговой пары для Order Book стратегии',
           style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
         ),
-        const SizedBox(height: 24),
-        ..._pairs.map((p) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+        const SizedBox(height: 16),
+        // Search field
+        Container(
+          decoration: BoxDecoration(
+            color: pc.surfaceC,
+            borderRadius: PfRadius.borderRadiusMd,
+            border: Border.all(color: pc.borderC),
+          ),
+          child: TextField(
+            controller: _searchPairController,
+            style: PfTypography.bodyMd.copyWith(color: pc.foregroundC),
+            decoration: InputDecoration(
+              hintText: 'Поиск пары...',
+              hintStyle: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              prefixIcon: PhosphorIcon(
+                PhosphorIconsFill.magnifyingGlass,
+                size: 18,
+                color: pc.mutedForegroundC,
+              ),
+              suffixIcon: _searchPairController.text.isNotEmpty
+                  ? GestureDetector(
+                      onTap: () {
+                        _searchPairController.clear();
+                        _loadPairs(refresh: true);
+                      },
+                      child: PhosphorIcon(
+                        PhosphorIconsFill.x,
+                        size: 16,
+                        color: pc.mutedForegroundC,
+                      ),
+                    )
+                  : null,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (_loadingPairs && _loadedPairs.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        const SizedBox(height: 8),
+        // Pair list
+        ..._loadedPairs.map((pair) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
           child: PfCard(
-            variant: _selectedPair == p ? 'trading' : 'default',
-            onTap: () => setState(() => _selectedPair = p),
+            variant: _selectedPairSymbol == pair.symbol ? 'trading' : 'default',
+            onTap: () => setState(() => _selectedPairSymbol = pair.symbol),
             padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
             child: Row(
               children: [
@@ -299,34 +458,44 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: _selectedPair == p
+                    color: _selectedPairSymbol == pair.symbol
                         ? theme.colorScheme.primary.withValues(alpha: 0.12)
                         : pc.mutedC,
                     borderRadius: PfRadius.borderRadiusMd,
                   ),
                   child: Center(
-                    child: PhosphorIcon(
-                      _selectedPair == p
-                          ? PhosphorIconsFill.checkCircle
-                          : PhosphorIconsFill.coin,
-                      size: 20,
-                      color: _selectedPair == p
-                          ? theme.colorScheme.primary
-                          : pc.mutedForegroundC,
+                    child: Text(
+                      pair.base.isNotEmpty ? pair.base[0] : '?',
+                      style: PfTypography.titleMd.copyWith(
+                        color: _selectedPairSymbol == pair.symbol
+                            ? theme.colorScheme.primary
+                            : pc.mutedForegroundC,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    p,
-                    style: PfTypography.titleMd.copyWith(
-                      color: pc.foregroundC,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pair.symbol,
+                        style: PfTypography.titleMd.copyWith(
+                          color: pc.foregroundC,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (pair.base.isNotEmpty)
+                        Text(
+                          '${pair.base}/${pair.quote}',
+                          style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+                        ),
+                    ],
                   ),
                 ),
-                if (_selectedPair == p)
+                if (_selectedPairSymbol == pair.symbol)
                   Container(
                     width: 8,
                     height: 8,
@@ -339,6 +508,47 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
             ),
           ),
         )),
+        // Load more trigger
+        if (_hasMorePairs && _loadingPairs)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+        if (_hasMorePairs && !_loadingPairs)
+          GestureDetector(
+            onTap: () {
+              setState(() => _pairPage++);
+              _loadPairs();
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'Загрузить ещё... (${_loadedPairs.length} показано)',
+                  style: PfTypography.bodySm.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (!_hasMorePairs && _loadedPairs.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Center(
+              child: Text(
+                'Все пары загружены (${_loadedPairs.length})',
+                style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -487,13 +697,14 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            PhosphorIcon(_kStepIcons[2], size: 20, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Text('Баланс и лимиты', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
-          ],
-        ),
+            Row(
+              children: [
+                PhosphorIcon(_kStepIcons[2], size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('Баланс и лимиты', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+                _helpIcon('Баланс', 'Виртуальный баланс для симуляции торговли. Средства не настоящие — вы не рискуете реальным капиталом. Можно изменить в любой момент до запуска.'),
+              ],
+            ),
         const SizedBox(height: 8),
         Text(
           'Виртуальный баланс для симуляции торговли',
@@ -1017,7 +1228,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
           padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
           child: Column(
             children: [
-              _summaryRow(pc, 'Пара', _selectedPair, theme.colorScheme.primary),
+              _summaryRow(pc, 'Пара', _selectedPairSymbol, theme.colorScheme.primary),
               const PfDivider(indent: 0),
               _summaryRow(pc, 'Стратегия', _selectedStrategy?.label ?? '', theme.colorScheme.primary),
               const PfDivider(indent: 0),
@@ -1146,7 +1357,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
     setState(() => _isLoading = true);
     try {
       await _repository.startOrderBookRun({
-        'pair': _selectedPair,
+        'pair': _selectedPairSymbol,
         'strategy': _selectedStrategy?.name ?? 'imbalance_scalping',
         'initial_balance': _balance,
         'max_open_trades': _maxOpenTrades,

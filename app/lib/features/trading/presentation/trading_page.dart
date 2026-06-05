@@ -169,7 +169,7 @@ class _TradingPageState extends State<TradingPage>
                     subtitle: 'Дисбаланс стакана,\nспред, моментум',
                     badge: 'Скоро',
                     badgeColor: Color(0xFF5E6AD2),
-                    onTap: () => context.go('/trading/orderbook-wizard'),
+                    onTap: () => _showOrderBookModeSelector(),
                   ),
                 ),
               ],
@@ -319,6 +319,187 @@ class _TradingPageState extends State<TradingPage>
             onTap: () => context.go('/trading/run/${run.id}'),
           );
         },
+      ),
+    );
+  }
+
+  /// Show Order Book mode selector bottom sheet.
+  void _showOrderBookModeSelector() {
+    final pc = PfColors.of(context);
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(PfSpacing.lg),
+        decoration: BoxDecoration(
+          color: pc.backgroundC,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: pc.mutedC,
+                  borderRadius: PfRadius.borderRadiusPill,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Режим торговли',
+              style: PfTypography.titleLg.copyWith(color: pc.foregroundC),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Выберите режим для Order Book стратегии',
+              style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+            ),
+            const SizedBox(height: 24),
+            // Virtual mode
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(ctx);
+                context.go('/trading/orderbook-wizard');
+              },
+              child: Container(
+                padding: const EdgeInsets.all(PfSpacing.md),
+                decoration: BoxDecoration(
+                  color: pc.cardC,
+                  borderRadius: PfRadius.borderRadiusLg,
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                        borderRadius: PfRadius.borderRadiusMd,
+                      ),
+                      child: Center(
+                        child: PhosphorIcon(
+                          PhosphorIconsFill.flask,
+                          size: 24,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Virtual Mode',
+                            style: PfTypography.titleMd.copyWith(
+                              color: pc.foregroundC,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Реальные данные Binance, виртуальный баланс.\nБез риска для капитала.',
+                            style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: PfColors.success.withValues(alpha: 0.12),
+                        borderRadius: PfRadius.borderRadiusPill,
+                      ),
+                      child: Text(
+                        'Доступен',
+                        style: PfTypography.caption.copyWith(
+                          color: PfColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Real mode — заглушка
+            Container(
+              padding: const EdgeInsets.all(PfSpacing.md),
+              decoration: BoxDecoration(
+                color: pc.cardC.withValues(alpha: 0.5),
+                borderRadius: PfRadius.borderRadiusLg,
+                border: Border.all(color: pc.borderC),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: pc.mutedC,
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Center(
+                      child: PhosphorIcon(
+                        PhosphorIconsFill.coins,
+                        size: 24,
+                        color: pc.mutedForegroundC,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Real Mode',
+                          style: PfTypography.titleMd.copyWith(
+                            color: pc.mutedForegroundC,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Реальный баланс и сделки на Binance.\nТребуется API ключ.',
+                          style: PfTypography.bodySm.copyWith(
+                            color: pc.mutedForegroundC.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: pc.mutedC,
+                      borderRadius: PfRadius.borderRadiusPill,
+                    ),
+                    child: Text(
+                      'Скоро',
+                      style: PfTypography.caption.copyWith(
+                        color: pc.mutedForegroundC,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
