@@ -49,6 +49,37 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) context.go('/');
     } catch (e) {
       _logError(e);
+      if (mounted) {
+        String message;
+        if (e is DioException) {
+          if (e.response?.data is Map) {
+            final data = e.response!.data as Map;
+            message = data.containsKey('detail')
+                ? data['detail'].toString()
+                : 'Ошибка сервера (${e.response?.statusCode})';
+          } else if (e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.connectionError) {
+            message = 'Сервер не отвечает. Проверьте соединение.';
+          } else if (e.type == DioExceptionType.badResponse) {
+            message = 'Ошибка сервера (${e.response?.statusCode})';
+          } else {
+            message = 'Не удалось войти. Попробуйте позже.';
+          }
+        } else {
+          message = 'Неизвестная ошибка';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: PfColors.destructive,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

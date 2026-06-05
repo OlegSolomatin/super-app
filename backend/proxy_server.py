@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 # ── Super-App ──────────────────────────────────────────
 FLUTTER_DIST = Path.home() / "workspace/super-app/app/build/web"
@@ -206,6 +207,28 @@ class SuperAppProxy(BaseHTTPRequestHandler):
                 self.send_header("Expires", "0")
                 self.end_headers()
                 self.wfile.write(raw_body)
+        except HTTPError as e:
+            # Pass through 4xx/5xx status codes and bodies from the backend
+            raw_body = e.read()
+            content_type = e.headers.get("Content-Type", "application/json")
+            content_encoding = e.headers.get("Content-Encoding", "")
+
+            if content_encoding == "gzip" or (
+                len(raw_body) >= 2 and raw_body[:2] == b'\x1f\x8b'
+            ):
+                try:
+                    raw_body = gzip.decompress(raw_body)
+                except Exception:
+                    pass
+
+            self.send_response(e.code)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+            self.end_headers()
+            self.wfile.write(raw_body)
         except Exception as e:
             self.send_response(502)
             self.send_header("Content-Type", "application/json; charset=utf-8")
