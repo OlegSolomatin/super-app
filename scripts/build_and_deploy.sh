@@ -28,6 +28,9 @@ if [ -n "$BUILD_NUMBER" ]; then
   # Обновляем build number
   NEW_VERSION="1.0.0+$BUILD_NUMBER"
   sed -i "s/^version: .*/version: $NEW_VERSION/" pubspec.yaml
+  # Обновляем app_version.dart
+  echo "🎯 Обновляю app_version.dart..."
+  sed -i "s/const String appVersion = '.*'/const String appVersion = '$NEW_VERSION'/" "$PROJECT_DIR/app/lib/core/app_version.dart"
   echo "📝 Новая версия: $NEW_VERSION"
 fi
 

@@ -11,6 +11,7 @@ import 'package:app/shared/tokens/pf_spacing.dart';
 import 'package:app/shared/tokens/pf_typography.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
 import 'package:app/shared/widgets/pf_divider.dart';
+import 'package:app/core/app_version.dart';
 
 /// Navigation destination for sidebar.
 class NavDestination {
@@ -317,6 +318,7 @@ class AdaptiveScaffold extends StatelessWidget {
 
           if (!isCompact) _buildUserSection(context, section),
           if (isCompact) _buildCompactUserSection(context),
+          if (!isCompact) _buildVersionBadge(pc),
         ],
       ),
     );
@@ -447,6 +449,22 @@ class AdaptiveScaffold extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─── Build Version Badge ─────────────────────────────────────────────
+  Widget _buildVersionBadge(PfColors pc) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(PfSpacing.sm, 0, PfSpacing.sm, PfSpacing.sm),
+      child: Text(
+        appVersion,
+        style: PfTypography.caption.copyWith(
+          color: pc.mutedForegroundC.withValues(alpha: 0.4),
+          fontSize: 10,
+        ),
+        maxLines: 1,
+        textAlign: TextAlign.center,
       ),
     );
   }
