@@ -36,11 +36,19 @@ from app.services.trading.orderbook.strategies.base import (
 from app.services.trading.orderbook.strategies.imbalance_scalping import (
     ImbalanceScalpingStrategy,
 )
+from app.services.trading.orderbook.strategies.spread_capture import (
+    SpreadCaptureStrategy,
+)
+from app.services.trading.orderbook.strategies.order_flow_momentum import (
+    OrderFlowMomentumStrategy,
+)
 
 logger = logging.getLogger(__name__)
 
 STRATEGY_REGISTRY = {
     "imbalance_scalping": ImbalanceScalpingStrategy,
+    "spread_capture": SpreadCaptureStrategy,
+    "order_flow_momentum": OrderFlowMomentumStrategy,
 }
 
 

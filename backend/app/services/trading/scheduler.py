@@ -498,6 +498,14 @@ class TradingScheduler:
             trailing_stop_positive_offset=config.get("trailing_offset", 0.5),
             cooldown_seconds=config.get("cooldown_seconds", 120),
             max_runtime_hours=config.get("auto_stop_hours", 0),
+            # Spread Capture params
+            min_spread_pct=config.get("min_spread_pct", 0.02),
+            spread_entry_threshold=config.get("spread_entry_threshold", 0.03),
+            spread_exit_threshold=config.get("spread_exit_threshold", 0.01),
+            # Order Flow Momentum params
+            flow_threshold_volume=config.get("flow_threshold_volume", 10000.0),
+            min_flow_signals=config.get("min_flow_signals", 2),
+            flow_exit_seconds=config.get("flow_exit_seconds", 30),
         )
 
         engine = OrderBookEngine(ob_config)

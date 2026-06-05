@@ -77,14 +77,52 @@ const _kObStrategies = [
   _ObStrategyOption(
     name: 'spread_capture',
     label: 'Spread Capture',
-    description: 'Торговля по спреду / Market Making Lite (скоро)',
-    enabled: false,
+    description: 'Торговля по спреду — расширение/сужение спреда как сигнал',
+    params: [
+      _ObStrategyParam(
+        key: 'min_spread_pct',
+        label: 'Мин. спред',
+        unit: '%',
+        defaultValue: 0.02, min: 0.01, max: 0.1, divisions: 9,
+      ),
+      _ObStrategyParam(
+        key: 'spread_entry_threshold',
+        label: 'Порог входа',
+        unit: '%',
+        defaultValue: 0.03, min: 0.01, max: 0.1, divisions: 9,
+      ),
+      _ObStrategyParam(
+        key: 'spread_exit_threshold',
+        label: 'Порог выхода',
+        unit: '%',
+        defaultValue: 0.01, min: 0.005, max: 0.05, divisions: 9,
+      ),
+    ],
   ),
   _ObStrategyOption(
     name: 'order_flow_momentum',
     label: 'Order Flow Momentum',
-    description: 'Агрессивные market orders как сигнал (скоро)',
-    enabled: false,
+    description: 'Агрессивные market orders как сигнал движения цены',
+    params: [
+      _ObStrategyParam(
+        key: 'flow_threshold_volume',
+        label: 'Порог объёма',
+        unit: ' USDT',
+        defaultValue: 10000, min: 1000, max: 100000, divisions: 99,
+      ),
+      _ObStrategyParam(
+        key: 'min_flow_signals',
+        label: 'Мин. сигналов',
+        unit: '',
+        defaultValue: 2, min: 1, max: 5, divisions: 4,
+      ),
+      _ObStrategyParam(
+        key: 'flow_exit_seconds',
+        label: 'Выход через',
+        unit: 'с',
+        defaultValue: 30, min: 10, max: 120, divisions: 11,
+      ),
+    ],
   ),
 ];
 
@@ -130,6 +168,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
 
   // Step 1: Strategy
   _ObStrategyOption? _selectedStrategy;
+  final Map<String, double> _strategyParams = {};
 
   // Step 2: Balance
   double _balance = 1000;
@@ -165,6 +204,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       duration: const Duration(milliseconds: 300),
     );
     _selectedStrategy = _kObStrategies.firstWhere((s) => s.enabled);
+    for (final p in _selectedStrategy!.params) {
+      _strategyParams[p.key] = p.defaultValue;
+    }
     _loadPairs();
     _pairScrollController.addListener(() {
       if (_pairScrollController.position.pixels >=
@@ -702,7 +744,13 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     final selected = _selectedStrategy?.name == s.name;
     return PfCard(
       variant: selected ? 'trading' : 'default',
-      onTap: s.enabled ? () => setState(() => _selectedStrategy = s) : null,
+              onTap: s.enabled ? () {
+                _strategyParams.clear();
+                for (final p in s.params) {
+                  _strategyParams[p.key] = p.defaultValue;
+                }
+                setState(() => _selectedStrategy = s);
+              } : null,
       padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -766,7 +814,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   }
 
   Widget _buildParamSlider(_ObStrategyParam param, ThemeData theme, PfColors pc) {
-    // Хардкодим значения параметров для MVP
+    final val = _strategyParams[param.key] ?? param.defaultValue;
     return Padding(
       padding: const EdgeInsets.only(bottom: PfSpacing.md),
       child: PfCard(
@@ -779,7 +827,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
               children: [
                 Text(param.label, style: PfTypography.bodyMd.copyWith(color: pc.foregroundC)),
                 Text(
-                  '${param.defaultValue.toStringAsFixed(param.defaultValue < 1 ? 2 : 0)}${param.unit}',
+                  '${val.toStringAsFixed(val < 1 ? 2 : 0)}${param.unit}',
                   style: PfTypography.titleMd.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w600,
@@ -788,12 +836,13 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
               ],
             ),
             _buildCustomSlider(
-              value: param.defaultValue,
+              value: val,
               min: param.min,
               max: param.max,
               divisions: param.divisions,
+              label: '${val.toStringAsFixed(val < 1 ? 2 : 0)}${param.unit}',
               theme: theme, pc: pc,
-              onChange: (_) {}, // MVP — readonly пока
+              onChange: (v) => setState(() => _strategyParams[param.key] = v),
             ),
           ],
         ),
@@ -1626,7 +1675,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   Future<void> _startEngine() async {
     setState(() => _isLoading = true);
     try {
-      final response = await _repository.startOrderBookRun({
+      final request = <String, dynamic>{
         'pair': _selectedPairSymbol,
         'strategy': _selectedStrategy?.name ?? 'imbalance_scalping',
         'initial_balance': _balance,
@@ -1638,7 +1687,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         'confirmation_ticks': _confirmationTicks,
         'max_spread': _maxSpread,
         'cooldown_seconds': _cooldownSeconds,
-      });
+      };
+      // Add strategy-specific params
+      for (final entry in _strategyParams.entries) {
+        request[entry.key] = entry.value;
+      }
+      final response = await _repository.startOrderBookRun(request);
       if (mounted) {
         setState(() => _isLoading = false);
         final runId = response['id'] as int?;

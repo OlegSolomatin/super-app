@@ -177,6 +177,18 @@ class OrderBookConfig:
     min_trade_interval: int = 10
     max_runtime_hours: int = 0  # 0 = unlimited
 
+    # Strategy 2: Spread Capture
+    min_spread_pct: float = 0.02
+    spread_entry_threshold: float = 0.03
+    spread_exit_threshold: float = 0.01
+    spread_baseline_window: int = 20
+
+    # Strategy 3: Order Flow Momentum
+    flow_threshold_volume: float = 10000.0
+    flow_window_seconds: int = 10
+    min_flow_signals: int = 2
+    flow_exit_seconds: int = 30
+
 
 class OrderBookCache:
     """Кольцевой буфер снапшотов.

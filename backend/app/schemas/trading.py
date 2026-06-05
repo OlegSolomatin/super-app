@@ -300,6 +300,16 @@ class OrderBookStartRequest(BaseModel):
         default=0, ge=0, le=72, description="Auto-stop after N hours (0 = unlimited)"
     )
 
+    # Spread Capture params
+    min_spread_pct: Optional[float] = Field(default=None, ge=0.01, le=1.0)
+    spread_entry_threshold: Optional[float] = Field(default=None, ge=0.01, le=1.0)
+    spread_exit_threshold: Optional[float] = Field(default=None, ge=0.001, le=1.0)
+
+    # Order Flow Momentum params
+    flow_threshold_volume: Optional[float] = Field(default=None, ge=100, le=1_000_000)
+    min_flow_signals: Optional[int] = Field(default=None, ge=1, le=10)
+    flow_exit_seconds: Optional[int] = Field(default=None, ge=5, le=300)
+
 
 class OrderBookRunResponse(BaseModel):
     """Response model for an Order Book run."""
