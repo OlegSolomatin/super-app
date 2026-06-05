@@ -16,6 +16,7 @@ import 'package:app/shared/widgets/pf_button.dart';
 import 'package:app/shared/widgets/pf_divider.dart';
 import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
+import 'package:app/features/trading/data/strategy_names.dart';
 
 class TradingPage extends StatefulWidget {
   final TradingRepository repository;
@@ -566,6 +567,7 @@ class _TradingPageState extends State<TradingPage>
           final strategy = run['strategy'] as String? ?? 'N/A';
           return PfCard(
             padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+            onTap: () => context.go('/trading/ob-run/${run['id']}'),
             child: Row(children: [
               Container(width: 40, height: 40,
                 decoration: BoxDecoration(
@@ -710,7 +712,7 @@ class _TradingRunCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  run.strategyName ?? run.config['strategy'] ?? 'Стратегия',
+                  translateStrategy(run.strategyName ?? run.config['strategy']),
                   style: PfTypography.titleMd.copyWith(color: pc.foregroundC),
                 ),
               ),

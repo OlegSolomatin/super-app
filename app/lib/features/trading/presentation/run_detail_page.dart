@@ -15,6 +15,7 @@ import 'package:app/shared/widgets/pf_divider.dart';
 import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/models/trading_trade.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
+import 'package:app/features/trading/data/strategy_names.dart';
 
 class TradingRunDetailPage extends StatefulWidget {
   final String runId;
@@ -102,7 +103,7 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
   @override
   Widget build(BuildContext context) {
     final pc = PfColors.of(context);
-    final name = _run?.strategyName ?? 'Детали запуска';
+    final name = translateStrategy(_run?.strategyName) ?? 'Детали запуска';
 
     return AdaptiveScaffold(
       title: name,
@@ -192,7 +193,7 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
             children: [
               Expanded(
                 child: Text(
-                  run.strategyName ?? run.config['strategy'] ?? 'Стратегия',
+                  translateStrategy(run.strategyName ?? run.config['strategy']),
                   style: PfTypography.titleLg.copyWith(color: pc.foregroundC),
                 ),
               ),
@@ -220,10 +221,13 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
     );
   }
 
-  // ─── Info Card ──────────────────────────────────────────────────
+  // ─── Info Card: динамические настройки из config ─────────────────
   Widget _buildInfoCard() {
     final pc = PfColors.of(context);
     final run = _run!;
+    final cfg = run.config;
+    final _skipKeys = {'strategy', 'virtual_balance'};
+
     return PfCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,11 +239,47 @@ class _TradingRunDetailPageState extends State<TradingRunDetailPage> {
           const SizedBox(height: PfSpacing.sm),
           const PfDivider(),
           const SizedBox(height: PfSpacing.sm),
-          _InfoRow(label: 'Стратегия', value: run.config['strategy'] ?? '—'),
-          _InfoRow(label: 'Пара', value: run.config['pair'] ?? '—'),
-          _InfoRow(label: 'Таймфрейм', value: run.config['timeframe'] ?? '—'),
-          _InfoRow(label: 'Плечо', value: 'x${run.config['leverage'] ?? '1'}'),
-          _InfoRow(label: 'Баланс', value: '\$${(run.config['balance'] ?? 1000).toString()}'),
+
+          // Пропускаем ключи, которые показываем отдельно
+
+          // Все настройки из config
+          ...cfg.entries
+              .where((e) => !_skipKeys.contains(e.key))
+              .map((e) => _InfoRow(
+                    label: translateConfigKey(e.key),
+                    value: formatConfigValue(e.value),
+                  )),
+
+          const SizedBox(height: PfSpacing.sm),
+          const PfDivider(),
+          const SizedBox(height: PfSpacing.sm),
+
+          // Баланс: до и после
+          Text(
+            'Баланс',
+            style: PfTypography.titleMd.copyWith(
+              fontSize: 14,
+              color: pc.foregroundC,
+            ),
+          ),
+          const SizedBox(height: PfSpacing.xs),
+          _InfoRow(
+            label: 'Стартовый',
+            value: '\$${formatConfigValue(run.startingBalance)}',
+          ),
+          if (run.finalBalance != null || run.status != 'running') ...[
+            const SizedBox(height: 2),
+            _InfoRow(
+              label: run.status == 'running' ? 'Текущий' : 'Итоговый',
+              value: '\$${formatConfigValue(run.finalBalance ?? run.startingBalance)}',
+              valueColor: run.finalBalance != null
+                  ? (run.finalBalance! >= (run.startingBalance ?? 0)
+                      ? PfColors.success
+                      : PfColors.destructive)
+                  : null,
+            ),
+          ],
+          const SizedBox(height: PfSpacing.sm),
           _InfoRow(label: 'Дата запуска', value: _formatDate(run.createdAt)),
         ],
       ),
@@ -319,12 +359,14 @@ class _StatCell extends StatelessWidget {
   final String value;
   final bool mono;
   final Color? color;
+  final bool small;
 
   const _StatCell({
     required this.label,
     required this.value,
     this.mono = false,
     this.color,
+    this.small = false,
   });
 
   @override
@@ -335,14 +377,22 @@ class _StatCell extends StatelessWidget {
       children: [
         Text(
           label,
-          style: PfTypography.caption.copyWith(color: pc.mutedForegroundC),
+          style: PfTypography.caption.copyWith(
+            color: pc.mutedForegroundC,
+            fontSize: small ? 9 : null,
+          ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: small ? 2 : 4),
         Text(
           value,
-          style: mono
-              ? PfTypography.number.copyWith(color: color ?? pc.foregroundC)
-              : PfTypography.bodyMd.copyWith(color: color ?? pc.foregroundC),
+          style: small
+              ? PfTypography.caption.copyWith(
+                  color: color ?? pc.foregroundC,
+                  fontWeight: FontWeight.w500,
+                )
+              : mono
+                  ? PfTypography.number.copyWith(color: color ?? pc.foregroundC)
+                  : PfTypography.bodyMd.copyWith(color: color ?? pc.foregroundC),
           overflow: TextOverflow.ellipsis,
         ),
       ],
@@ -354,8 +404,13 @@ class _StatCell extends StatelessWidget {
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
+  final Color? valueColor;
 
-  const _InfoRow({required this.label, required this.value});
+  const _InfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +429,10 @@ class _InfoRow extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: PfTypography.bodyMd.copyWith(color: pc.foregroundC),
+              style: PfTypography.bodySm.copyWith(
+                color: valueColor ?? pc.foregroundC,
+                fontWeight: FontWeight.w500,
+              ),
               textAlign: TextAlign.end,
             ),
           ),
@@ -485,7 +543,28 @@ class _TradeCard extends StatelessWidget {
               ),
             ],
           ),
-
+          const SizedBox(height: PfSpacing.sm),
+          // Date & time: entry → exit
+          Row(
+            children: [
+              Expanded(
+                child: _StatCell(
+                  label: '🟢 Вход',
+                  value: '${trade.entryDate} ${trade.entryTimeStr}',
+                  color: pc.foregroundC,
+                  small: true,
+                ),
+              ),
+              Expanded(
+                child: _StatCell(
+                  label: '🔴 Выход',
+                  value: trade.exitDateTimeStr,
+                  color: trade.exitTime != null ? pc.foregroundC : pc.mutedForegroundC,
+                  small: true,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

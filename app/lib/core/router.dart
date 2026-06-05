@@ -7,6 +7,7 @@ import 'package:app/features/home/presentation/home_page.dart';
 import 'package:app/features/trading/presentation/trading_page.dart';
 import 'package:app/features/trading/presentation/wizard_page.dart';
 import 'package:app/features/trading/presentation/orderbook_wizard_page.dart';
+import 'package:app/features/trading/presentation/orderbook_run_detail_page.dart';
 import 'package:app/features/trading/presentation/run_detail_page.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/admin/presentation/agents_page.dart';
@@ -92,6 +93,16 @@ class AppRouter {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return TradingRunDetailPage(
+            runId: id,
+            repository: _tradingRepository,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/trading/ob-run/:id',
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return OrderBookRunDetailPage(
             runId: id,
             repository: _tradingRepository,
           );

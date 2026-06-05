@@ -2032,24 +2032,34 @@ class _PairTile extends StatelessWidget {
   }
 
   Widget _coinLetterBox(ThemeData theme) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: isSelected
-            ? theme.colorScheme.primary.withValues(alpha: 0.2)
-            : theme.disabledColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Text(
-          pair.base.substring(0, 1),
-          style: TextStyle(
+    final symbol = pair.base.toLowerCase();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.asset(
+        'assets/icons/crypto/$symbol.png',
+        width: 36,
+        height: 36,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
             color: isSelected
-                ? theme.colorScheme.primary
-                : theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+                ? theme.colorScheme.primary.withValues(alpha: 0.2)
+                : theme.disabledColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              pair.base.substring(0, 1),
+              style: TextStyle(
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
           ),
         ),
       ),
