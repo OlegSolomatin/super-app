@@ -6,12 +6,18 @@ import 'package:app/shared/tokens/pf_radius.dart';
 import 'package:app/shared/tokens/pf_spacing.dart';
 import 'package:app/shared/tokens/pf_typography.dart';
 import 'package:app/shared/widgets/adaptive_scaffold.dart';
+import 'package:app/shared/widgets/pf_card.dart';
 import 'package:app/shared/widgets/pf_button.dart';
+import 'package:app/shared/widgets/pf_badge.dart';
+import 'package:app/shared/widgets/pf_divider.dart';
+import 'package:app/shared/widgets/responsive_layout.dart';
 
-/// Параметр стратегии Order Book.
+/// Cтатичные модели данных Order Book визарда.
+
 class _ObStrategyParam {
   final String key;
   final String label;
+  final String unit;
   final double defaultValue;
   final double min;
   final double max;
@@ -20,6 +26,7 @@ class _ObStrategyParam {
   const _ObStrategyParam({
     required this.key,
     required this.label,
+    this.unit = '',
     required this.defaultValue,
     this.min = 0,
     this.max = 100,
@@ -27,12 +34,10 @@ class _ObStrategyParam {
   });
 }
 
-/// Модель стратегии Order Book.
 class _ObStrategyOption {
   final String name;
   final String label;
   final String description;
-  final Color color;
   final bool enabled;
   final List<_ObStrategyParam> params;
 
@@ -40,27 +45,27 @@ class _ObStrategyOption {
     required this.name,
     required this.label,
     required this.description,
-    this.color = const Color(0xFF5E6AD2),
     this.enabled = true,
     this.params = const [],
   });
 }
 
-/// Доступные OB-стратегии.
 const _kObStrategies = [
   _ObStrategyOption(
     name: 'imbalance_scalping',
     label: 'Imbalance Scalping',
-    description: 'Ловит дисбаланс bid/ask с 3-тик подтверждением',
+    description: 'Ловит дисбаланс Bid/Ask с 3-тик подтверждением',
     params: [
       _ObStrategyParam(
         key: 'imbalance_threshold',
         label: 'Порог дисбаланса',
+        unit: '%',
         defaultValue: 0.65, min: 0.55, max: 0.85, divisions: 30,
       ),
       _ObStrategyParam(
         key: 'surge_pct',
-        label: 'Всплеск объёма %',
+        label: 'Всплеск объёма',
+        unit: '%',
         defaultValue: 20, min: 5, max: 50, divisions: 45,
       ),
     ],
@@ -77,6 +82,20 @@ const _kObStrategies = [
     description: 'Агрессивные market orders как сигнал (скоро)',
     enabled: false,
   ),
+];
+
+/// Короткие подписи под шагами.
+const _kStepLabels = ['Пара', 'Стратегия', 'Баланс', 'Риски', 'Точность', 'Защиты', 'Сводка'];
+
+/// Иконки шагов.
+const _kStepIcons = [
+  PhosphorIconsFill.coin,
+  PhosphorIconsFill.chartLineUp,
+  PhosphorIconsFill.wallet,
+  PhosphorIconsFill.shieldCheck,
+  PhosphorIconsFill.magnifyingGlassPlus,
+  PhosphorIconsFill.lockKey,
+  PhosphorIconsFill.listChecks,
 ];
 
 class OrderBookWizardPage extends StatefulWidget {
@@ -124,95 +143,195 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
   @override
   Widget build(BuildContext context) {
     final pc = PfColors.of(context);
+    final theme = Theme.of(context);
     return AdaptiveScaffold(
       title: 'Order Book стратегия',
       currentPath: '/trading/orderbook-wizard',
       showBackButton: true,
-      body: Column(
-        children: [
-          // Step indicator
-          Padding(
-            padding: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.md, PfSpacing.lg, 0),
-            child: Row(
-              children: List.generate(7, (i) {
-                final isActive = i <= _currentStep;
-                return Expanded(
-                  child: Container(
-                    height: 3,
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? PfColors.accentAdmin
-                          : pc.borderC,
-                      borderRadius: PfRadius.borderRadiusPill,
-                    ),
-                  ),
-                );
-              }),
+      body: ConstrainedContent(
+        maxWidth: 720,
+        child: Column(
+          children: [
+            _buildStepProgressBar(theme, pc),
+            Expanded(
+              child: _buildStepContent(theme, pc),
             ),
-          ),
-          const SizedBox(height: PfSpacing.lg),
-          // Step content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
-              child: _buildStepContent(pc),
-            ),
-          ),
-          // Navigation
-          _buildNavigation(pc),
-        ],
+            _buildNavigation(theme, pc),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStepContent(PfColors pc) {
+  // ── Step Progress Bar ──────────────────────────────────────────────
+  Widget _buildStepProgressBar(ThemeData theme, PfColors pc) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: PfSpacing.md, horizontal: PfSpacing.sm),
+      margin: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
+      decoration: BoxDecoration(
+        color: pc.cardC,
+        borderRadius: PfRadius.borderRadiusLg,
+        border: Border.all(color: pc.borderC),
+      ),
+      child: Row(
+        children: List.generate(7, (index) {
+          final isActive = index == _currentStep;
+          final isDone = index < _currentStep;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => _onStepTapped(index),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Step dot
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDone
+                            ? PfColors.success
+                            : isActive
+                                ? theme.colorScheme.primary
+                                : pc.mutedC,
+                      ),
+                      child: Center(
+                        child: isDone
+                            ? PhosphorIcon(
+                                PhosphorIconsFill.check,
+                                size: 14,
+                                color: Colors.white,
+                              )
+                            : Text(
+                                '${index + 1}',
+                                style: PfTypography.caption.copyWith(
+                                  color: isActive
+                                      ? theme.colorScheme.onPrimary
+                                      : pc.mutedForegroundC,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _kStepLabels[index],
+                      style: PfTypography.caption.copyWith(
+                        color: isActive
+                            ? theme.colorScheme.primary
+                            : isDone
+                                ? PfColors.success
+                                : pc.mutedForegroundC,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  void _onStepTapped(int index) {
+    // Не даём перепрыгивать вперёд больше чем на 1 шаг
+    if (index <= _currentStep + 1) {
+      setState(() => _currentStep = index);
+    }
+  }
+
+  // ── Step Content Router ────────────────────────────────────────────
+  Widget _buildStepContent(ThemeData theme, PfColors pc) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(PfSpacing.lg),
+      child: _buildStepWidget(theme, pc),
+    );
+  }
+
+  Widget _buildStepWidget(ThemeData theme, PfColors pc) {
     switch (_currentStep) {
-      case 0: return _buildStepPair(pc);
-      case 1: return _buildStepStrategy(pc);
-      case 2: return _buildStepBalance(pc);
-      case 3: return _buildStepRisk(pc);
-      case 4: return _buildStepPrecision(pc);
-      case 5: return _buildStepProtections(pc);
-      case 6: return _buildStepSummary(pc);
+      case 0: return _buildStepPair(theme, pc);
+      case 1: return _buildStepStrategy(theme, pc);
+      case 2: return _buildStepBalance(theme, pc);
+      case 3: return _buildStepRisk(theme, pc);
+      case 4: return _buildStepPrecision(theme, pc);
+      case 5: return _buildStepProtections(theme, pc);
+      case 6: return _buildStepSummary(theme, pc);
       default: return const SizedBox();
     }
   }
 
   // ── Step 0: Pair ──────────────────────────────────────────────────
-  Widget _buildStepPair(PfColors pc) {
+  Widget _buildStepPair(ThemeData theme, PfColors pc) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Выберите пару', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
-        const SizedBox(height: 16),
+        Row(
+          children: [
+            PhosphorIcon(_kStepIcons[0], size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Выберите пару', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Торговая пара для Order Book стратегии',
+          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+        ),
+        const SizedBox(height: 24),
         ..._pairs.map((p) => Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Material(
-            color: _selectedPair == p ? PfColors.accentAdmin.withValues(alpha: 0.08) : pc.cardC,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => setState(() => _selectedPair = p),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(
+          child: PfCard(
+            variant: _selectedPair == p ? 'trading' : 'default',
+            onTap: () => setState(() => _selectedPair = p),
+            padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _selectedPair == p
+                        ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                        : pc.mutedC,
+                    borderRadius: PfRadius.borderRadiusMd,
+                  ),
+                  child: Center(
+                    child: PhosphorIcon(
                       _selectedPair == p
                           ? PhosphorIconsFill.checkCircle
-                          : PhosphorIconsFill.circle,
-                      color: _selectedPair == p ? PfColors.accentAdmin : pc.mutedForegroundC,
+                          : PhosphorIconsFill.coin,
                       size: 20,
+                      color: _selectedPair == p
+                          ? theme.colorScheme.primary
+                          : pc.mutedForegroundC,
                     ),
-                    const SizedBox(width: 12),
-                    Text(p, style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: pc.foregroundC,
-                    )),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    p,
+                    style: PfTypography.titleMd.copyWith(
+                      color: pc.foregroundC,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (_selectedPair == p)
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
             ),
           ),
         )),
@@ -221,222 +340,732 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
   }
 
   // ── Step 1: Strategy ──────────────────────────────────────────────
-  Widget _buildStepStrategy(PfColors pc) {
+  Widget _buildStepStrategy(ThemeData theme, PfColors pc) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Выберите стратегию', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
-        const SizedBox(height: 16),
+        Row(
+          children: [
+            PhosphorIcon(_kStepIcons[1], size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Выберите стратегию', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Алгоритм для анализа Order Book и принятия решений',
+          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+        ),
+        const SizedBox(height: 24),
         ..._kObStrategies.map((s) => Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: _buildStrategyCard(s, pc),
+          child: _buildStrategyCard(s, theme, pc),
         )),
+        // Если есть параметры у выбранной стратегии
+        if (_selectedStrategy != null && _selectedStrategy!.params.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text('Параметры стратегии', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+          const SizedBox(height: 12),
+          ..._selectedStrategy!.params.map((param) =>
+            _buildParamSlider(param, theme, pc)),
+        ],
       ],
     );
   }
 
-  Widget _buildStrategyCard(_ObStrategyOption s, PfColors pc) {
+  Widget _buildStrategyCard(_ObStrategyOption s, ThemeData theme, PfColors pc) {
     final selected = _selectedStrategy?.name == s.name;
-    return Material(
-      color: selected ? PfColors.accentAdmin.withValues(alpha: 0.08) : pc.cardC,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: s.enabled ? () => setState(() => _selectedStrategy = s) : null,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? PfColors.accentAdmin : pc.borderC,
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return PfCard(
+      variant: selected ? 'trading' : 'default',
+      onTap: s.enabled ? () => setState(() => _selectedStrategy = s) : null,
+      padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                      : s.enabled
+                          ? pc.mutedC
+                          : pc.mutedC.withValues(alpha: 0.5),
+                  borderRadius: PfRadius.borderRadiusMd,
+                ),
+                child: Center(
+                  child: PhosphorIcon(
                     selected
                         ? PhosphorIconsFill.checkCircle
-                        : (s.enabled
-                            ? PhosphorIconsFill.circle
-                            : PhosphorIconsFill.lock),
-                    color: selected ? PfColors.accentAdmin : pc.mutedForegroundC,
+                        : s.enabled
+                            ? PhosphorIconsFill.chartLineUp
+                            : PhosphorIconsFill.lock,
                     size: 20,
+                    color: selected
+                        ? theme.colorScheme.primary
+                        : s.enabled
+                            ? pc.mutedForegroundC
+                            : pc.mutedC,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(s.label, style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: s.enabled ? pc.foregroundC : pc.mutedForegroundC,
-                    )),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(s.description, style: TextStyle(
-                fontSize: 12,
-                color: pc.mutedForegroundC,
-              )),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      s.label,
+                      style: PfTypography.titleMd.copyWith(
+                        color: s.enabled ? pc.foregroundC : pc.mutedForegroundC,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      s.description,
+                      style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+                    ),
+                  ],
+                ),
+              ),
+              if (!s.enabled)
+                PfBadge(variant: 'default', label: 'Скоро'),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParamSlider(_ObStrategyParam param, ThemeData theme, PfColors pc) {
+    // Хардкодим значения параметров для MVP
+    return Padding(
+      padding: const EdgeInsets.only(bottom: PfSpacing.md),
+      child: PfCard(
+        padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(param.label, style: PfTypography.bodyMd.copyWith(color: pc.foregroundC)),
+                Text(
+                  '${param.defaultValue.toStringAsFixed(param.defaultValue < 1 ? 2 : 0)}${param.unit}',
+                  style: PfTypography.titleMd.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            Slider(
+              value: param.defaultValue,
+              min: param.min,
+              max: param.max,
+              divisions: param.divisions,
+              activeColor: theme.colorScheme.primary,
+              inactiveColor: pc.mutedC,
+              onChanged: (_) {}, // MVP — readonly пока
+            ),
+          ],
         ),
       ),
     );
   }
 
   // ── Step 2: Balance ───────────────────────────────────────────────
-  Widget _buildStepBalance(PfColors pc) {
+  Widget _buildStepBalance(ThemeData theme, PfColors pc) {
+    const presets = [100, 500, 1000, 5000, 10000];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Баланс и лимиты', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
-        const SizedBox(height: 16),
-        Text('Стартовый баланс: \$${_balance.toStringAsFixed(0)}',
-            style: TextStyle(color: pc.foregroundC)),
-        Slider(
-          value: _balance,
-          min: 100, max: 10000, divisions: 99,
-          onChanged: (v) => setState(() => _balance = v),
-        ),
-        const SizedBox(height: 16),
         Row(
           children: [
-            Text('Макс. открытых сделок:', style: TextStyle(color: pc.foregroundC)),
-            const SizedBox(width: 12),
-            DropdownButton<int>(
-              value: _maxOpenTrades,
-              dropdownColor: pc.cardC,
-              items: [1, 2, 3, 5].map((v) => DropdownMenuItem(
-                value: v, child: Text('$v', style: TextStyle(color: pc.foregroundC)),
-              )).toList(),
-              onChanged: (v) => setState(() => _maxOpenTrades = v!),
-            ),
+            PhosphorIcon(_kStepIcons[2], size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Баланс и лимиты', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
           ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Виртуальный баланс для симуляции торговли',
+          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+        ),
+        const SizedBox(height: 24),
+        // Баланс — крупная цифра
+        Center(
+          child: Text(
+            '\$${_balance.toStringAsFixed(0)}',
+            style: PfTypography.numberDisplay.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Slider(
+          value: _balance,
+          min: 100,
+          max: 10000,
+          divisions: 99,
+          activeColor: theme.colorScheme.primary,
+          inactiveColor: pc.mutedC,
+          onChanged: (v) => setState(() => _balance = v),
+        ),
+        const SizedBox(height: 12),
+        // Быстрые пресеты
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: presets.map((v) {
+            final isActive = _balance == v;
+            return ChoiceChip(
+              label: Text('\$${v.toStringAsFixed(0)}'),
+              selected: isActive,
+              selectedColor: theme.colorScheme.primary,
+              onSelected: (_) => setState(() => _balance = v.toDouble()),
+              labelStyle: TextStyle(
+                color: isActive ? theme.colorScheme.onPrimary : pc.foregroundC,
+              ),
+              side: BorderSide(
+                color: isActive ? theme.colorScheme.primary : pc.borderC,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: PfRadius.borderRadiusMd,
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        // Макс. открытых сделок
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Row(
+            children: [
+              PhosphorIcon(PhosphorIconsFill.arrowsLeftRight, size: 18, color: pc.mutedForegroundC),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Макс. открытых сделок', style: PfTypography.bodyMd.copyWith(color: pc.foregroundC)),
+                    const SizedBox(height: 2),
+                    Text('Одновременное количество активных позиций', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<int>(
+                value: _maxOpenTrades,
+                underline: const SizedBox(),
+                dropdownColor: pc.cardC,
+                style: PfTypography.titleMd.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+                items: [1, 2, 3, 5].map((v) => DropdownMenuItem(
+                  value: v,
+                  child: Text('$v', style: PfTypography.titleMd.copyWith(
+                    color: pc.foregroundC,
+                    fontWeight: FontWeight.w600,
+                  )),
+                )).toList(),
+                onChanged: (v) => setState(() => _maxOpenTrades = v!),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   // ── Step 3: Risk ──────────────────────────────────────────────────
-  Widget _buildStepRisk(PfColors pc) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Риски', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
-        const SizedBox(height: 16),
-        _riskSlider('Stop Loss', '%', _stoploss, -5.0, 0.0, 50, (v) => setState(() => _stoploss = v), pc),
-        _riskSlider('Trailing Stop', '%', _trailingStop, 0.0, 2.0, 40, (v) => setState(() => _trailingStop = v), pc),
-        _riskSlider('Trailing Offset', '%', _trailingOffset, 0.0, 2.0, 40, (v) => setState(() => _trailingOffset = v), pc),
-        _riskSlider('Max Hold', 's', _maxHoldSeconds.toDouble(), 10, 300, 29, (v) => setState(() => _maxHoldSeconds = v.round()), pc),
-      ],
-    );
-  }
-
-  Widget _riskSlider(String label, String unit, double value, double min, double max, int div, ValueChanged<double> onChange, PfColors pc) {
+  Widget _buildStepRisk(ThemeData theme, PfColors pc) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: TextStyle(fontSize: 13, color: pc.foregroundC)),
-            Text('${value.toStringAsFixed(2)}$unit',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: pc.foregroundC)),
+            PhosphorIcon(_kStepIcons[3], size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Управление рисками', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
           ],
         ),
-        Slider(value: value, min: min, max: max, divisions: div, onChanged: onChange),
+        const SizedBox(height: 8),
+        Text(
+          'Защита капитала и контроль потерь',
+          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+        ),
+        const SizedBox(height: 24),
+        _riskCard(
+          title: 'Stop Loss',
+          subtitle: 'Автоматический выход при падении цены',
+          value: '${_stoploss.toStringAsFixed(1)}%',
+          valueColor: _stoploss < -2.0 ? PfColors.destructive : pc.foregroundC,
+          slider: _riskSlider(
+            value: _stoploss, min: -5.0, max: 0.0, divisions: 50,
+            onChange: (v) => setState(() => _stoploss = v),
+            theme: theme, pc: pc,
+          ),
+          theme: theme, pc: pc,
+        ),
+        const SizedBox(height: 8),
+        _riskCard(
+          title: 'Trailing Stop',
+          subtitle: 'Динамический стоп, следующий за ценой',
+          value: '${_trailingStop.toStringAsFixed(1)}%',
+          valueColor: pc.foregroundC,
+          slider: _riskSlider(
+            value: _trailingStop, min: 0.0, max: 2.0, divisions: 40,
+            onChange: (v) => setState(() => _trailingStop = v),
+            theme: theme, pc: pc,
+          ),
+          theme: theme, pc: pc,
+        ),
+        const SizedBox(height: 8),
+        _riskCard(
+          title: 'Trailing Offset',
+          subtitle: 'Отступ от максимума для активации trailing',
+          value: '${_trailingOffset.toStringAsFixed(1)}%',
+          valueColor: pc.foregroundC,
+          slider: _riskSlider(
+            value: _trailingOffset, min: 0.0, max: 2.0, divisions: 40,
+            onChange: (v) => setState(() => _trailingOffset = v),
+            theme: theme, pc: pc,
+          ),
+          theme: theme, pc: pc,
+        ),
+        const SizedBox(height: 8),
+        _riskCard(
+          title: 'Max Hold',
+          subtitle: 'Максимальное время удержания позиции',
+          value: '${_maxHoldSeconds}s',
+          valueColor: pc.foregroundC,
+          slider: _riskSlider(
+            value: _maxHoldSeconds.toDouble(), min: 10, max: 300, divisions: 29,
+            onChange: (v) => setState(() => _maxHoldSeconds = v.round()),
+            theme: theme, pc: pc,
+          ),
+          theme: theme, pc: pc,
+        ),
       ],
     );
   }
 
+  Widget _riskCard({
+    required String title,
+    required String subtitle,
+    required String value,
+    required Color valueColor,
+    required Widget slider,
+    required ThemeData theme,
+    required PfColors pc,
+  }) {
+    return PfCard(
+      padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                ],
+              ),
+              Text(
+                value,
+                style: PfTypography.number.copyWith(
+                  color: valueColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          slider,
+        ],
+      ),
+    );
+  }
+
+  Widget _riskSlider({
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChange,
+    required ThemeData theme,
+    required PfColors pc,
+  }) {
+    return Slider(
+      value: value,
+      min: min,
+      max: max,
+      divisions: divisions,
+      activeColor: theme.colorScheme.primary,
+      inactiveColor: pc.mutedC,
+      onChanged: onChange,
+    );
+  }
+
   // ── Step 4: Precision ─────────────────────────────────────────────
-  Widget _buildStepPrecision(PfColors pc) {
+  Widget _buildStepPrecision(ThemeData theme, PfColors pc) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Точность', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
-        const SizedBox(height: 16),
-        Text('Confirmation ticks: $_confirmationTicks',
-            style: TextStyle(color: pc.foregroundC)),
-        Slider(
-          value: _confirmationTicks.toDouble(), min: 1, max: 10, divisions: 9,
-          onChanged: (v) => setState(() => _confirmationTicks = v.round()),
+        Row(
+          children: [
+            PhosphorIcon(_kStepIcons[4], size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Точность сигналов', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+          ],
         ),
-        const SizedBox(height: 16),
-        Text('Max spread: ${_maxSpread.toStringAsFixed(3)}%',
-            style: TextStyle(color: pc.foregroundC)),
-        Slider(
-          value: _maxSpread, min: 0.01, max: 0.5, divisions: 49,
-          onChanged: (v) => setState(() => _maxSpread = v),
+        const SizedBox(height: 8),
+        Text(
+          'Настройки подтверждения входов и фильтрации шума',
+          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+        ),
+        const SizedBox(height: 24),
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Confirmation Ticks', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                      const SizedBox(height: 2),
+                      Text('Количество тиков для подтверждения сигнала', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Text(
+                      '$_confirmationTicks',
+                      style: PfTypography.titleMd.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Slider(
+                value: _confirmationTicks.toDouble(),
+                min: 1, max: 10, divisions: 9,
+                activeColor: theme.colorScheme.primary,
+                inactiveColor: pc.mutedC,
+                onChanged: (v) => setState(() => _confirmationTicks = v.round()),
+              ),
+              const SizedBox(height: 16),
+              // Текстовая подсказка
+              Row(
+                children: [
+                  PhosphorIcon(PhosphorIconsFill.info, size: 14, color: pc.mutedForegroundC),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Больше тиков = меньше ложных входов, но больше задержка',
+                    style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Max Spread', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                      const SizedBox(height: 2),
+                      Text('Максимальный допустимый спред', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Text(
+                      '${(_maxSpread * 100).toStringAsFixed(1)}%',
+                      style: PfTypography.titleMd.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Slider(
+                value: _maxSpread,
+                min: 0.01, max: 0.5, divisions: 49,
+                activeColor: theme.colorScheme.primary,
+                inactiveColor: pc.mutedC,
+                onChanged: (v) => setState(() => _maxSpread = v),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   // ── Step 5: Protections ───────────────────────────────────────────
-  Widget _buildStepProtections(PfColors pc) {
+  Widget _buildStepProtections(ThemeData theme, PfColors pc) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Защиты', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
-        const SizedBox(height: 16),
-        Text('Cooldown: ${_cooldownSeconds}s',
-            style: TextStyle(color: pc.foregroundC)),
-        Slider(
-          value: _cooldownSeconds.toDouble(), min: 10, max: 600, divisions: 59,
-          onChanged: (v) => setState(() => _cooldownSeconds = v.round()),
+        Row(
+          children: [
+            PhosphorIcon(_kStepIcons[5], size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Защиты', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Дополнительные механизмы безопасности',
+          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+        ),
+        const SizedBox(height: 24),
+        // Cooldown
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: PfColors.warning.withValues(alpha: 0.12),
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Center(
+                      child: PhosphorIcon(
+                        PhosphorIconsFill.clockCounterClockwise,
+                        size: 18,
+                        color: PfColors.warning,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Cooldown', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                        const SizedBox(height: 2),
+                        Text('Пауза между сделками после выхода', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Slider(
+                      value: _cooldownSeconds.toDouble(),
+                      min: 10, max: 600, divisions: 59,
+                      activeColor: theme.colorScheme.primary,
+                      inactiveColor: pc.mutedC,
+                      onChanged: (v) => setState(() => _cooldownSeconds = v.round()),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: PfColors.warning.withValues(alpha: 0.12),
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Text(
+                      '${_cooldownSeconds}s',
+                      style: PfTypography.titleMd.copyWith(
+                        color: PfColors.warning,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Доп. защиты (в будущем)
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: pc.mutedC,
+                  borderRadius: PfRadius.borderRadiusMd,
+                ),
+                child: Center(
+                  child: PhosphorIcon(PhosphorIconsFill.lock, size: 18, color: pc.mutedForegroundC),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Low Profit Guard', style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC)),
+                    const SizedBox(height: 2),
+                    Text('Автостоп при низкой доходности (скоро)', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC.withValues(alpha: 0.6))),
+                  ],
+                ),
+              ),
+              PfBadge(variant: 'default', label: 'Скоро'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: pc.mutedC,
+                  borderRadius: PfRadius.borderRadiusMd,
+                ),
+                child: Center(
+                  child: PhosphorIcon(PhosphorIconsFill.trendDown, size: 18, color: pc.mutedForegroundC),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Max Drawdown', style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC)),
+                    const SizedBox(height: 2),
+                    Text('Автостоп при превышении просадки (скоро)', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC.withValues(alpha: 0.6))),
+                  ],
+                ),
+              ),
+              PfBadge(variant: 'default', label: 'Скоро'),
+            ],
+          ),
         ),
       ],
     );
   }
 
   // ── Step 6: Summary ───────────────────────────────────────────────
-  Widget _buildStepSummary(PfColors pc) {
+  Widget _buildStepSummary(ThemeData theme, PfColors pc) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Сводка', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: pc.cardC,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: pc.borderC),
-          ),
+        Row(
+          children: [
+            PhosphorIcon(_kStepIcons[6], size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Сводка настроек', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Проверьте параметры перед запуском',
+          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+        ),
+        const SizedBox(height: 24),
+        // Основная сводка
+        PfCard(
+          padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _infoRow('Пара', _selectedPair, pc),
-              _infoRow('Стратегия', _selectedStrategy?.label ?? '', pc),
-              _infoRow('Баланс', '\$${_balance.toStringAsFixed(0)}', pc),
-              _infoRow('Stop Loss', '${_stoploss.toStringAsFixed(1)}%', pc),
-              _infoRow('Trailing', '${_trailingStop.toStringAsFixed(2)}% / offset ${_trailingOffset.toStringAsFixed(2)}%', pc),
-              _infoRow('Max Hold', '${_maxHoldSeconds}s', pc),
-              _infoRow('Cooldown', '${_cooldownSeconds}s', pc),
-              _infoRow('Точность', '$_confirmationTicks тиков / spread ${_maxSpread.toStringAsFixed(3)}%', pc),
+              _summaryRow(pc, 'Пара', _selectedPair, theme.colorScheme.primary),
+              const PfDivider(indent: 0),
+              _summaryRow(pc, 'Стратегия', _selectedStrategy?.label ?? '', theme.colorScheme.primary),
+              const PfDivider(indent: 0),
+              _summaryRow(pc, 'Баланс', '\$${_balance.toStringAsFixed(0)}', theme.colorScheme.primary),
+              const PfDivider(indent: 0),
+              _summaryRow(pc, 'Stop Loss', '${_stoploss.toStringAsFixed(1)}%', _stoploss < -2.0 ? PfColors.destructive : pc.foregroundC),
+              const PfDivider(indent: 0),
+              _summaryRow(pc, 'Trailing Stop', '${_trailingStop.toStringAsFixed(1)}% / offset ${_trailingOffset.toStringAsFixed(1)}%', pc.foregroundC),
+              const PfDivider(indent: 0),
+              _summaryRow(pc, 'Max Hold', '${_maxHoldSeconds}s', pc.foregroundC),
+              const PfDivider(indent: 0),
+              _summaryRow(pc, 'Cooldown', '${_cooldownSeconds}s', PfColors.warning),
+              const PfDivider(indent: 0),
+              _summaryRow(pc, 'Точность', '$_confirmationTicks тиков / spread ${(_maxSpread * 100).toStringAsFixed(1)}%', pc.foregroundC),
             ],
           ),
         ),
         const SizedBox(height: 16),
+        // Предупреждение о режиме
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(PfSpacing.md),
           decoration: BoxDecoration(
-            color: PfColors.warning.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: PfColors.warning.withValues(alpha: 0.3)),
+            color: PfColors.warning.withValues(alpha: 0.08),
+            borderRadius: PfRadius.borderRadiusLg,
+            border: Border.all(color: PfColors.warning.withValues(alpha: 0.2)),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(PhosphorIconsFill.warning, color: PfColors.warning, size: 18),
-              const SizedBox(width: 10),
+              PhosphorIcon(
+                PhosphorIconsFill.warning,
+                size: 20,
+                color: PfColors.warning,
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Работает только в virtual режиме — реальные данные Binance + виртуальный баланс',
-                  style: TextStyle(fontSize: 12, color: pc.foregroundC),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Режим Virtual',
+                      style: PfTypography.titleMd.copyWith(
+                        color: PfColors.warning,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Работает только в virtual режиме — реальные данные Binance через WebSocket, виртуальный баланс. Без риска для капитала.',
+                      style: PfTypography.bodyMd.copyWith(color: pc.foregroundC),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -446,21 +1075,31 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage> {
     );
   }
 
-  Widget _infoRow(String label, String value, PfColors pc) {
+  Widget _summaryRow(PfColors pc, String label, String value, Color valueColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: PfSpacing.sm),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 13, color: pc.mutedForegroundC)),
-          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pc.foregroundC)),
+          Row(
+            children: [
+              Text(label, style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC)),
+            ],
+          ),
+          Text(
+            value,
+            style: PfTypography.bodyMd.copyWith(
+              color: valueColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
   // ── Navigation ────────────────────────────────────────────────────
-  Widget _buildNavigation(PfColors pc) {
+  Widget _buildNavigation(ThemeData theme, PfColors pc) {
     return Container(
       padding: const EdgeInsets.all(PfSpacing.lg),
       decoration: BoxDecoration(
