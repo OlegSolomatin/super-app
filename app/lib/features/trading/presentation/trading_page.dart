@@ -45,7 +45,7 @@ class _TradingPageState extends State<TradingPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) setState(() {});
     });
@@ -219,15 +219,13 @@ class _TradingPageState extends State<TradingPage>
                     isActive: _tabController.index == 1,
                     onTap: () => _tabController.animateTo(1),
                   ),
-                  if (_obRuns.isNotEmpty) ...[
-                    const SizedBox(width: 2),
-                    _PillTab(
-                      label: '📗 OB',
-                      count: _obRuns.length,
-                      isActive: false,
-                      onTap: () => {},
-                    ),
-                  ],
+                  const SizedBox(width: 2),
+                  _PillTab(
+                    label: '📗 OB',
+                    count: _obRuns.length,
+                    isActive: _tabController.index == 2,
+                    onTap: () => _tabController.animateTo(2),
+                  ),
                 ],
               ),
             ),
@@ -254,6 +252,7 @@ class _TradingPageState extends State<TradingPage>
                     emptySubtext: 'Завершённые стратегии появятся здесь',
                     repository: widget.repository,
                   ),
+                  _buildObRunsList(),
                 ],
               ),
             ),
@@ -526,6 +525,82 @@ class _TradingPageState extends State<TradingPage>
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── OrderBook Runs List ──────────────────────────────────────────────
+  Widget _buildObRunsList() {
+    final pc = PfColors.of(context);
+    if (_loadingObRuns) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_obRuns.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhosphorIcon(PhosphorIconsFill.stack, size: 48,
+              color: pc.mutedForegroundC.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            Text('Нет OB-запусков',
+              style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC)),
+            const SizedBox(height: 4),
+            Text('Запустите стратегию по ордербуку',
+              style: PfTypography.bodySm.copyWith(
+                color: pc.mutedForegroundC.withValues(alpha: 0.6))),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadOrderBookRuns,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+        itemCount: _obRuns.length,
+        separatorBuilder: (_, __) => const SizedBox(height: PfSpacing.sm),
+        itemBuilder: (context, index) {
+          final run = _obRuns[index];
+          final status = run['status'] as String? ?? 'unknown';
+          final pair = run['pair'] as String? ?? 'N/A';
+          final strategy = run['strategy'] as String? ?? 'N/A';
+          return PfCard(
+            padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+            child: Row(children: [
+              Container(width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: status == 'running' ? PfColors.success.withValues(alpha: 0.12) : pc.mutedC,
+                  borderRadius: PfRadius.borderRadiusMd,
+                ),
+                child: Center(child: PhosphorIcon(
+                  status == 'running' ? PhosphorIconsFill.playCircle : PhosphorIconsFill.checkCircle,
+                  size: 20,
+                  color: status == 'running' ? PfColors.success : pc.mutedForegroundC,
+                )),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(pair, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text('$strategy · ${status == 'running' ? '🟢 Активна' : '⏹️ Завершена'}',
+                    style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                ],
+              )),
+              if (status == 'running')
+                PfButton(variant: 'outline', size: 'sm', label: '⏹',
+                  onPressed: () async {
+                    final id = run['id'] as int?;
+                    if (id != null) {
+                      await widget.repository.stopOrderBookRun(id);
+                      _loadOrderBookRuns();
+                    }
+                  },
+                ),
+            ]),
+          );
+        },
       ),
     );
   }

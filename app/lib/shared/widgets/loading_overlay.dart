@@ -31,14 +31,14 @@ class LoadingOverlay extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(
+                    CircularProgressIndicator(
                       color: AppTheme.accentColor,
                     ),
                     if (message != null) ...[
                       const SizedBox(height: 16),
                       Text(
                         message!,
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        style: TextStyle(color: AppTheme.textPrimary),
                       ),
                     ],
                   ],
