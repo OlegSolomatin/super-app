@@ -123,13 +123,14 @@ class _TradingPageState extends State<TradingPage>
   @override
   Widget build(BuildContext context) {
     final pc = PfColors.of(context);
+    final hasRuns = _activeRuns.isNotEmpty || _historyRuns.isNotEmpty;
     return AdaptiveScaffold(
       title: 'Трейдинг',
       currentPath: '/trading',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header + New Strategy button ──────────────
+          // ── Header ─────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
             child: Row(
@@ -140,71 +141,125 @@ class _TradingPageState extends State<TradingPage>
                     style: PfTypography.displayMd.copyWith(color: pc.foregroundC),
                   ),
                 ),
-                PfButton(
-                  variant: 'primary',
-                  size: 'md',
-                  label: 'Стратегия',
-                  icon: PhosphorIconsFill.rocket,
-                  onPressed: () => context.go('/trading/wizard'),
-                ),
               ],
             ),
           ),
           const SizedBox(height: PfSpacing.lg),
 
+          // ── Mode Selector ──────────────────────────────
+          if (!hasRuns)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _ModeCard(
+                      icon: PhosphorIconsFill.chartBar,
+                      title: 'Стратегии\nпо свечам',
+                      subtitle: 'RSI, MACD, ADX,\nсвечные паттерны',
+                      badge: '17 стратегий',
+                      badgeColor: Color(0xFFFCD535),
+                      onTap: () => context.go('/trading/wizard'),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: _ModeCard(
+                      icon: PhosphorIconsFill.stack,
+                      title: 'Стратегии\nпо ордербуку',
+                      subtitle: 'Дисбаланс стакана,\nспред, моментум',
+                      badge: 'Скоро',
+                      badgeColor: Color(0xFF5E6AD2),
+                      onTap: () => context.go('/trading/orderbook-wizard'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // ── Pill Tabs ─────────────────────────────────
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: pc.surfaceC,
-              borderRadius: PfRadius.borderRadiusPill,
+          if (hasRuns)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: pc.surfaceC,
+                borderRadius: PfRadius.borderRadiusPill,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PillTab(
+                    label: 'Запущенные',
+                    count: _activeRuns.length,
+                    isActive: _tabController.index == 0,
+                    onTap: () => _tabController.animateTo(0),
+                  ),
+                  const SizedBox(width: 2),
+                  _PillTab(
+                    label: 'История',
+                    count: _historyRuns.length,
+                    isActive: _tabController.index == 1,
+                    onTap: () => _tabController.animateTo(1),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _PillTab(
-                  label: 'Запущенные',
-                  count: _activeRuns.length,
-                  isActive: _tabController.index == 0,
-                  onTap: () => _tabController.animateTo(0),
-                ),
-                const SizedBox(width: 2),
-                _PillTab(
-                  label: 'История',
-                  count: _historyRuns.length,
-                  isActive: _tabController.index == 1,
-                  onTap: () => _tabController.animateTo(1),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: PfSpacing.md),
+          if (hasRuns) const SizedBox(height: PfSpacing.md),
 
           // ── Tab Content ───────────────────────────────
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildRunsList(
-                  runs: _activeRuns,
-                  loading: _loadingActive,
-                  emptyIcon: PhosphorIconsFill.rocket,
-                  emptyText: 'Нет активных стратегий',
-                  emptySubtext: 'Запустите новую стратегию, чтобы увидеть результаты',
-                  repository: widget.repository,
-                ),
-                _buildRunsList(
-                  runs: _historyRuns,
-                  loading: _loadingHistory,
-                  emptyIcon: PhosphorIconsFill.clockCounterClockwise,
-                  emptyText: 'История пуста',
-                  emptySubtext: 'Завершённые стратегии появятся здесь',
-                  repository: widget.repository,
-                ),
-              ],
+          if (hasRuns)
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildRunsList(
+                    runs: _activeRuns,
+                    loading: _loadingActive,
+                    emptyIcon: PhosphorIconsFill.rocket,
+                    emptyText: 'Нет активных стратегий',
+                    emptySubtext: 'Запустите новую стратегию, чтобы увидеть результаты',
+                    repository: widget.repository,
+                  ),
+                  _buildRunsList(
+                    runs: _historyRuns,
+                    loading: _loadingHistory,
+                    emptyIcon: PhosphorIconsFill.clockCounterClockwise,
+                    emptyText: 'История пуста',
+                    emptySubtext: 'Завершённые стратегии появятся здесь',
+                    repository: widget.repository,
+                  ),
+                ],
+              ),
             ),
-          ),
+
+          // ── Empty state ───────────────────────────────
+          if (!hasRuns) ...[
+            const Spacer(),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PhosphorIcon(
+                    PhosphorIconsFill.rocket,
+                    size: 48,
+                    color: pc.mutedForegroundC.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Нет активных стратегий',
+                    style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Выберите тип стратегии выше, чтобы начать',
+                    style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(flex: 2),
+          ],
         ],
       ),
     );
@@ -600,6 +655,99 @@ class _InfoCell extends StatelessWidget {
               : PfTypography.bodyMd.copyWith(color: pc.foregroundC),
         ),
       ],
+    );
+  }
+}
+
+
+// ─── Mode Card (выбор типа стратегии) ─────────────────────────────────────
+class _ModeCard extends StatelessWidget {
+  final PhosphorIconData icon;
+  final String title;
+  final String subtitle;
+  final String badge;
+  final Color badgeColor;
+  final VoidCallback onTap;
+
+  const _ModeCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.badgeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pc = PfColors.of(context);
+    return Material(
+      color: pc.cardC,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: pc.borderC),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: badgeColor, size: 22),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: badgeColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: pc.foregroundC,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: pc.mutedForegroundC,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

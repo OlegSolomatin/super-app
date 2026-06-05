@@ -6,6 +6,7 @@ import 'package:app/features/auth/presentation/register_page.dart';
 import 'package:app/features/home/presentation/home_page.dart';
 import 'package:app/features/trading/presentation/trading_page.dart';
 import 'package:app/features/trading/presentation/wizard_page.dart';
+import 'package:app/features/trading/presentation/orderbook_wizard_page.dart';
 import 'package:app/features/trading/presentation/run_detail_page.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/admin/presentation/agents_page.dart';
@@ -79,6 +80,10 @@ class AppRouter {
         builder: (context, state) => TradingWizardPage(
           repository: _tradingRepository,
         ),
+      ),
+      GoRoute(
+        path: '/trading/orderbook-wizard',
+        builder: (context, state) => const OrderBookWizardPage(),
       ),
       GoRoute(
         path: '/trading/run/:id',
