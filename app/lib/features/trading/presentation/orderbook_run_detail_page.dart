@@ -213,6 +213,20 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
   Widget _buildConfigCard(PfColors pc) {
     final config = _run!['config'] as Map<String, dynamic>? ?? {};
 
+    // Подсказки к настройкам
+    const configHelpTexts = <String, String>{
+      'stoploss': 'Автоматический выход при падении цены на N% от входа. Защищает капитал.',
+      'trailing_stop': 'Динамический стоп-лосс, двигающийся за ценой по мере её роста.',
+      'trailing_offset': 'Отступ от максимума для активации трейлинг-стопа.',
+      'max_hold_seconds': 'Максимальное время удержания позиции в секундах.',
+      'confirmation_ticks': 'Количество тиков для подтверждения сигнала входа.',
+      'max_spread': 'Максимальный допустимый спред для входа.',
+      'cooldown_seconds': 'Пауза между сделками после выхода.',
+      'auto_stop_hours': 'Автоматическая остановка стратегии через N часов.',
+      'initial_balance': 'Виртуальный стартовый баланс для симуляции.',
+      'max_open_trades': 'Максимум одновременных открытых позиций.',
+    };
+
     return PfCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,9 +247,18 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                   children: [
                     SizedBox(
                       width: 140,
-                      child: Text(
-                        translateConfigKey(e.key),
-                        style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              translateConfigKey(e.key),
+                              style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (configHelpTexts.containsKey(e.key))
+                            _helpIcon(translateConfigKey(e.key), configHelpTexts[e.key]!),
+                        ],
                       ),
                     ),
                     Expanded(
@@ -323,6 +346,56 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
     if (dt == null) return '—';
     final d = dt.toLocal();
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  // ── Help Icon ──────────────────────────────────────────────────────
+  void _showHelp(String title, String body) {
+    final pc = PfColors.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(PfSpacing.lg),
+        decoration: BoxDecoration(
+          color: pc.backgroundC,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: pc.mutedC,
+                  borderRadius: PfRadius.borderRadiusPill,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(title, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Text(body, style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC)),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _helpIcon(String title, String body) {
+    return GestureDetector(
+      onTap: () => _showHelp(title, body),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Icon(
+          Icons.help_outline,
+          size: 16,
+          color: PfColors.mutedForeground.withValues(alpha: 0.6),
+        ),
+      ),
+    );
   }
 }
 

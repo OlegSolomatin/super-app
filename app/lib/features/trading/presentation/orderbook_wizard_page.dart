@@ -140,6 +140,46 @@ const _kStepIcons = [
   PhosphorIconsFill.listChecks,
 ];
 
+/// Пресеты «Стандартные» — логически согласованные настройки под каждую стратегию.
+const _kStrategyPresets = {
+  'imbalance_scalping': {
+    'balance': 1000.0,
+    'maxOpenTrades': 2,
+    'stoploss': -1.0,
+    'trailingStop': 0.3,
+    'trailingOffset': 0.5,
+    'maxHoldSeconds': 120,
+    'confirmationTicks': 3,
+    'maxSpread': 0.05,
+    'cooldownSeconds': 120,
+    'autoStopHours': 0,
+  },
+  'spread_capture': {
+    'balance': 5000.0,
+    'maxOpenTrades': 3,
+    'stoploss': -0.5,
+    'trailingStop': 0.5,
+    'trailingOffset': 0.3,
+    'maxHoldSeconds': 60,
+    'confirmationTicks': 2,
+    'maxSpread': 0.03,
+    'cooldownSeconds': 30,
+    'autoStopHours': 2,
+  },
+  'order_flow_momentum': {
+    'balance': 2000.0,
+    'maxOpenTrades': 1,
+    'stoploss': -1.5,
+    'trailingStop': 0.4,
+    'trailingOffset': 0.4,
+    'maxHoldSeconds': 180,
+    'confirmationTicks': 1,
+    'maxSpread': 0.08,
+    'cooldownSeconds': 60,
+    'autoStopHours': 4,
+  },
+};
+
 class OrderBookWizardPage extends StatefulWidget {
   final TradingRepository repository;
 
@@ -461,6 +501,52 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     );
   }
 
+  // ── «Стандартные» — сброс всех полей к пресету ──────────────────
+  void _applyDefaults() {
+    final preset = _kStrategyPresets[_selectedStrategy?.name ?? ''];
+    if (preset == null) return;
+    setState(() {
+      _balance = preset['balance'] as double;
+      _maxOpenTrades = preset['maxOpenTrades'] as int;
+      _stoploss = preset['stoploss'] as double;
+      _trailingStop = preset['trailingStop'] as double;
+      _trailingOffset = preset['trailingOffset'] as double;
+      _maxHoldSeconds = preset['maxHoldSeconds'] as int;
+      _confirmationTicks = preset['confirmationTicks'] as int;
+      _maxSpread = preset['maxSpread'] as double;
+      _cooldownSeconds = preset['cooldownSeconds'] as int;
+      _autoStopHours = preset['autoStopHours'] as int;
+    });
+  }
+
+  Widget _defaultsButton(ThemeData theme) {
+    return GestureDetector(
+      onTap: _applyDefaults,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary.withValues(alpha: 0.1),
+          borderRadius: PfRadius.borderRadiusMd,
+          border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhosphorIcon(PhosphorIconsFill.arrowCounterClockwise, size: 13, color: theme.colorScheme.primary),
+            const SizedBox(width: 4),
+            Text(
+              'Стандартные',
+              style: PfTypography.caption.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Иконка криптопары ────────────────────────────────────────────
   Widget _pairIcon(String base, ThemeData theme) {
     final symbol = base.toLowerCase();
@@ -566,6 +652,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             PhosphorIcon(_kStepIcons[0], size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text('Выберите пару', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+            const Spacer(),
+            _defaultsButton(theme),
+            _helpIcon('Выбор пары', 'Поиск среди 430+ USDT торговых пар с Binance. Выберите пару для Order Book стратегии. Можно фильтровать по названию в поле поиска.'),
           ],
         ),
         const SizedBox(height: 8),
@@ -729,6 +818,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             PhosphorIcon(_kStepIcons[1], size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text('Выберите стратегию', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+            const Spacer(),
+            _defaultsButton(theme),
+            _helpIcon('Стратегия', 'Алгоритм анализа стакана заявок. Каждая стратегия ищет свои паттерны:\n\n• Imbalance Scalping — ловит дисбаланс Bid/Ask\n• Spread Capture — торгует расширение/сужение спреда\n• Order Flow Momentum — реагирует на агрессивные market orders'),
           ],
         ),
         const SizedBox(height: 8),
@@ -826,6 +918,17 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     );
   }
 
+  final Map<String, String> _paramHelpTexts = {
+    'imbalance_threshold': 'Порог дисбаланса Bid/Ask. 0.65 = 65% — если одна сторона стакана на 65% тяжелее другой, срабатывает сигнал.',
+    'surge_pct': 'Всплеск объёма в % от среднего. Срабатывает, когда объём резко превышает норму.',
+    'min_spread_pct': 'Минимальный спред для входа в сделку. Узкий спред = меньше проскальзывание.',
+    'spread_entry_threshold': 'Спред расширился до этого порога → вход. Больше значение = реже входы.',
+    'spread_exit_threshold': 'Спред сузился до этого порога → выход. Меньше значение = дольше в позиции.',
+    'flow_threshold_volume': 'Объём market order (в USDT) для засчитывания сигнала. 10000 = \$10,000.',
+    'min_flow_signals': 'Минимальное количество рыночных заявок подряд для подтверждения тренда.',
+    'flow_exit_seconds': 'Выход из позиции через N секунд после входа (таймер).',
+  };
+
   Widget _buildParamSlider(_ObStrategyParam param, ThemeData theme, PfColors pc) {
     final val = _strategyParams[param.key] ?? param.defaultValue;
     return Padding(
@@ -838,7 +941,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(param.label, style: PfTypography.bodyMd.copyWith(color: pc.foregroundC)),
+                Row(
+                  children: [
+                    Text(param.label, style: PfTypography.bodyMd.copyWith(color: pc.foregroundC)),
+                    _helpIcon(param.label, _paramHelpTexts[param.key] ?? 'Параметр стратегии. Рекомендуемые значения отмечены в описании.'),
+                  ],
+                ),
                 Text(
                   '${val.toStringAsFixed(val < 1 ? 2 : 0)}${param.unit}',
                   style: PfTypography.titleMd.copyWith(
@@ -874,6 +982,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                 PhosphorIcon(_kStepIcons[2], size: 20, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text('Баланс и лимиты', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+                const Spacer(),
+                _defaultsButton(theme),
                 _helpIcon('Баланс', 'Виртуальный баланс для симуляции торговли. Средства не настоящие — вы не рискуете реальным капиталом. Можно изменить в любой момент до запуска.'),
               ],
             ),
@@ -979,6 +1089,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             PhosphorIcon(_kStepIcons[3], size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text('Управление рисками', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+            const Spacer(),
+            _defaultsButton(theme),
+            _helpIcon('Риски', 'Настройки защиты капитала: стоп-лосс, трейлинг стоп и максимальное время удержания позиции. Эти параметры ограничивают потери.'),
           ],
         ),
         const SizedBox(height: 8),
@@ -992,6 +1105,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           subtitle: 'Автоматический выход при падении цены',
           value: '${_stoploss.toStringAsFixed(1)}%',
           valueColor: _stoploss < -2.0 ? PfColors.destructive : pc.foregroundC,
+          helpText: 'Автоматический выход из позиции при падении цены на N% от цены входа. Защищает от крупных убытков.',
           slider: _riskSlider(
             value: _stoploss, min: -5.0, max: 0.0, divisions: 50,
             onChange: (v) => setState(() => _stoploss = v),
@@ -1005,6 +1119,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           subtitle: 'Динамический стоп, следующий за ценой',
           value: '${_trailingStop.toStringAsFixed(1)}%',
           valueColor: pc.foregroundC,
+          helpText: 'Стоп-лосс, который двигается за ценой. Если цена растёт, стоп подтягивается. Если цена падает — стоп остаётся на месте.',
           slider: _riskSlider(
             value: _trailingStop, min: 0.0, max: 2.0, divisions: 40,
             onChange: (v) => setState(() => _trailingStop = v),
@@ -1018,6 +1133,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           subtitle: 'Отступ от максимума для активации trailing',
           value: '${_trailingOffset.toStringAsFixed(1)}%',
           valueColor: pc.foregroundC,
+          helpText: 'Отступ от максимума цены, при котором активируется трейлинг-стоп. Меньше значение = раньше начнёт двигаться.',
           slider: _riskSlider(
             value: _trailingOffset, min: 0.0, max: 2.0, divisions: 40,
             onChange: (v) => setState(() => _trailingOffset = v),
@@ -1031,6 +1147,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           subtitle: 'Максимальное время удержания позиции',
           value: '${_maxHoldSeconds}s',
           valueColor: pc.foregroundC,
+          helpText: 'Максимальное время удержания позиции в секундах. После истечения времени позиция закрывается принудительно.',
           slider: _riskSlider(
             value: _maxHoldSeconds.toDouble(), min: 10, max: 300, divisions: 29,
             onChange: (v) => setState(() => _maxHoldSeconds = v.round()),
@@ -1050,6 +1167,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     required Widget slider,
     required ThemeData theme,
     required PfColors pc,
+    String? helpText,
   }) {
     return PfCard(
       padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
@@ -1062,7 +1180,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                  Row(
+                    children: [
+                      Text(title, style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                      if (helpText != null) _helpIcon(title, helpText),
+                    ],
+                  ),
                   const SizedBox(height: 2),
                   Text(subtitle, style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
                 ],
@@ -1112,6 +1235,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             PhosphorIcon(_kStepIcons[4], size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text('Точность сигналов', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+            const Spacer(),
+            _defaultsButton(theme),
+            _helpIcon('Точность', 'Настройки подтверждения входов: количество тиков для фильтрации ложных сигналов и максимальный спред для избегания проскальзывания.'),
           ],
         ),
         const SizedBox(height: 8),
@@ -1131,7 +1257,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Confirmation Ticks', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                      Row(
+                        children: [
+                          Text('Confirmation Ticks', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                          _helpIcon('Confirmation Ticks', 'Количество последовательных тиков для подтверждения сигнала входа. Больше тиков = меньше ложных срабатываний, но выше задержка.'),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text('Количество тиков для подтверждения сигнала', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
                     ],
@@ -1187,7 +1318,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Max Spread', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                      Row(
+                        children: [
+                          Text('Max Spread', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                          _helpIcon('Max Spread', 'Максимальный допустимый спред для входа. Если спред шире — вход не происходит. Защищает от проскальзывания на низколиквидных парах.'),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text('Максимальный допустимый спред', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
                     ],
@@ -1233,6 +1369,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             PhosphorIcon(_kStepIcons[5], size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text('Защиты', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+            const Spacer(),
+            _defaultsButton(theme),
+            _helpIcon('Защиты', 'Дополнительные механизмы безопасности: пауза между сделками (cooldown) и автостоп по времени для автоматической остановки стратегии.'),
           ],
         ),
         const SizedBox(height: 8),
@@ -1269,7 +1408,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Cooldown', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                        Row(
+                          children: [
+                            Text('Cooldown', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                            _helpIcon('Cooldown', 'Пауза между сделками после выхода. Предотвращает повторный вход сразу после закрытия позиции, снижая риск флипов.'),
+                          ],
+                        ),
                         const SizedBox(height: 2),
                         Text('Пауза между сделками после выхода', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
                       ],
@@ -1342,7 +1486,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Автостоп по времени', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                        Row(
+                          children: [
+                            Text('Автостоп по времени', style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+                            _helpIcon('Автостоп', 'Автоматическая остановка стратегии через N часов. Полезно чтобы стратегия не работала бесконечно. 0 = отключено.'),
+                          ],
+                        ),
                         const SizedBox(height: 2),
                         Text('Автоматическая остановка стратегии через N часов', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
                       ],
@@ -1476,6 +1625,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             PhosphorIcon(_kStepIcons[6], size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text('Сводка настроек', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+            const Spacer(),
+            _helpIcon('Сводка', 'Проверьте все настройки перед запуском. Кнопка «Стандартные» на предыдущих шагах сбросит параметры к рекомендованным для выбранной стратегии.'),
           ],
         ),
         const SizedBox(height: 8),
