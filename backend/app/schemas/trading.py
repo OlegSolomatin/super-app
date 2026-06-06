@@ -334,6 +334,15 @@ class OrderBookRunResponse(BaseModel):
     open_trade_json: Optional[str] = None
     config: Optional[dict] = None
 
+    # Signal metrics
+    signals_total: Optional[int] = None
+    signals_rejected: Optional[int] = None
+    signals_per_minute: Optional[float] = None
+    last_signal_at: Optional[str] = None
+    last_signal_type: Optional[str] = None
+    last_rejection_reason: Optional[str] = None
+    signal_summary_json: Optional[str] = None
+
     @field_validator("user_id", mode="before")
     @classmethod
     def coerce_user_id(cls, v: Any) -> UUID:

@@ -618,12 +618,42 @@ class TradingScheduler:
             break  # только первая открытая позиция
 
         async with async_session_factory() as session:
+            # Signal metrics from engine
+            metrics = getattr(engine, "metrics", {}) or {}
+            signals_total = metrics.get("signals_generated", 0)
+            signals_rejected = metrics.get("signals_rejected", 0)
+            spm = metrics.get("signals_per_minute", 0.0)
+
+            # Summary of rejection breakdown (top-5 reasons)
+            rejection_keys = [
+                "cache_not_warm", "global_stop_filtered",
+                "pairlock_filtered", "has_position_filtered",
+                "rejected_spread", "rejected_iceberg",
+                "rejected_confirm_ticks", "rejected_no_signal",
+                "rejected_gatekeeper", "rejected_wallet",
+            ]
+            signal_summary = {
+                k: metrics.get(k, 0) for k in rejection_keys
+                if metrics.get(k, 0) > 0
+            }
+
+            # Last signal info
+            signal_history = getattr(engine, "_signal_history", [])
+            last_signal = list(signal_history)[-1] if signal_history else None
+
             await session.execute(
                 update(DBOrderBookRun)
                 .where(DBOrderBookRun.id == run_id)
                 .values(
                     current_balance=current_balance,
                     open_trade_json=json.dumps(open_trade) if open_trade else None,
+                    signals_total=signals_total,
+                    signals_rejected=signals_rejected,
+                    signals_per_minute=spm,
+                    last_signal_at=last_signal.get("timestamp") if last_signal else None,
+                    last_signal_type=last_signal.get("signal_type") if last_signal else None,
+                    last_rejection_reason=last_signal.get("detail") if last_signal and last_signal.get("status") == "filtered" else None,
+                    signal_summary_json=json.dumps(signal_summary) if signal_summary else None,
                 )
             )
             await session.commit()

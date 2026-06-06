@@ -263,6 +263,15 @@ class OrderBookRun(Base):
     current_balance = Column(Float, nullable=True)
     open_trade_json = Column(Text, nullable=True)
 
+    # Signal metrics (обновляются каждые 3 сек)
+    signals_total = Column(Integer, nullable=True, default=0)
+    signals_rejected = Column(Integer, nullable=True, default=0)
+    signals_per_minute = Column(Float, nullable=True, default=0.0)
+    last_signal_at = Column(DateTime(timezone=True), nullable=True)
+    last_signal_type = Column(String(50), nullable=True)
+    last_rejection_reason = Column(String(200), nullable=True)
+    signal_summary_json = Column(Text, nullable=True)
+
     __table_args__ = (
         Index("ix_ob_runs_user_status", "user_id", "status"),
         Index("ix_ob_runs_started_at", "started_at"),
