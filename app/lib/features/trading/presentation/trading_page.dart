@@ -565,42 +565,77 @@ class _TradingPageState extends State<TradingPage>
           final status = run['status'] as String? ?? 'unknown';
           final pair = run['pair'] as String? ?? 'N/A';
           final strategy = run['strategy'] as String? ?? 'N/A';
+          final signalsTotal = (run['signals_total'] as num?)?.toInt() ?? 0;
+          final spm = (run['signals_per_minute'] as num?)?.toDouble() ?? 0.0;
+          final isActive = status == 'running';
           return PfCard(
             padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
             onTap: () => context.go('/trading/ob-run/${run['id']}'),
-            child: Row(children: [
-              Container(width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: status == 'running' ? PfColors.success.withValues(alpha: 0.12) : pc.mutedC,
-                  borderRadius: PfRadius.borderRadiusMd,
-                ),
-                child: Center(child: PhosphorIcon(
-                  status == 'running' ? PhosphorIconsFill.playCircle : PhosphorIconsFill.checkCircle,
-                  size: 20,
-                  color: status == 'running' ? PfColors.success : pc.mutedForegroundC,
-                )),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(pair, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 2),
-                  Text('$strategy · ${status == 'running' ? '🟢 Активна' : '⏹️ Завершена'}',
-                    style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: isActive ? PfColors.success.withValues(alpha: 0.12) : pc.mutedC,
+                      borderRadius: PfRadius.borderRadiusMd,
+                    ),
+                    child: Center(child: PhosphorIcon(
+                      isActive ? PhosphorIconsFill.playCircle : PhosphorIconsFill.checkCircle,
+                      size: 20,
+                      color: isActive ? PfColors.success : pc.mutedForegroundC,
+                    )),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(pair, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      Text('$strategy · ${isActive ? '🟢 Активна' : '⏹️ Завершена'}',
+                        style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                    ],
+                  )),
+                  if (isActive)
+                    PfButton(variant: 'outline', size: 'sm', label: '⏹',
+                      onPressed: () async {
+                        final id = run['id'] as int?;
+                        if (id != null) {
+                          await widget.repository.stopOrderBookRun(id);
+                          _loadOrderBookRuns();
+                        }
+                      },
+                    ),
+                ]),
+                // Signal activity row (only for running)
+                if (isActive) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // Alive dot
+                      Container(
+                        width: 6, height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: spm > 0 ? PfColors.success : PfColors.warning,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          spm > 0
+                              ? '${spm.toStringAsFixed(0)} сигн/мин · $signalsTotal всего'
+                              : 'Нет сигналов ($signalsTotal обработано)',
+                          style: PfTypography.caption.copyWith(
+                            color: spm > 0 ? pc.mutedForegroundC : PfColors.warning,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-              )),
-              if (status == 'running')
-                PfButton(variant: 'outline', size: 'sm', label: '⏹',
-                  onPressed: () async {
-                    final id = run['id'] as int?;
-                    if (id != null) {
-                      await widget.repository.stopOrderBookRun(id);
-                      _loadOrderBookRuns();
-                    }
-                  },
-                ),
-            ]),
+              ],
+            ),
           );
         },
       ),
