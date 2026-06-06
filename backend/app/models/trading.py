@@ -256,6 +256,9 @@ class OrderBookRun(Base):
     loss_trades = Column(Integer, nullable=True, default=0)
     final_balance = Column(Float, nullable=True)
 
+    # Конфигурация стратегии (сохраняется при старте)
+    config_json = Column(Text, nullable=True)
+
     # Live-status (обновляются engine в реальном времени)
     current_balance = Column(Float, nullable=True)
     open_trade_json = Column(Text, nullable=True)

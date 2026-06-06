@@ -53,6 +53,7 @@ async def start_orderbook_run(
         strategy=config.strategy,
         initial_balance=config.initial_balance,
         max_open_trades=config.max_open_trades,
+        config_json=config.model_dump_json(),
     )
     session.add(db_run)
     await session.flush()

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+import json
 from typing import Any, List, Optional
 from uuid import UUID
 
@@ -331,6 +332,7 @@ class OrderBookRunResponse(BaseModel):
     final_balance: Optional[float] = None
     current_balance: Optional[float] = None
     open_trade_json: Optional[str] = None
+    config: Optional[dict] = None
 
     @field_validator("user_id", mode="before")
     @classmethod
@@ -349,6 +351,20 @@ class OrderBookRunResponse(BaseModel):
         if isinstance(v, str):
             return TradingRunStatus(v)
         return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_config_json(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            config_json = data.get("config_json")
+            if isinstance(config_json, str):
+                try:
+                    data["config"] = json.loads(config_json)
+                except (json.JSONDecodeError, TypeError):
+                    data["config"] = None
+            # Удаляем сырое поле, т.к. его нет в схеме
+            data.pop("config_json", None)
+        return data
 
 
 class OrderBookRunListResponse(BaseModel):

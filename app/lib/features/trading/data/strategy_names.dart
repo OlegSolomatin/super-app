@@ -86,6 +86,27 @@ const Map<String, String> configKeyRussianNames = {
   'trailing_stop_pct': 'Трейлинг стоп (%)',
   'max_open_positions': 'Макс. открытых позиций',
   'min_notional': 'Мин. номинал',
+
+  // OrderBook общие
+  'initial_balance': 'Стартовый баланс',
+  'max_open_trades': 'Макс. сделок',
+  'stoploss': 'Стоп-лосс (%)',
+  'trailing_stop': 'Трейлинг стоп (%)',
+  'trailing_offset': 'Отступ трейлинга (%)',
+  'max_hold_seconds': 'Макс. удержание (сек)',
+  'confirmation_ticks': 'Тиков подтверждения',
+  'max_spread': 'Макс. спред (%)',
+  'cooldown_seconds': 'Кулдаун (сек)',
+
+  // Spread Capture
+  'min_spread_pct': 'Мин. спред (%)',
+  'spread_entry_threshold': 'Порог входа (спред)',
+  'spread_exit_threshold': 'Порог выхода (спред)',
+
+  // Order Flow Momentum
+  'flow_threshold_volume': 'Порог объёма потока',
+  'min_flow_signals': 'Мин. сигналов потока',
+  'flow_exit_seconds': 'Выход потока (сек)',
 };
 
 /// Форматирует значение настройки для отображения.
