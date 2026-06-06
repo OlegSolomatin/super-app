@@ -25,6 +25,7 @@ from app.schemas.trading import (
     OrderBookRunListResponse,
     OrderBookRunResponse,
     OrderBookStartRequest,
+    OrderBookStatusResponse,
 )
 from app.services.trading.scheduler import scheduler
 
@@ -133,6 +134,36 @@ async def get_orderbook_run(
     if not db_run:
         raise HTTPException(status_code=404, detail="Run not found")
     return OrderBookRunResponse.model_validate(db_run)
+
+
+@router.get("/runs/{run_id}/status", response_model=OrderBookStatusResponse)
+async def get_orderbook_run_status(
+    run_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> OrderBookStatusResponse:
+    """Get live status for an active Order Book run (engine metrics, signals)."""
+    # Verify the run belongs to this user
+    stmt = select(DBOrderBookRun).where(
+        DBOrderBookRun.id == run_id,
+        DBOrderBookRun.user_id == current_user.id,
+    )
+    result = await session.execute(stmt)
+    db_run = result.scalar_one_or_none()
+    if not db_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="OrderBook run not found",
+        )
+
+    status_data = scheduler.get_engine_status(run_id)
+    if status_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Engine is not running (run may be finished or cancelled)",
+        )
+
+    return OrderBookStatusResponse(**status_data)
 
 
 @router.post("/stop")

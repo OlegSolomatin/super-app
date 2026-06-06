@@ -388,3 +388,17 @@ class OrderBookRunListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class OrderBookStatusResponse(BaseModel):
+    """Live status of an OB engine run (from engine.status)."""
+
+    running: bool
+    pair: str
+    strategy: str
+    balance: float
+    free_balance: float
+    open_trades: dict
+    metrics: dict
+    active_locks: list
+    recent_signals: list[dict]

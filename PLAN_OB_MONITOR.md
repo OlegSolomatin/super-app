@@ -1,504 +1,538 @@
+     1|
+     2|# PLAN: Мониторинг Order Book стратегий — видимость сигналов и отказов
+     3|
+     4|**Версия:** 1.0  
+     5|**Дата:** 2026-06-06  
+     6|**Цель:** Сделать видимым, почему OB-стратегии не совершают сделок, добавить счётчики сигналов/отказов, ленту последних событий и индикаторы активности на фронте.
+     7|
+     8|---
+     9|
+    10|## 📋 Статус выполнения
+    11|
+    12|| # | Приоритет | Этап | Статус | Проблемы |
+    13||---|-----------|------|--------|----------|
+    14|| 1 | 🔴 | Счётчики отказов + Signal History Buffer | ✅ **Выполнен** | Нет |
+    15|| 2 | 🟡 | API эндпоинт live-статуса | ✅ **Выполнен** | Нет |
+    16|| 3 | 🔵 | Signal метрики в БД | ⏳ Ожидает | — |
+    17|| 4 | 🟢 | Фронт: блок активности на RunDetail | ⏳ Ожидает | — |
+    18|| 5 | 🟢 | Фронт: лента последних сигналов | ⏳ Ожидает | — |
+    19|| 6 | 🟢 | Фронт: индикаторы на TradingPage | ⏳ Ожидает | — |
+    20|| 7 | ⚪ | Логирование в файл | ⏳ Ожидает | — |
+    21|
+    22|---
+    23|
+    24|## 🔴 Приоритет 1: Счётчики отказов + Signal History Buffer — ВЫПОЛНЕН
+    25|
+    26|### Что сделано
+    27|
+    28|**Файлы:**
+    29|- `backend/app/services/trading/orderbook/engine.py`
+    30|- `backend/app/services/trading/orderbook/strategies/base.py`
+    31|- `backend/app/services/trading/orderbook/strategies/imbalance_scalping.py`
+    32|- `backend/app/services/trading/orderbook/strategies/spread_capture.py`
+    33|- `backend/app/services/trading/orderbook/strategies/order_flow_momentum.py`
+    34|
+    35|**Изменения:**
+    36|
+    37|1. **engine.py:**
+    38|   - Добавлен `from collections import deque`
+    39|   - В `__init__`: `self._signal_history: deque[dict]` (maxlen=100), `self._signal_timestamps: deque[datetime]`
+    40|   - `self.metrics` расширен с 8 до 20 ключей (12 новых счётчиков отказов)
+    41|   - Добавлен метод `_record_signal()` — запись сигнала в history
+    42|   - `_on_snapshot()`: на каждый `return` — инкремент счётчика + `_record_signal()`
+    43|   - `signals_per_minute` — скользящее окно за 60 сек
+    44|   - `status` property: добавлен `recent_signals` (последние 20)
+    45|   - При отказе analyze(): читает `self.strategy._last_rejection`
+    46|
+    47|2. **base.py (стратегии):**
+    48|   - Добавлен `self._last_rejection: str = ""`
+    49|   - Добавлен метод `_reject(reason)` — запоминает причину отказа
+    50|
+    51|3. **Все 3 стратегии:**
+    52|   - Каждый `return None` в `analyze()` теперь вызывает `_reject()` с детальным описанием
+    53|
+    54|**Новые счётчики (12 шт):**
+    55|```
+    56|signals_rejected, signals_per_minute, cache_not_warm,
+    57|global_stop_filtered, pairlock_filtered, has_position_filtered,
+    58|rejected_spread, rejected_iceberg, rejected_confirm_ticks,
+    59|rejected_no_signal, rejected_gatekeeper, rejected_wallet
+    60|```
+    61|
+    62|**Проверка:**
+    63|- `python3 -c "from app.services.trading.orderbook.engine import OrderBookEngine"` — ✅
+    64|- `python3 -c "from ...strategies.* import ..."` — ✅
+    65|- Все 3 стратегии корректно инициализируются с `_reject()`
+    66|
+    67|---
+    68|
+    69|## 📋 Текущая проблема
+    70|
+    71|```
+    72|WS снапшот (каждые 100мс)
+    73|    ↓
+    74|_on_snapshot() в engine.py
+    75|    ├─ Cache не прогрет?     → return 🤫
+    76|    ├─ Global stop?           → return 🤫
+    77|    ├─ PairLock активен?      → return 🤫
+    78|    ├─ Уже есть позиция?      → return 🤫
+    79|    ├─ analyze() → None?      → return 🤫🤫🤫
+    80|    ├─ confirm_entry() False? → return 🤫
+    81|    ├─ stake ≤ 0?             → return 🤫
+    82|    └─ ✅ ENTRY (единственный лог)
+    83|```
+    84|
+    85|**Симптом:** Стратегия может получить 10,000+ снапшотов, отфильтровать 99.9% из них, а пользователь видит «0 сделок» и не понимает почему.
+    86|
+    87|
 
-# PLAN: Мониторинг Order Book стратегий — видимость сигналов и отказов
-
-**Версия:** 1.0  
-**Дата:** 2026-06-06  
-**Цель:** Сделать видимым, почему OB-стратегии не совершают сделок, добавить счётчики сигналов/отказов, ленту последних событий и индикаторы активности на фронте.
-
----
-
-## 📋 Статус выполнения
-
-| # | Приоритет | Этап | Статус | Проблемы |
-|---|-----------|------|--------|----------|
-| 1 | 🔴 | Счётчики отказов + Signal History Buffer | ✅ **Выполнен** | Нет |
-| 2 | 🟡 | API эндпоинт live-статуса | ⏳ Ожидает | — |
-| 3 | 🔵 | Signal метрики в БД | ⏳ Ожидает | — |
-| 4 | 🟢 | Фронт: блок активности на RunDetail | ⏳ Ожидает | — |
-| 5 | 🟢 | Фронт: лента последних сигналов | ⏳ Ожидает | — |
-| 6 | 🟢 | Фронт: индикаторы на TradingPage | ⏳ Ожидает | — |
-| 7 | ⚪ | Логирование в файл | ⏳ Ожидает | — |
-
----
-
-## 🔴 Приоритет 1: Счётчики отказов + Signal History Buffer — ВЫПОЛНЕН
+## 🟡 Приоритет 2: API эндпоинт live-статуса — ВЫПОЛНЕН
 
 ### Что сделано
 
 **Файлы:**
-- `backend/app/services/trading/orderbook/engine.py`
-- `backend/app/services/trading/orderbook/strategies/base.py`
-- `backend/app/services/trading/orderbook/strategies/imbalance_scalping.py`
-- `backend/app/services/trading/orderbook/strategies/spread_capture.py`
-- `backend/app/services/trading/orderbook/strategies/order_flow_momentum.py`
+- `backend/app/services/trading/scheduler.py`
+- `backend/app/schemas/trading.py`
+- `backend/app/api/v1/orderbook.py`
 
 **Изменения:**
 
-1. **engine.py:**
-   - Добавлен `from collections import deque`
-   - В `__init__`: `self._signal_history: deque[dict]` (maxlen=100), `self._signal_timestamps: deque[datetime]`
-   - `self.metrics` расширен с 8 до 20 ключей (12 новых счётчиков отказов)
-   - Добавлен метод `_record_signal()` — запись сигнала в history
-   - `_on_snapshot()`: на каждый `return` — инкремент счётчика + `_record_signal()`
-   - `signals_per_minute` — скользящее окно за 60 сек
-   - `status` property: добавлен `recent_signals` (последние 20)
-   - При отказе analyze(): читает `self.strategy._last_rejection`
+1. **scheduler.py:**
+   - Добавлен `self._engines: Dict[int, Any]` — хранит ссылки на активные OB engine
+   - Добавлен `get_engine_status(run_id)` — возвращает `engine.status` или None
+   - Engine сохраняется в `_engines` при `start_orderbook_run()`
+   - Engine удаляется из `_engines` в `finally` блоке `_run_orderbook_engine()`
 
-2. **base.py (стратегии):**
-   - Добавлен `self._last_rejection: str = ""`
-   - Добавлен метод `_reject(reason)` — запоминает причину отказа
+2. **schemas/trading.py:**
+   - Добавлен `OrderBookStatusResponse` — 9 полей (running, pair, strategy, balance, free_balance, open_trades, metrics, active_locks, recent_signals)
 
-3. **Все 3 стратегии:**
-   - Каждый `return None` в `analyze()` теперь вызывает `_reject()` с детальным описанием
-
-**Новые счётчики (12 шт):**
-```
-signals_rejected, signals_per_minute, cache_not_warm,
-global_stop_filtered, pairlock_filtered, has_position_filtered,
-rejected_spread, rejected_iceberg, rejected_confirm_ticks,
-rejected_no_signal, rejected_gatekeeper, rejected_wallet
-```
+3. **api/v1/orderbook.py:**
+   - Импортирован `OrderBookStatusResponse`
+   - Добавлен эндпоинт `GET /orderbook/runs/{run_id}/status` — возвращает live-статус engine
 
 **Проверка:**
-- `python3 -c "from app.services.trading.orderbook.engine import OrderBookEngine"` — ✅
-- `python3 -c "from ...strategies.* import ..."` — ✅
-- Все 3 стратегии корректно инициализируются с `_reject()`
+- `python3 -c "from app.schemas.trading import OrderBookStatusResponse"` — ✅
+- `python3 -c "from app.api.v1.orderbook import router"` — ✅
+- `scheduler._engines` — ✅
+- Route `GET /orderbook/runs/{run_id}/status` зарегистрирован — ✅
 
 ---
 
-## 📋 Текущая проблема
-
-```
-WS снапшот (каждые 100мс)
-    ↓
-_on_snapshot() в engine.py
-    ├─ Cache не прогрет?     → return 🤫
-    ├─ Global stop?           → return 🤫
-    ├─ PairLock активен?      → return 🤫
-    ├─ Уже есть позиция?      → return 🤫
-    ├─ analyze() → None?      → return 🤫🤫🤫
-    ├─ confirm_entry() False? → return 🤫
-    ├─ stake ≤ 0?             → return 🤫
-    └─ ✅ ENTRY (единственный лог)
-```
-
-**Симптом:** Стратегия может получить 10,000+ снапшотов, отфильтровать 99.9% из них, а пользователь видит «0 сделок» и не понимает почему.
-
 ---
-
-## 🔴 Приоритет 1: Счётчики отказов + Signal History Buffer (бэкенд)
-
-### Где меняем
-
-**Файлы:**
-- `backend/app/services/trading/orderbook/engine.py` — основной
-- `backend/app/services/trading/orderbook/models.py` — модель `OrderBookSignal` (опционально)
-
-### Что делаем
-
-#### 1.1 Расширяем `self.metrics` в `OrderBookEngine.__init__()`
-
-```python
-self.metrics = {
-    # Было:
-    "signals_generated": 0,
-    "trades_opened": 0,
-    "trades_closed": 0,
-    "total_pnl": 0.0,
-    "win_count": 0,
-    "loss_count": 0,
-    "max_drawdown": 0.0,
-    "peak_balance": config.initial_balance,
-
-    # Новое:
-    "signals_rejected": 0,       # Общее кол-во отказов
-    "signals_per_minute": 0.0,   # Средняя скорость (за 60с)
-    "cache_not_warm": 0,         # 1. Кэш не прогрет
-    "global_stop_filtered": 0,   # 2. Global protection сработала
-    "pairlock_filtered": 0,      # 3. PairLock активен
-    "has_position_filtered": 0,  # 4. Уже в позиции
-    "rejected_spread": 0,        # 5a. Спред > max
-    "rejected_iceberg": 0,       # 5b. Iceberg
-    "rejected_confirm_ticks": 0, # 5c. Не хватило тиков
-    "rejected_no_signal": 0,     # 5d. analyze() → None (без явной причины)
-    "rejected_gatekeeper": 0,    # 6. confirm_trade_entry → False
-    "rejected_wallet": 0,        # 7. Не хватило баланса
-
-    # Время последнего сигнала (для индикатора «жива ли стратегия»)
-    "last_signal_at": None,
-    "last_signal_type": None,
-    "last_rejection_reason": None,
-}
-```
-
-#### 1.2 Вставляем счётчики в `_on_snapshot()`
-
-Для каждого `return` в `_on_snapshot()`:
-
-```python
-# Было:
-if not self.cache.is_warm:
-    return
-
-# Стало:
-if not self.cache.is_warm:
-    self.metrics["cache_not_warm"] += 1
-    self._record_signal(None, "cache_not_warm")
-    return
-
-# Аналогично для:
-# - protection.global_stop() → metrics["global_stop_filtered"]
-# - pairlock.is_locked()    → metrics["pairlock_filtered"]
-# - snap.pair in trades     → metrics["has_position_filtered"]
-# - snap.spread_pct > cfg   → metrics["rejected_spread"]
-# - is_iceberg()            → metrics["rejected_iceberg"]
-# - len(window) < ticks     → metrics["rejected_confirm_ticks"]
-# - analyze → None          → metrics["rejected_no_signal"]
-# - confirm_entry → False   → metrics["rejected_gatekeeper"]
-# - stake ≤ 0               → metrics["rejected_wallet"]
-```
-
-Также считаем `signals_per_minute` — скользящее среднее:
-
-```python
-# В _on_snapshot, в самом начале:
-now = datetime.now(timezone.utc)
-self._signal_timestamps.append(now)
-# Чистим старые (>60с)
-cutoff = now - timedelta(seconds=60)
-while self._signal_timestamps and self._signal_timestamps[0] < cutoff:
-    self._signal_timestamps.popleft()
-self.metrics["signals_per_minute"] = len(self._signal_timestamps)
-```
-
-#### 1.3 Добавляем `_record_signal()` и `_signal_history`
-
-```python
-# В __init__:
-self._signal_history: deque[dict] = deque(maxlen=100)  # 100 записей
-self._signal_timestamps: deque[datetime] = deque()      # для signals_per_minute
-
-# Новый метод:
-def _record_signal(self, signal_type: str | None, status: str, detail: str = ""):
-    """Записать событие сигнала в историю.
-    
-    signal_type: "imbalance_buy", "spread_capture", None (нет сигнала)
-    status: "accepted" | "rejected" | "filtered"
-    detail: причина отказа
-    """
-    self._signal_history.append({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "signal_type": signal_type or "none",
-        "status": status,
-        "detail": detail,
-    })
-```
-
-#### 1.4 Добавляем `_record_signal()` во все точки выхода `_on_snapshot()`
-
-Где нет signal object — передаём `None`:
-```python
-self._record_signal(None, "filtered", "cache_not_warm")
-self._record_signal(None, "filtered", f"spread={snap.spread_pct:.4f} > {c.max_spread_pct}")
-self._record_signal(None, "filtered", "iceberg")
-self._record_signal(None, "filtered", f"confirm_ticks={len(window)}/{c.confirmation_ticks}")
-self._record_signal(None, "filtered", "pairlock")
-self._record_signal(None, "filtered", "has_position")
-self._record_signal(None, "filtered", "global_stop")
-self._record_signal(None, "filtered", "gatekeeper")
-self._record_signal(None, "filtered", "wallet")
-```
-
-Где есть signal — передаём его тип:
-```python
-self._record_signal(signal.entry_tag, "accepted", signal.reason)
-```
-
-#### 1.5 Добавляем `logger.debug()` на каждый отказ
-
-```python
-logger.debug(
-    "[OBEngine] REJECT %s | %s | conf=%d snap=%d",
-    snap.pair, reason, c.confirmation_ticks, len(window)
-)
-```
-
-#### 1.6 Расширяем `status` property
-
-```python
-@property
-def status(self) -> dict:
-    return {
-        # ...было...
-        "metrics": {k: round(v, 2) if isinstance(v, float) else v for k, v in self.metrics.items()},
-        "active_locks": self.pairlock.active_locks,
-        # НОВОЕ:
-        "recent_signals": list(self._signal_history)[-20:],  # последние 20
-        "signals_per_minute": self.metrics["signals_per_minute"],
-    }
-```
-
-### Проверка после этапа
-
-1. `cd backend && python -c "from app.services.trading.orderbook.engine import OrderBookEngine; print('OK')"` — импорт без ошибок
-2. `pytest tests/ -x -k orderbook` — тесты не сломались (если есть)
-3. Проверить что `_signal_timestamps` не имеет race condition (использует `async with self._lock`)
-
-### Зависимость с фронтом
-
-На этом этапе данные только живут в памяти engine. Фронт их не видит — это нормально. Начинаем наполнять данные.
-
----
-
-## 🟡 Приоритет 2: API эндпоинт live-статуса (бэкенд)
-
-### Где меняем
-
-**Файлы:**
-- `backend/app/api/v1/orderbook.py` — новый эндпоинт
-- `backend/app/schemas/trading.py` — новая Pydantic-схема
-- `backend/app/services/trading/scheduler.py` — чтобы достать engine по run_id
-
-### Что делаем
-
-#### 2.1 Добавляем метод в scheduler для доступа к engine
-
-```python
-# В scheduler.py:
-def get_engine_status(self, run_id: int) -> dict | None:
-    """Получить live-статус engine по run_id."""
-    engine = self._engines.get(run_id)
-    if engine is None:
-        return None
-    return engine.status
-```
-
-Добавить `_engines: dict[int, OrderBookEngine]` в `TradingScheduler.__init__()`:
-```python
-self._engines: dict[int, OrderBookEngine] = {}
-```
-
-Сохранять engine при старте:
-```python
-# В start_orderbook_run():
-engine = OrderBookEngine(ob_config)
-self._engines[run_id] = engine  # ← НОВОЕ
-task = asyncio.create_task(...)
-```
-
-Удалять при завершении:
-```python
-# В _run_orderbook_engine(), в finally:
-self._engines.pop(run_id, None)
-```
-
-#### 2.2 Pydantic-схема для статуса
-
-```python
-# В schemas/trading.py:
-class OrderBookStatusResponse(BaseModel):
-    running: bool
-    pair: str
-    strategy: str
-    balance: float
-    signals_per_minute: float
-    metrics: dict
-    open_trades: dict
-    active_locks: list
-    recent_signals: list[dict]  # последние 20
-```
-
-#### 2.3 Новый эндпоинт
-
-```python
-@router.get("/runs/{run_id}/status", response_model=OrderBookStatusResponse)
-async def get_orderbook_run_status(
-    run_id: int,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> OrderBookStatusResponse:
-    # Проверить что run принадлежит пользователю
-    stmt = select(DBOrderBookRun).where(
-        DBOrderBookRun.id == run_id,
-        DBOrderBookRun.user_id == current_user.id,
-    )
-    result = await session.execute(stmt)
-    db_run = result.scalar_one_or_none()
-    if not db_run:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-    status = scheduler.get_engine_status(run_id)
-    if status is None:
-        raise HTTPException(status_code=404, detail="Engine not running")
-
-    return OrderBookStatusResponse(**status)
-```
-
-### Проверка после этапа
-
-1. Запустить бэкенд: `cd backend && PYTHONPATH=$PWD uvicorn app.main:app`
-2. Создать тестовый OB-запуск
-3. Вызвать `curl http://localhost:8000/api/v1/orderbook/runs/{id}/status`
-4. Проверить что возвращается полный статус с метриками
-5. `dart analyze` — импорт схемы не сломал фронт (опционально)
-
-### Как работает с фронтом
-
-Фронт будет дёргать `GET /runs/{id}/status` раз в 2-3 секунды для активных запусков. Получает все метрики + recent_signals.
-
----
-
-## 🔵 Приоритет 3: Signal History Buffer + метрики в БД (live-сохранение)
-
-### Где меняем
-
-**Файлы:**
-- `backend/app/models/trading.py` — новые поля OrderBookRun
-- `backend/app/services/trading/scheduler.py` — расширить `_save_ob_live_status()`
-- `backend/app/schemas/trading.py` — расширить OrderBookRunResponse
-
-### Что делаем
-
-#### 3.1 Новые поля в OrderBookRun
-
-```python
-class OrderBookRun(Base):
-    # ...существующие поля...
-    
-    # НОВОЕ: live-метрики (обновляются каждые 3 сек)
-    signals_total = Column(Integer, nullable=True, default=0)
-    signals_rejected = Column(Integer, nullable=True, default=0)
-    signals_per_minute = Column(Float, nullable=True, default=0.0)
-    
-    # НОВОЕ: последний сигнал (для визуала)
-    last_signal_at = Column(DateTime(timezone=True), nullable=True)
-    last_signal_type = Column(String(50), nullable=True)
-    last_rejection_reason = Column(String(200), nullable=True)
-    
-    # НОВОЕ: сигнальное резюме (JSON-строка)
-    signal_summary_json = Column(Text, nullable=True)
-```
-
-#### 3.2 Расширяем `_save_ob_live_status()`
-
-```python
-# В scheduler.py _save_ob_live_status():
-# Взять метрики из engine
-metrics = getattr(engine, "metrics", {})
-signals_generated = metrics.get("signals_generated", 0)
-
-# Сигнальное резюме (топ-5 причин отказов)
-rejection_breakdown = {
-    k: v for k, v in metrics.items()
-    if k.startswith("rejected_") or k.endswith("_filtered")
-}
-
-values = {
-    "current_balance": current_balance,
-    "open_trade_json": json.dumps(open_trade) if open_trade else None,
-    # НОВОЕ:
-    "signals_total": signals_generated,
-    "signals_rejected": metrics.get("signals_rejected", 0),
-    "signals_per_minute": metrics.get("signals_per_minute", 0.0),
-    "last_signal_at": metrics.get("last_signal_at"),
-    "last_signal_type": metrics.get("last_signal_type"),
-    "last_rejection_reason": metrics.get("last_rejection_reason"),
-    "signal_summary_json": json.dumps(rejection_breakdown),
-}
-```
-
-#### 3.3 Нужна миграция
-
-```bash
-cd backend && PYTHONPATH=$PWD alembic revision --autogenerate -m "add signal metrics to ob runs"
-# Проверить сгенерированный файл
-cd backend && PYTHONPATH=$PWD alembic upgrade head
-```
-
-### Проверка после этапа
-
-1. Миграция выполняется без ошибок
-2. При live-запуске — поля `signals_total`, `signals_rejected` заполняются
-3. `curl .../orderbook/runs/{id}` — возвращает новые поля
-
-### Как работает с фронтом
-
-Фронт получает метрики через существующий `GET /runs/{id}` (который дёргается раз в 5 сек). Без нового эндпоинта — данные уже в ответе.
-
----
-
-## 🟢 Приоритет 4: Фронт — блок активности сигналов на RunDetailPage
-
-### Где меняем
-
-**Файл:**
-- `app/lib/features/trading/presentation/orderbook_run_detail_page.dart`
-- `app/lib/features/trading/data/trading_repository.dart` — новый метод
-
-### Что делаем
-
-#### 4.1 Новый метод в репозитории
-
-```dart
-Future<Map<String, dynamic>> getOrderBookRunStatus(int runId) async {
-  final response = await client.get('/api/v1/orderbook/runs/$runId/status');
-  return response.data as Map<String, dynamic>;
-}
-```
-
-#### 4.2 Новый блок «Активность сигналов» на RunDetailPage
-
-Расположить **после баланса, перед настройками** (или наоборот — смотрим).
-
-```dart
-Widget _buildSignalActivity(PfColors pc) {
-  // Если запуск не running — не показываем
-  if (_run?['status'] != 'running') return const SizedBox();
-  
-  // Берём из _run (сохраняется в БД) или из _liveStatus (если есть)
-  final total = _run?['signals_total'] as int? ?? 0;
-  final rejected = _run?['signals_rejected'] as int? ?? 0;
-  final spm = (_run?['signals_per_minute'] as num?)?.toDouble() ?? 0;
-  
-  final accepted = total - rejected;
-  final rejectRate = total > 0 ? (rejected / total * 100) : 0.0;
-  
-  return PfCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            PhosphorIcon(PhosphorIconsFill.waveform, size: 16, color: pc.foregroundC),
-            const SizedBox(width: 8),
-            Text('Активность сигналов', style: ...),
-            const Spacer(),
-            // Индикатор «жива ли стратегия»
-            _buildAliveIndicator(spm, pc),
-          ],
-        ),
-        const SizedBox(height: PfSpacing.sm),
-        const PfDivider(),
-        const SizedBox(height: PfSpacing.sm),
-        
-        // Большая цифра: всего сигналов
-        _bigMetric(pc, '$total', 'сигналов всего'),
-        
-        // Speed: сигналов/мин
-        _speedIndicator(spm, pc, theme),
-        
-        // Прогресс-бар принято/отсеяно
-        _acceptRejectBar(accepted, rejected, pc),
-        
-        // Разбивка по причинам (из signal_summary)
-        if (_run?['signal_summary_json'] != null)
-          _rejectionBreakdown(pc, jsonDecode(_run!['signal_summary_json'] as String)),
-      ],
-    ),
-  );
-}
-```
-
+    88|
+    89|## 🔴 Приоритет 1: Счётчики отказов + Signal History Buffer (бэкенд)
+    90|
+    91|### Где меняем
+    92|
+    93|**Файлы:**
+    94|- `backend/app/services/trading/orderbook/engine.py` — основной
+    95|- `backend/app/services/trading/orderbook/models.py` — модель `OrderBookSignal` (опционально)
+    96|
+    97|### Что делаем
+    98|
+    99|#### 1.1 Расширяем `self.metrics` в `OrderBookEngine.__init__()`
+   100|
+   101|```python
+   102|self.metrics = {
+   103|    # Было:
+   104|    "signals_generated": 0,
+   105|    "trades_opened": 0,
+   106|    "trades_closed": 0,
+   107|    "total_pnl": 0.0,
+   108|    "win_count": 0,
+   109|    "loss_count": 0,
+   110|    "max_drawdown": 0.0,
+   111|    "peak_balance": config.initial_balance,
+   112|
+   113|    # Новое:
+   114|    "signals_rejected": 0,       # Общее кол-во отказов
+   115|    "signals_per_minute": 0.0,   # Средняя скорость (за 60с)
+   116|    "cache_not_warm": 0,         # 1. Кэш не прогрет
+   117|    "global_stop_filtered": 0,   # 2. Global protection сработала
+   118|    "pairlock_filtered": 0,      # 3. PairLock активен
+   119|    "has_position_filtered": 0,  # 4. Уже в позиции
+   120|    "rejected_spread": 0,        # 5a. Спред > max
+   121|    "rejected_iceberg": 0,       # 5b. Iceberg
+   122|    "rejected_confirm_ticks": 0, # 5c. Не хватило тиков
+   123|    "rejected_no_signal": 0,     # 5d. analyze() → None (без явной причины)
+   124|    "rejected_gatekeeper": 0,    # 6. confirm_trade_entry → False
+   125|    "rejected_wallet": 0,        # 7. Не хватило баланса
+   126|
+   127|    # Время последнего сигнала (для индикатора «жива ли стратегия»)
+   128|    "last_signal_at": None,
+   129|    "last_signal_type": None,
+   130|    "last_rejection_reason": None,
+   131|}
+   132|```
+   133|
+   134|#### 1.2 Вставляем счётчики в `_on_snapshot()`
+   135|
+   136|Для каждого `return` в `_on_snapshot()`:
+   137|
+   138|```python
+   139|# Было:
+   140|if not self.cache.is_warm:
+   141|    return
+   142|
+   143|# Стало:
+   144|if not self.cache.is_warm:
+   145|    self.metrics["cache_not_warm"] += 1
+   146|    self._record_signal(None, "cache_not_warm")
+   147|    return
+   148|
+   149|# Аналогично для:
+   150|# - protection.global_stop() → metrics["global_stop_filtered"]
+   151|# - pairlock.is_locked()    → metrics["pairlock_filtered"]
+   152|# - snap.pair in trades     → metrics["has_position_filtered"]
+   153|# - snap.spread_pct > cfg   → metrics["rejected_spread"]
+   154|# - is_iceberg()            → metrics["rejected_iceberg"]
+   155|# - len(window) < ticks     → metrics["rejected_confirm_ticks"]
+   156|# - analyze → None          → metrics["rejected_no_signal"]
+   157|# - confirm_entry → False   → metrics["rejected_gatekeeper"]
+   158|# - stake ≤ 0               → metrics["rejected_wallet"]
+   159|```
+   160|
+   161|Также считаем `signals_per_minute` — скользящее среднее:
+   162|
+   163|```python
+   164|# В _on_snapshot, в самом начале:
+   165|now = datetime.now(timezone.utc)
+   166|self._signal_timestamps.append(now)
+   167|# Чистим старые (>60с)
+   168|cutoff = now - timedelta(seconds=60)
+   169|while self._signal_timestamps and self._signal_timestamps[0] < cutoff:
+   170|    self._signal_timestamps.popleft()
+   171|self.metrics["signals_per_minute"] = len(self._signal_timestamps)
+   172|```
+   173|
+   174|#### 1.3 Добавляем `_record_signal()` и `_signal_history`
+   175|
+   176|```python
+   177|# В __init__:
+   178|self._signal_history: deque[dict] = deque(maxlen=100)  # 100 записей
+   179|self._signal_timestamps: deque[datetime] = deque()      # для signals_per_minute
+   180|
+   181|# Новый метод:
+   182|def _record_signal(self, signal_type: str | None, status: str, detail: str = ""):
+   183|    """Записать событие сигнала в историю.
+   184|    
+   185|    signal_type: "imbalance_buy", "spread_capture", None (нет сигнала)
+   186|    status: "accepted" | "rejected" | "filtered"
+   187|    detail: причина отказа
+   188|    """
+   189|    self._signal_history.append({
+   190|        "timestamp": datetime.now(timezone.utc).isoformat(),
+   191|        "signal_type": signal_type or "none",
+   192|        "status": status,
+   193|        "detail": detail,
+   194|    })
+   195|```
+   196|
+   197|#### 1.4 Добавляем `_record_signal()` во все точки выхода `_on_snapshot()`
+   198|
+   199|Где нет signal object — передаём `None`:
+   200|```python
+   201|self._record_signal(None, "filtered", "cache_not_warm")
+   202|self._record_signal(None, "filtered", f"spread={snap.spread_pct:.4f} > {c.max_spread_pct}")
+   203|self._record_signal(None, "filtered", "iceberg")
+   204|self._record_signal(None, "filtered", f"confirm_ticks={len(window)}/{c.confirmation_ticks}")
+   205|self._record_signal(None, "filtered", "pairlock")
+   206|self._record_signal(None, "filtered", "has_position")
+   207|self._record_signal(None, "filtered", "global_stop")
+   208|self._record_signal(None, "filtered", "gatekeeper")
+   209|self._record_signal(None, "filtered", "wallet")
+   210|```
+   211|
+   212|Где есть signal — передаём его тип:
+   213|```python
+   214|self._record_signal(signal.entry_tag, "accepted", signal.reason)
+   215|```
+   216|
+   217|#### 1.5 Добавляем `logger.debug()` на каждый отказ
+   218|
+   219|```python
+   220|logger.debug(
+   221|    "[OBEngine] REJECT %s | %s | conf=%d snap=%d",
+   222|    snap.pair, reason, c.confirmation_ticks, len(window)
+   223|)
+   224|```
+   225|
+   226|#### 1.6 Расширяем `status` property
+   227|
+   228|```python
+   229|@property
+   230|def status(self) -> dict:
+   231|    return {
+   232|        # ...было...
+   233|        "metrics": {k: round(v, 2) if isinstance(v, float) else v for k, v in self.metrics.items()},
+   234|        "active_locks": self.pairlock.active_locks,
+   235|        # НОВОЕ:
+   236|        "recent_signals": list(self._signal_history)[-20:],  # последние 20
+   237|        "signals_per_minute": self.metrics["signals_per_minute"],
+   238|    }
+   239|```
+   240|
+   241|### Проверка после этапа
+   242|
+   243|1. `cd backend && python -c "from app.services.trading.orderbook.engine import OrderBookEngine; print('OK')"` — импорт без ошибок
+   244|2. `pytest tests/ -x -k orderbook` — тесты не сломались (если есть)
+   245|3. Проверить что `_signal_timestamps` не имеет race condition (использует `async with self._lock`)
+   246|
+   247|### Зависимость с фронтом
+   248|
+   249|На этом этапе данные только живут в памяти engine. Фронт их не видит — это нормально. Начинаем наполнять данные.
+   250|
+   251|---
+   252|
+   253|## 🟡 Приоритет 2: API эндпоинт live-статуса (бэкенд)
+   254|
+   255|### Где меняем
+   256|
+   257|**Файлы:**
+   258|- `backend/app/api/v1/orderbook.py` — новый эндпоинт
+   259|- `backend/app/schemas/trading.py` — новая Pydantic-схема
+   260|- `backend/app/services/trading/scheduler.py` — чтобы достать engine по run_id
+   261|
+   262|### Что делаем
+   263|
+   264|#### 2.1 Добавляем метод в scheduler для доступа к engine
+   265|
+   266|```python
+   267|# В scheduler.py:
+   268|def get_engine_status(self, run_id: int) -> dict | None:
+   269|    """Получить live-статус engine по run_id."""
+   270|    engine = self._engines.get(run_id)
+   271|    if engine is None:
+   272|        return None
+   273|    return engine.status
+   274|```
+   275|
+   276|Добавить `_engines: dict[int, OrderBookEngine]` в `TradingScheduler.__init__()`:
+   277|```python
+   278|self._engines: dict[int, OrderBookEngine] = {}
+   279|```
+   280|
+   281|Сохранять engine при старте:
+   282|```python
+   283|# В start_orderbook_run():
+   284|engine = OrderBookEngine(ob_config)
+   285|self._engines[run_id] = engine  # ← НОВОЕ
+   286|task = asyncio.create_task(...)
+   287|```
+   288|
+   289|Удалять при завершении:
+   290|```python
+   291|# В _run_orderbook_engine(), в finally:
+   292|self._engines.pop(run_id, None)
+   293|```
+   294|
+   295|#### 2.2 Pydantic-схема для статуса
+   296|
+   297|```python
+   298|# В schemas/trading.py:
+   299|class OrderBookStatusResponse(BaseModel):
+   300|    running: bool
+   301|    pair: str
+   302|    strategy: str
+   303|    balance: float
+   304|    signals_per_minute: float
+   305|    metrics: dict
+   306|    open_trades: dict
+   307|    active_locks: list
+   308|    recent_signals: list[dict]  # последние 20
+   309|```
+   310|
+   311|#### 2.3 Новый эндпоинт
+   312|
+   313|```python
+   314|@router.get("/runs/{run_id}/status", response_model=OrderBookStatusResponse)
+   315|async def get_orderbook_run_status(
+   316|    run_id: int,
+   317|    current_user: User = Depends(get_current_user),
+   318|    session: AsyncSession = Depends(get_session),
+   319|) -> OrderBookStatusResponse:
+   320|    # Проверить что run принадлежит пользователю
+   321|    stmt = select(DBOrderBookRun).where(
+   322|        DBOrderBookRun.id == run_id,
+   323|        DBOrderBookRun.user_id == current_user.id,
+   324|    )
+   325|    result = await session.execute(stmt)
+   326|    db_run = result.scalar_one_or_none()
+   327|    if not db_run:
+   328|        raise HTTPException(status_code=404, detail="Run not found")
+   329|
+   330|    status = scheduler.get_engine_status(run_id)
+   331|    if status is None:
+   332|        raise HTTPException(status_code=404, detail="Engine not running")
+   333|
+   334|    return OrderBookStatusResponse(**status)
+   335|```
+   336|
+   337|### Проверка после этапа
+   338|
+   339|1. Запустить бэкенд: `cd backend && PYTHONPATH=$PWD uvicorn app.main:app`
+   340|2. Создать тестовый OB-запуск
+   341|3. Вызвать `curl http://localhost:8000/api/v1/orderbook/runs/{id}/status`
+   342|4. Проверить что возвращается полный статус с метриками
+   343|5. `dart analyze` — импорт схемы не сломал фронт (опционально)
+   344|
+   345|### Как работает с фронтом
+   346|
+   347|Фронт будет дёргать `GET /runs/{id}/status` раз в 2-3 секунды для активных запусков. Получает все метрики + recent_signals.
+   348|
+   349|---
+   350|
+   351|## 🔵 Приоритет 3: Signal History Buffer + метрики в БД (live-сохранение)
+   352|
+   353|### Где меняем
+   354|
+   355|**Файлы:**
+   356|- `backend/app/models/trading.py` — новые поля OrderBookRun
+   357|- `backend/app/services/trading/scheduler.py` — расширить `_save_ob_live_status()`
+   358|- `backend/app/schemas/trading.py` — расширить OrderBookRunResponse
+   359|
+   360|### Что делаем
+   361|
+   362|#### 3.1 Новые поля в OrderBookRun
+   363|
+   364|```python
+   365|class OrderBookRun(Base):
+   366|    # ...существующие поля...
+   367|    
+   368|    # НОВОЕ: live-метрики (обновляются каждые 3 сек)
+   369|    signals_total = Column(Integer, nullable=True, default=0)
+   370|    signals_rejected = Column(Integer, nullable=True, default=0)
+   371|    signals_per_minute = Column(Float, nullable=True, default=0.0)
+   372|    
+   373|    # НОВОЕ: последний сигнал (для визуала)
+   374|    last_signal_at = Column(DateTime(timezone=True), nullable=True)
+   375|    last_signal_type = Column(String(50), nullable=True)
+   376|    last_rejection_reason = Column(String(200), nullable=True)
+   377|    
+   378|    # НОВОЕ: сигнальное резюме (JSON-строка)
+   379|    signal_summary_json = Column(Text, nullable=True)
+   380|```
+   381|
+   382|#### 3.2 Расширяем `_save_ob_live_status()`
+   383|
+   384|```python
+   385|# В scheduler.py _save_ob_live_status():
+   386|# Взять метрики из engine
+   387|metrics = getattr(engine, "metrics", {})
+   388|signals_generated = metrics.get("signals_generated", 0)
+   389|
+   390|# Сигнальное резюме (топ-5 причин отказов)
+   391|rejection_breakdown = {
+   392|    k: v for k, v in metrics.items()
+   393|    if k.startswith("rejected_") or k.endswith("_filtered")
+   394|}
+   395|
+   396|values = {
+   397|    "current_balance": current_balance,
+   398|    "open_trade_json": json.dumps(open_trade) if open_trade else None,
+   399|    # НОВОЕ:
+   400|    "signals_total": signals_generated,
+   401|    "signals_rejected": metrics.get("signals_rejected", 0),
+   402|    "signals_per_minute": metrics.get("signals_per_minute", 0.0),
+   403|    "last_signal_at": metrics.get("last_signal_at"),
+   404|    "last_signal_type": metrics.get("last_signal_type"),
+   405|    "last_rejection_reason": metrics.get("last_rejection_reason"),
+   406|    "signal_summary_json": json.dumps(rejection_breakdown),
+   407|}
+   408|```
+   409|
+   410|#### 3.3 Нужна миграция
+   411|
+   412|```bash
+   413|cd backend && PYTHONPATH=$PWD alembic revision --autogenerate -m "add signal metrics to ob runs"
+   414|# Проверить сгенерированный файл
+   415|cd backend && PYTHONPATH=$PWD alembic upgrade head
+   416|```
+   417|
+   418|### Проверка после этапа
+   419|
+   420|1. Миграция выполняется без ошибок
+   421|2. При live-запуске — поля `signals_total`, `signals_rejected` заполняются
+   422|3. `curl .../orderbook/runs/{id}` — возвращает новые поля
+   423|
+   424|### Как работает с фронтом
+   425|
+   426|Фронт получает метрики через существующий `GET /runs/{id}` (который дёргается раз в 5 сек). Без нового эндпоинта — данные уже в ответе.
+   427|
+   428|---
+   429|
+   430|## 🟢 Приоритет 4: Фронт — блок активности сигналов на RunDetailPage
+   431|
+   432|### Где меняем
+   433|
+   434|**Файл:**
+   435|- `app/lib/features/trading/presentation/orderbook_run_detail_page.dart`
+   436|- `app/lib/features/trading/data/trading_repository.dart` — новый метод
+   437|
+   438|### Что делаем
+   439|
+   440|#### 4.1 Новый метод в репозитории
+   441|
+   442|```dart
+   443|Future<Map<String, dynamic>> getOrderBookRunStatus(int runId) async {
+   444|  final response = await client.get('/api/v1/orderbook/runs/$runId/status');
+   445|  return response.data as Map<String, dynamic>;
+   446|}
+   447|```
+   448|
+   449|#### 4.2 Новый блок «Активность сигналов» на RunDetailPage
+   450|
+   451|Расположить **после баланса, перед настройками** (или наоборот — смотрим).
+   452|
+   453|```dart
+   454|Widget _buildSignalActivity(PfColors pc) {
+   455|  // Если запуск не running — не показываем
+   456|  if (_run?['status'] != 'running') return const SizedBox();
+   457|  
+   458|  // Берём из _run (сохраняется в БД) или из _liveStatus (если есть)
+   459|  final total = _run?['signals_total'] as int? ?? 0;
+   460|  final rejected = _run?['signals_rejected'] as int? ?? 0;
+   461|  final spm = (_run?['signals_per_minute'] as num?)?.toDouble() ?? 0;
+   462|  
+   463|  final accepted = total - rejected;
+   464|  final rejectRate = total > 0 ? (rejected / total * 100) : 0.0;
+   465|  
+   466|  return PfCard(
+   467|    child: Column(
+   468|      crossAxisAlignment: CrossAxisAlignment.start,
+   469|      children: [
+   470|        Row(
+   471|          children: [
+   472|            PhosphorIcon(PhosphorIconsFill.waveform, size: 16, color: pc.foregroundC),
+   473|            const SizedBox(width: 8),
+   474|            Text('Активность сигналов', style: ...),
+   475|            const Spacer(),
+   476|            // Индикатор «жива ли стратегия»
+   477|            _buildAliveIndicator(spm, pc),
+   478|          ],
+   479|        ),
+   480|        const SizedBox(height: PfSpacing.sm),
+   481|        const PfDivider(),
+   482|        const SizedBox(height: PfSpacing.sm),
+   483|        
+   484|        // Большая цифра: всего сигналов
+   485|        _bigMetric(pc, '$total', 'сигналов всего'),
+   486|        
+   487|        // Speed: сигналов/мин
+   488|        _speedIndicator(spm, pc, theme),
+   489|        
+   490|        // Прогресс-бар принято/отсеяно
+   491|        _acceptRejectBar(accepted, rejected, pc),
+   492|        
+   493|        // Разбивка по причинам (из signal_summary)
+   494|        if (_run?['signal_summary_json'] != null)
+   495|          _rejectionBreakdown(pc, jsonDecode(_run!['signal_summary_json'] as String)),
+   496|      ],
+   497|    ),
+   498|  );
+   499|}
+   500|```
+   501|
 #### 4.3 Детали виджетов
 
 **`_buildAliveIndicator()`:**

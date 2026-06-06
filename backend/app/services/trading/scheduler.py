@@ -11,7 +11,7 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +50,15 @@ class TradingScheduler:
 
     def __init__(self) -> None:
         self._tasks: Dict[int, asyncio.Task] = {}
+        self._engines: Dict[int, Any] = {}  # run_id -> OrderBookEngine (store for status)
         self._scan_progress: Dict[int, dict] = {}  # run_id -> progress info
+
+    def get_engine_status(self, run_id: int) -> Optional[dict]:
+        """Return live status for an OB engine run, or None if not running."""
+        engine = self._engines.get(run_id)
+        if engine is None:
+            return None
+        return engine.status
 
     def get_scan_progress(self, run_id: int) -> Optional[dict]:
         """Return scan progress for a pair-scanner run, or None if not scanning."""
@@ -511,6 +519,7 @@ class TradingScheduler:
         )
 
         engine = OrderBookEngine(ob_config)
+        self._engines[run_id] = engine
 
         task = asyncio.create_task(self._run_orderbook_engine(run_id, engine, ob_config))
         self._tasks[run_id] = task
@@ -566,6 +575,7 @@ class TradingScheduler:
             return
         finally:
             live_task.cancel()
+            self._engines.pop(run_id, None)
 
         # Mark as done and save results
         await self._save_ob_results(run_id, engine, status="done")
