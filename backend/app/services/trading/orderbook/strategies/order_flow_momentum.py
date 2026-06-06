@@ -46,10 +46,12 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
 
         # Защита: спред
         if snap.spread_pct > c.max_spread_pct:
+            self._reject(f"spread={snap.spread_pct:.4f} > {c.max_spread_pct}")
             return None
 
         window = cache.window(10)
         if len(window) < 5:
+            self._reject(f"window={len(window)} < 5")
             return None
 
         top_bid_vol = snap.bids[0][1] if snap.bids else 0.0
@@ -60,6 +62,7 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
         # Сравниваем с предыдущим тиком
         prev = window[-2] if len(window) >= 2 else None
         if prev is None:
+            self._reject("no_prev_tick")
             return None
 
         prev_top_bid = prev.bids[0][1] if prev.bids else 0.0
@@ -133,6 +136,13 @@ class OrderFlowMomentumStrategy(AbstractOrderBookStrategy):
                 entry_tag="flow_momentum_sell",
             )
 
+        # Недостаточно burst'ов для сигнала
+        self._reject(
+            f"no_burst: buy={self._buy_burst_count}/{c.min_flow_signals} "
+            f"sell={self._sell_burst_count}/{c.min_flow_signals} "
+            f"ask_vol={ask_vol_consumed:.0f} "
+            f"bid_vol={bid_vol_consumed:.0f}"
+        )
         return None
 
     def custom_exit(self, trade: Trade, snap: OrderBookSnapshot,

@@ -47,18 +47,22 @@ class SpreadCaptureStrategy(AbstractOrderBookStrategy):
 
         # Защита: слишком широкий спред
         if snap.spread_pct > c.max_spread_pct:
+            self._reject(f"spread={snap.spread_pct:.4f} > max={c.max_spread_pct}")
             return None
 
         # Защита: слишком узкий спред (неликвид)
         if snap.spread_pct < c.min_spread_pct:
+            self._reject(f"spread={snap.spread_pct:.4f} < min={c.min_spread_pct}")
             return None
 
         # Защита: iceberg
         if self.is_iceberg(snap):
+            self._reject("iceberg")
             return None
 
         window = cache.window(c.spread_baseline_window)
         if len(window) < c.spread_baseline_window // 2:
+            self._reject(f"baseline_window={len(window)}/{c.spread_baseline_window}")
             return None
 
         baseline = self._baseline_spread(window)
@@ -98,6 +102,7 @@ class SpreadCaptureStrategy(AbstractOrderBookStrategy):
                 entry_tag="spread_narrowed",
             )
 
+        self._reject(f"no_deviation: spread={snap.spread_pct:.4f}% baseline={baseline:.4f}% dev={deviation:.4f}")
         return None
 
     def custom_exit(self, trade: Trade, snap: OrderBookSnapshot,

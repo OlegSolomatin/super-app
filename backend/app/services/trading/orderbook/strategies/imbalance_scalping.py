@@ -41,14 +41,17 @@ class ImbalanceScalpingStrategy(AbstractOrderBookStrategy):
 
         # Защита: спред
         if snap.spread_pct > c.max_spread_pct:
+            self._reject(f"spread={snap.spread_pct:.4f}>{c.max_spread_pct}")
             return None
 
         # Защита: iceberg
         if self.is_iceberg(snap):
+            self._reject("iceberg")
             return None
 
         window = cache.window(c.confirmation_ticks + 2)
         if len(window) < c.confirmation_ticks:
+            self._reject(f"confirm_ticks={len(window)}/{c.confirmation_ticks}")
             return None
 
         imb = snap.imbalance
@@ -85,6 +88,7 @@ class ImbalanceScalpingStrategy(AbstractOrderBookStrategy):
                 entry_tag="imbalance_sell",
             )
 
+        self._reject(f"no_pattern: imb={imb:.3f} surge_bid={surge_bid:.1f}% surge_ask={surge_ask:.1f}%")
         return None
 
     def custom_exit(self, trade: Trade, snap: OrderBookSnapshot,

@@ -28,6 +28,11 @@ class AbstractOrderBookStrategy(ABC):
 
     def __init__(self, config: OrderBookConfig):
         self.config = config
+        self._last_rejection: str = ""  # Последняя причина отказа analyze()
+
+    def _reject(self, reason: str) -> None:
+        """Запомнить причину отказа сигнала."""
+        self._last_rejection = reason
 
     @abstractmethod
     def analyze(self, snap: OrderBookSnapshot,

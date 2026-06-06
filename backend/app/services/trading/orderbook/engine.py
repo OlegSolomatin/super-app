@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -93,6 +94,10 @@ class OrderBookEngine:
         self._lock = asyncio.Lock()
         self._running = False
 
+        # Signal history (кольцевой буфер)
+        self._signal_history: deque[dict] = deque(maxlen=100)
+        self._signal_timestamps: deque[datetime] = deque()
+
         # Внешний fetcher или создаём свой
         self._fetcher: Optional[BinanceOrderBookStream] = fetcher
 
@@ -105,7 +110,36 @@ class OrderBookEngine:
             "loss_count": 0,
             "max_drawdown": 0.0,
             "peak_balance": config.initial_balance,
+            # Signal rejection counters
+            "signals_rejected": 0,
+            "signals_per_minute": 0.0,
+            "cache_not_warm": 0,
+            "global_stop_filtered": 0,
+            "pairlock_filtered": 0,
+            "has_position_filtered": 0,
+            "rejected_spread": 0,
+            "rejected_iceberg": 0,
+            "rejected_confirm_ticks": 0,
+            "rejected_no_signal": 0,
+            "rejected_gatekeeper": 0,
+            "rejected_wallet": 0,
         }
+
+    def _record_signal(self, signal_type: str | None, status: str,
+                        detail: str = "", price: float = 0.0):
+        """Записать событие сигнала в историю.
+
+        signal_type: тип сигнала или None (фильтр без сигнала)
+        status: 'accepted' | 'filtered'
+        detail: причина отказа / reason сигнала
+        """
+        self._signal_history.append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "signal_type": signal_type or "none",
+            "status": status,
+            "detail": detail,
+            "price": round(price, 4) if price else 0.0,
+        })
 
     async def start(self):
         """Запустить движок.
@@ -183,21 +217,39 @@ class OrderBookEngine:
             return
 
         self.cache.push(snap)
+
+        # signals_per_minute — скользящее окно
+        now = datetime.now(timezone.utc)
+        self._signal_timestamps.append(now)
+        cutoff = now - timedelta(seconds=60)
+        while self._signal_timestamps and self._signal_timestamps[0] < cutoff:
+            self._signal_timestamps.popleft()
+        self.metrics["signals_per_minute"] = len(self._signal_timestamps)
+
         if not self.cache.is_warm:
+            self.metrics["cache_not_warm"] += 1
             return
 
         # Protection: global stop
         if self.protection.global_stop():
             logger.warning("[OBEngine] Global stop triggered")
+            self.metrics["global_stop_filtered"] += 1
+            self._record_signal(None, "filtered", "global_stop")
             await self.stop()
             return
 
         # PairLock (единственный источник cooldown)
         if self.pairlock.is_locked(snap.pair):
+            self.metrics["pairlock_filtered"] += 1
+            self._record_signal(None, "filtered",
+                                f"pairlock: {snap.pair}")
             return
 
         # Already has a position on this pair?
         if snap.pair in self._trades:
+            self.metrics["has_position_filtered"] += 1
+            self._record_signal(None, "filtered",
+                                f"has_position: {snap.pair}")
             return
 
         # Strategy
@@ -205,17 +257,32 @@ class OrderBookEngine:
             signal = self.strategy.analyze(snap, self.cache)
 
         if signal is None:
+            self.metrics["rejected_no_signal"] += 1
+            self.metrics["signals_rejected"] += 1
+            reject_reason = getattr(self.strategy, "_last_rejection", "unknown")
+            self._record_signal(None, "filtered",
+                                f"strategy: {reject_reason}",
+                                price=snap.mid_price)
             return
 
         self.metrics["signals_generated"] += 1
 
         # Gatekeeper
         if not self.strategy.confirm_trade_entry(signal):
+            self.metrics["rejected_gatekeeper"] += 1
+            self.metrics["signals_rejected"] += 1
+            self._record_signal(signal.entry_tag, "filtered",
+                                f"gatekeeper: {signal.reason}",
+                                price=signal.price)
             return
 
         # Risk
         stake = self.wallets.get_trade_stake_amount(signal.pair)
         if stake <= 0:
+            self.metrics["rejected_wallet"] += 1
+            self.metrics["signals_rejected"] += 1
+            self._record_signal(signal.entry_tag, "filtered",
+                                f"wallet: stake={stake}", price=signal.price)
             return
 
         now = datetime.now(timezone.utc)
@@ -239,6 +306,10 @@ class OrderBookEngine:
             until=now + timedelta(seconds=self.config.min_trade_interval),
             reason=f"trade:{signal.entry_tag}",
         )
+
+        # Record accepted signal
+        self._record_signal(signal.entry_tag, "accepted",
+                            signal.reason, price=signal.price)
 
         logger.info(
             f"[OBEngine] ENTRY {signal.side} {signal.pair} "
@@ -442,4 +513,5 @@ class OrderBookEngine:
                 for k, v in self.metrics.items()
             },
             "active_locks": self.pairlock.active_locks,
+            "recent_signals": list(self._signal_history)[-20:],
         }
