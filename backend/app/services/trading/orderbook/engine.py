@@ -281,6 +281,15 @@ class OrderBookEngine:
             self.metrics["rejected_no_signal"] += 1
             self.metrics["signals_rejected"] += 1
             reject_reason = getattr(self.strategy, "_last_rejection", "unknown")
+            # Map strategy rejection reason to specific counter
+            if "spread" in reject_reason:
+                self.metrics["rejected_spread"] += 1
+            elif "iceberg" in reject_reason:
+                self.metrics["rejected_iceberg"] += 1
+            elif "confirm_ticks" in reject_reason or "window" in reject_reason:
+                self.metrics["rejected_confirm_ticks"] += 1
+            elif "baseline_window" in reject_reason:
+                self.metrics["rejected_confirm_ticks"] += 1
             logger.debug("[OB] %s | rejected: %s", snap.pair, reject_reason)
             self._record_signal(None, "filtered",
                                 f"strategy: {reject_reason}",
