@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from logging.handlers import RotatingFileHandler
 from typing import Optional
 
 from app.services.trading.orderbook.exchange.binance_stream import (
@@ -45,6 +47,21 @@ from app.services.trading.orderbook.strategies.order_flow_momentum import (
 )
 
 logger = logging.getLogger(__name__)
+
+# File logging for OB signals (5 MB per file, max 3 backups)
+_LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+_log_file = os.path.join(_LOG_DIR, "ob_signals.log")
+_file_handler = RotatingFileHandler(_log_file, maxBytes=5 * 1024 * 1024, backupCount=3)
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+# Only add if not already configured
+if not logger.handlers:
+    logger.addHandler(_file_handler)
+    logger.setLevel(logging.DEBUG)
 
 STRATEGY_REGISTRY = {
     "imbalance_scalping": ImbalanceScalpingStrategy,
@@ -228,6 +245,8 @@ class OrderBookEngine:
 
         if not self.cache.is_warm:
             self.metrics["cache_not_warm"] += 1
+            logger.debug("[OB] %s | cache_not_warm (%d/%d)",
+                         snap.pair, self.cache.count + 1, 10)
             return
 
         # Protection: global stop
@@ -241,6 +260,7 @@ class OrderBookEngine:
         # PairLock (единственный источник cooldown)
         if self.pairlock.is_locked(snap.pair):
             self.metrics["pairlock_filtered"] += 1
+            logger.debug("[OB] %s | pairlock_active", snap.pair)
             self._record_signal(None, "filtered",
                                 f"pairlock: {snap.pair}")
             return
@@ -248,6 +268,7 @@ class OrderBookEngine:
         # Already has a position on this pair?
         if snap.pair in self._trades:
             self.metrics["has_position_filtered"] += 1
+            logger.debug("[OB] %s | has_position", snap.pair)
             self._record_signal(None, "filtered",
                                 f"has_position: {snap.pair}")
             return
@@ -260,6 +281,7 @@ class OrderBookEngine:
             self.metrics["rejected_no_signal"] += 1
             self.metrics["signals_rejected"] += 1
             reject_reason = getattr(self.strategy, "_last_rejection", "unknown")
+            logger.debug("[OB] %s | rejected: %s", snap.pair, reject_reason)
             self._record_signal(None, "filtered",
                                 f"strategy: {reject_reason}",
                                 price=snap.mid_price)
@@ -271,6 +293,8 @@ class OrderBookEngine:
         if not self.strategy.confirm_trade_entry(signal):
             self.metrics["rejected_gatekeeper"] += 1
             self.metrics["signals_rejected"] += 1
+            logger.debug("[OB] %s | gatekeeper: %s",
+                         signal.pair, signal.reason)
             self._record_signal(signal.entry_tag, "filtered",
                                 f"gatekeeper: {signal.reason}",
                                 price=signal.price)
@@ -281,12 +305,16 @@ class OrderBookEngine:
         if stake <= 0:
             self.metrics["rejected_wallet"] += 1
             self.metrics["signals_rejected"] += 1
+            logger.debug("[OB] %s | wallet: stake=%.2f <= 0",
+                         signal.pair, stake)
             self._record_signal(signal.entry_tag, "filtered",
                                 f"wallet: stake={stake}", price=signal.price)
             return
 
         now = datetime.now(timezone.utc)
         if signal.price <= 0:
+            logger.debug("[OB] %s | invalid_price: %.4f",
+                         signal.pair, signal.price)
             return
         trade = Trade(
             pair=signal.pair,
