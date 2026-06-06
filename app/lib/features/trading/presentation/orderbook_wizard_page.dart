@@ -15,6 +15,8 @@ import 'package:app/shared/widgets/pf_divider.dart';
 import 'package:app/shared/widgets/responsive_layout.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/trading/data/models/trading_pair.dart';
+import 'package:dio/dio.dart';
+import 'package:app/shared/widgets/error_snackbar.dart';
 
 /// Cтатичные модели данных Order Book визарда.
 
@@ -411,7 +413,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         _runStatusText = '⏹️ Остановлен';
         _stopPolling();
       } else if (status == 'error') {
-        _runStatusText = '❌ Ошибка';
+        _runStatusText = '❌ Ошибка: ${run['error'] ?? 'неизвестная'}';
         _stopPolling();
       } else {
         _runStatusText = '🔄 Статус: $status';
@@ -1776,11 +1778,23 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                       ),
                     ),
                   const SizedBox(height: 16),
-                  PfButton(
-                    variant: 'primary',
-                    size: 'md',
-                    label: 'На Trading Page',
-                    onPressed: () => context.go('/trading'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      PfButton(
+                        variant: 'secondary',
+                        size: 'md',
+                        label: 'Подробнее',
+                        onPressed: () => context.go('/trading/ob-run/$_lastRunId'),
+                      ),
+                      const SizedBox(width: 12),
+                      PfButton(
+                        variant: 'primary',
+                        size: 'md',
+                        label: 'На Trading Page',
+                        onPressed: () => context.go('/trading'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1886,13 +1900,54 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         setState(() => _isLoading = false);
         final runId = response['id'] as int?;
         if (runId != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('✅ Запуск успешно создан!')),
+                ],
+              ),
+              backgroundColor: Colors.green.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              margin: const EdgeInsets.all(16),
+              duration: const Duration(seconds: 3),
+            ),
+          );
           _startPolling(runId);
+        } else {
+          showErrorSnackbar(context, '❌ Запуск не создан: API вернул пустой ответ');
         }
       }
     } catch (e) {
       debugPrint('[OB START ERROR] $e');
       if (mounted) {
         setState(() => _isLoading = false);
+        String msg;
+        if (e is DioException) {
+          final statusCode = e.response?.statusCode;
+          final detail = e.response?.data is Map
+              ? (e.response?.data as Map)['detail']
+              : null;
+          if (statusCode == 401 || statusCode == 403) {
+            msg = '🔐 Ошибка авторизации. Попробуйте перезайти в приложение.';
+          } else if (statusCode == 429) {
+            msg = '⏳ Достигнут лимит запусков. Остановите активный запуск.';
+          } else if (detail != null) {
+            msg = '❌ $detail';
+          } else if (statusCode != null) {
+            msg = '❌ Ошибка HTTP $statusCode. Сервер не отвечает.';
+          } else {
+            msg = '❌ Нет соединения с сервером. Проверьте подключение.';
+          }
+        } else if (e is FormatException) {
+          msg = '❌ Ошибка ответа сервера. Попробуйте снова.';
+        } else {
+          msg = '❌ Не удалось запустить стратегию: $e';
+        }
+        showErrorSnackbar(context, msg);
       }
     }
   }
