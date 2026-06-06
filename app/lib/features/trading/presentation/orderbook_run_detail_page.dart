@@ -35,7 +35,6 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
   Map<String, dynamic>? _run;
   Map<String, dynamic>? _signalStatus;
   bool _loading = true;
-  Timer? _pollTimer;
   Timer? _signalTimer;
 
   @override
@@ -47,13 +46,8 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
       }
     });
     _loadData();
-    // Poll every 5s for active runs
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (_run != null && _run!['status'] == 'running') {
-        _loadData();
-      }
-    });
-    // Poll signal status every 3s for active runs
+    // Live status every 3s — обновляет только блоки баланса/сделок/сигналов
+    // без полной перезагрузки страницы (не вызывает _loadData)
     _signalTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_run != null && _run!['status'] == 'running') {
         _fetchSignalStatus();
@@ -63,7 +57,6 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
     _signalTimer?.cancel();
     super.dispose();
   }
@@ -132,8 +125,16 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
   }
 
   Widget _buildHeader(PfColors pc) {
-    final status = _run!['status'] as String? ?? 'unknown';
+    final status = _signalStatus?['running'] == true
+        ? 'running'
+        : (_run?['status'] as String? ?? 'unknown');
     final isActive = status == 'running';
+    // Trade count: live from signalStatus (open_trades), fallback to DB
+    final openCount = _signalStatus?['open_trades'] is Map
+        ? (_signalStatus!['open_trades'] as Map).length
+        : 0;
+    final totalTrades = (_run?['total_trades'] as num?)?.toInt() ?? 0;
+    final displayTrades = isActive ? openCount : totalTrades;
     final strategyId = _run!['strategy'] as String?;
     final pair = _run!['pair'] as String? ?? '—';
 
@@ -169,7 +170,7 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
           Row(
             children: [
               Expanded(child: _StatCell(label: 'Пара', value: pair, mono: true)),
-              Expanded(child: _StatCell(label: 'Сделок', value: '${_run!['total_trades'] ?? 0}')),
+              Expanded(child: _StatCell(label: isActive ? 'Открыто' : 'Сделок', value: '$displayTrades')),
             ],
           ),
           if (startedAt != null) ...[
@@ -186,12 +187,17 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
 
   Widget _buildBalanceCard(PfColors pc) {
     final startBalance = (_run!['initial_balance'] as num?)?.toDouble();
-    final currentBalance = (_run!['current_balance'] as num?)?.toDouble();
-    final status = _run!['status'] as String? ?? 'unknown';
+    // Live balance from signalStatus, fallback to DB
+    final liveBalance = (_signalStatus?['balance'] as num?)?.toDouble();
+    final status = _signalStatus?['running'] == true
+        ? 'running'
+        : (_run?['status'] as String? ?? 'unknown');
     final isActive = status == 'running';
-    final totalTrades = (_run!['total_trades'] as num?)?.toInt() ?? 0;
-    final totalPnl = (_run!['total_pnl'] as num?)?.toDouble() ?? 0.0;
-    final displayBalance = currentBalance ?? startBalance;
+    final displayBalance = liveBalance ?? (_run!['current_balance'] as num?)?.toDouble() ?? startBalance;
+    // Total PnL: calculate from live balance, fallback to DB
+    final totalPnl = (liveBalance != null && startBalance != null)
+        ? liveBalance - startBalance
+        : (_run?['total_pnl'] as num?)?.toDouble() ?? 0.0;
 
     return PfCard(
       child: Column(
@@ -221,7 +227,7 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
           const SizedBox(height: PfSpacing.sm),
           const PfDivider(),
           const SizedBox(height: PfSpacing.sm),
-          _InfoRow(label: 'Сделок', value: '$totalTrades'),
+          _InfoRow(label: 'Открытых позиций', value: '${(liveBalance != null && _signalStatus?['open_trades'] is Map) ? (_signalStatus!['open_trades'] as Map).length : (_run?['total_trades'] ?? 0)}'),
           _InfoRow(
             label: 'Общий PnL',
             value: totalPnl != 0 ? '\$${totalPnl.toStringAsFixed(2)}' : '—',
