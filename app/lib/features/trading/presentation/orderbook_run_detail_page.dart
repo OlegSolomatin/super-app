@@ -33,8 +33,10 @@ class OrderBookRunDetailPage extends StatefulWidget {
 
 class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
   Map<String, dynamic>? _run;
+  Map<String, dynamic>? _signalStatus;
   bool _loading = true;
   Timer? _pollTimer;
+  Timer? _signalTimer;
 
   @override
   void initState() {
@@ -51,11 +53,18 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
         _loadData();
       }
     });
+    // Poll signal status every 3s for active runs
+    _signalTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_run != null && _run!['status'] == 'running') {
+        _fetchSignalStatus();
+      }
+    });
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _signalTimer?.cancel();
     super.dispose();
   }
 
@@ -66,6 +75,15 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
       if (mounted) setState(() { _run = data; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _fetchSignalStatus() async {
+    try {
+      final status = await widget.repository.getOrderBookRunStatus(widget.runId);
+      if (mounted) setState(() => _signalStatus = status);
+    } catch (_) {
+      // ignore polling errors silently
     }
   }
 
@@ -97,6 +115,10 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                       _buildHeader(pc),
                       const SizedBox(height: PfSpacing.md),
                       _buildBalanceCard(pc),
+                      if (_run?['status'] == 'running') ...[
+                        const SizedBox(height: PfSpacing.md),
+                        _buildSignalActivity(pc),
+                      ],
                       const SizedBox(height: PfSpacing.md),
                       _buildConfigCard(pc),
                       if (_run!['open_trade_json'] != null) ...[
@@ -277,6 +299,348 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
         ],
       ),
     );
+  }
+
+  // ── Signal Activity ────────────────────────────────────────────────
+  Widget _buildSignalActivity(PfColors pc) {
+    final status = _signalStatus;
+    final metrics = status?['metrics'] as Map<String, dynamic>? ?? {};
+    final signalsTotal = (metrics['signals_generated'] as num?)?.toInt() ?? 0;
+    final signalsRejected = (metrics['signals_rejected'] as num?)?.toInt() ?? 0;
+    final spm = (metrics['signals_per_minute'] as num?)?.toDouble() ?? 0.0;
+    final accepted = signalsTotal - signalsRejected;
+    final recent = status?['recent_signals'] as List<dynamic>? ?? [];
+
+    return PfCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              PhosphorIcon(PhosphorIconsFill.waveform, size: 16, color: pc.foregroundC),
+              const SizedBox(width: 8),
+              Text('Активность сигналов', style: PfTypography.titleMd.copyWith(fontSize: 14, color: pc.foregroundC)),
+              const Spacer(),
+              _aliveIndicator(spm),
+            ],
+          ),
+          const SizedBox(height: PfSpacing.sm),
+          const PfDivider(),
+          const SizedBox(height: PfSpacing.sm),
+          // Big number
+          Text(
+            '$signalsTotal',
+            style: PfTypography.numberDisplay.copyWith(color: pc.foregroundC, fontSize: 32),
+          ),
+          Text('сигналов обработано', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+          const SizedBox(height: 12),
+          // Speed
+          _speedRow(spm, pc),
+          const SizedBox(height: 12),
+          // Accept/reject bar
+          _acceptRejectBar(accepted, signalsRejected, pc),
+          const SizedBox(height: 12),
+          // Rejection breakdown
+          if (signalsRejected > 0) _rejectionBreakdown(metrics, pc),
+          const SizedBox(height: 8),
+          // Signal log button
+          if (recent.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: GestureDetector(
+                onTap: () => _showSignalLog(context, recent),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PhosphorIcon(PhosphorIconsFill.listDashes, size: 14, color: PfColors.mutedForeground),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Последние сигналы (${recent.length})',
+                      style: PfTypography.bodySm.copyWith(color: PfColors.mutedForeground, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 4),
+                    PhosphorIcon(PhosphorIconsFill.caretRight, size: 12, color: PfColors.mutedForeground),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aliveIndicator(double spm) {
+    if (spm < 1) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8, height: 8,
+            decoration: BoxDecoration(
+              color: PfColors.warning, shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: PfColors.warning.withValues(alpha: 0.4), blurRadius: 4)],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text('Нет сигналов', style: PfTypography.caption.copyWith(color: PfColors.warning)),
+        ],
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8, height: 8,
+          decoration: BoxDecoration(
+            color: PfColors.success, shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: PfColors.success.withValues(alpha: 0.4), blurRadius: 4)],
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text('${spm.toStringAsFixed(0)}/мин', style: PfTypography.caption.copyWith(color: PfColors.success)),
+      ],
+    );
+  }
+
+  Widget _speedRow(double spm, PfColors pc) {
+    return Row(
+      children: [
+        PhosphorIcon(PhosphorIconsFill.lightning, size: 14, color: spm > 0 ? PfColors.success : pc.mutedForegroundC),
+        const SizedBox(width: 6),
+        Text(
+          spm > 0 ? '${spm.toStringAsFixed(0)} сигналов/мин' : 'Нет активности',
+          style: PfTypography.bodyMd.copyWith(
+            color: spm > 0 ? PfColors.success : pc.mutedForegroundC,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _acceptRejectBar(int accepted, int rejected, PfColors pc) {
+    final total = accepted + rejected;
+    if (total == 0) {
+      return Row(
+        children: [
+          PhosphorIcon(PhosphorIconsFill.info, size: 14, color: pc.mutedForegroundC),
+          const SizedBox(width: 6),
+          Text('Ожидание первого сигнала...', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+        ],
+      );
+    }
+    final acceptRatio = accepted / total;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: PfRadius.borderRadiusPill,
+          child: SizedBox(
+            height: 10,
+            child: Row(
+              children: [
+                Flexible(
+                  flex: (acceptRatio * 1000).round().clamp(1, 1000),
+                  child: Container(color: PfColors.success),
+                ),
+                if (rejected > 0)
+                  Flexible(
+                    flex: ((1 - acceptRatio) * 1000).round().clamp(1, 1000),
+                    child: Container(color: PfColors.destructive.withValues(alpha: 0.5)),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            _dotLabel('✅ Принято', accepted.toString(), PfColors.success, pc),
+            const SizedBox(width: 16),
+            _dotLabel('❌ Отсеяно', rejected.toString(), PfColors.destructive, pc),
+          ],
+        ),
+        Text(
+          '${(accepted / total * 100).toStringAsFixed(2)}% принято',
+          style: PfTypography.caption.copyWith(color: pc.mutedForegroundC),
+        ),
+      ],
+    );
+  }
+
+  Widget _dotLabel(String label, String value, Color color, PfColors pc) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: PfTypography.bodySm.copyWith(color: pc.foregroundC)),
+        const SizedBox(width: 4),
+        Text(value, style: PfTypography.bodySm.copyWith(color: color, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _rejectionBreakdown(Map<String, dynamic> metrics, PfColors pc) {
+    final breakdown = <MapEntry<String, dynamic>>[];
+    const rejectionKeys = {
+      'cache_not_warm': 'Кэш',
+      'global_stop_filtered': 'Защиты',
+      'pairlock_filtered': 'PairLock',
+      'has_position_filtered': 'В позиции',
+      'rejected_spread': 'Спред',
+      'rejected_iceberg': 'Iceberg',
+      'rejected_confirm_ticks': 'Тики',
+      'rejected_no_signal': 'Нет сигнала',
+      'rejected_gatekeeper': 'Вратарь',
+      'rejected_wallet': 'Баланс',
+    };
+
+    for (final entry in rejectionKeys.entries) {
+      final val = (metrics[entry.key] as num?)?.toInt() ?? 0;
+      if (val > 0) {
+        breakdown.add(MapEntry(entry.value, val));
+      }
+    }
+
+    if (breakdown.isEmpty) return const SizedBox();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Разбивка отказов:', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8, runSpacing: 6,
+          children: breakdown.map((e) => _reasonChip(e.key, e.value, pc)).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _reasonChip(String label, int count, PfColors pc) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: pc.mutedC.withValues(alpha: 0.5),
+        borderRadius: PfRadius.borderRadiusPill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: PfTypography.caption.copyWith(color: pc.mutedForegroundC)),
+          const SizedBox(width: 4),
+          Text(
+            count.toString(),
+            style: PfTypography.caption.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSignalLog(BuildContext context, List<dynamic> signals) {
+    final pc = PfColors.of(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (ctx2, scrollCtrl) => Container(
+          decoration: BoxDecoration(
+            color: pc.backgroundC,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Center(
+                  child: Container(
+                    width: 36, height: 4,
+                    decoration: BoxDecoration(
+                      color: pc.mutedC,
+                      borderRadius: PfRadius.borderRadiusPill,
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    PhosphorIcon(PhosphorIconsFill.waveform, size: 18, color: pc.foregroundC),
+                    const SizedBox(width: 8),
+                    Text('Лента сигналов', style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const PfDivider(),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: signals.length,
+                  itemBuilder: (_, i) {
+                    final signal = signals[signals.length - 1 - i] as Map<String, dynamic>;
+                    final isAccepted = signal['status'] == 'accepted';
+                    final signalType = signal['signal_type'] as String? ?? '—';
+                    final detail = signal['detail'] as String? ?? '';
+                    final timestamp = signal['timestamp'] as String? ?? '';
+                    final price = (signal['price'] as num?)?.toDouble() ?? 0.0;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          PhosphorIcon(
+                            isAccepted ? PhosphorIconsFill.checkCircle : PhosphorIconsFill.xCircle,
+                            size: 16,
+                            color: isAccepted ? PfColors.success : PfColors.destructive.withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  signalType.replaceAll('_', ' '),
+                                  style: PfTypography.bodyMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w500),
+                                ),
+                                if (detail.isNotEmpty)
+                                  Text(detail, style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                                if (price > 0)
+                                  Text('@ ${price.toStringAsFixed(4)}', style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _fmtSignalTime(timestamp),
+                            style: PfTypography.caption.copyWith(color: pc.mutedForegroundC),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _fmtSignalTime(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso.length > 8 ? iso.substring(11, 19) : iso;
+    }
   }
 
   Widget _buildCurrentTradeCard(PfColors pc, String tradeJson) {
