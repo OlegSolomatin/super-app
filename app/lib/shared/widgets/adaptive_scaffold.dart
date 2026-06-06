@@ -99,10 +99,11 @@ class AdaptiveScaffold extends StatelessWidget {
                   size: 22,
                 ),
                 onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
+                  final router = GoRouter.of(context);
+                  if (router.canPop()) {
+                    router.pop();
                   } else {
-                    context.go('/');
+                    router.go('/');
                   }
                 },
               )
@@ -491,10 +492,11 @@ class AdaptiveScaffold extends StatelessWidget {
                 size: 20,
               ),
               onPressed: () {
-                if (context.canPop()) {
-                  context.pop();
+                final router = GoRouter.of(context);
+                if (router.canPop()) {
+                  router.pop();
                 } else {
-                  context.go('/');
+                  router.go('/');
                 }
               },
               visualDensity: VisualDensity.compact,
