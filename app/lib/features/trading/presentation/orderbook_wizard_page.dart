@@ -248,7 +248,17 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _strategyParams[p.key] = p.defaultValue;
     }
     _loadPairs();
-    // Infinite scroll handled by ListView.builder in _buildPairList
+    // Infinite scroll via scroll controller listener
+    _pairScrollController.addListener(() {
+      if (!_hasMorePairs || _loadingPairs) return;
+      final maxScroll = _pairScrollController.position.maxScrollExtent;
+      if (maxScroll <= 0) return;
+      final threshold = 200.0;
+      if (_pairScrollController.position.pixels >= maxScroll - threshold) {
+        setState(() => _pairPage++);
+        _loadPairs();
+      }
+    });
     _searchPairController.addListener(() {
       _searchTimer?.cancel();
       _searchTimer = Timer(const Duration(milliseconds: 300), () {
@@ -686,13 +696,6 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         // Loader trigger at the end
         if (index == _loadedPairs.length) {
           if (_hasMorePairs) {
-            // Auto-trigger next page when this item becomes visible
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (_hasMorePairs && !_loadingPairs) {
-                setState(() => _pairPage++);
-                _loadPairs();
-              }
-            });
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
