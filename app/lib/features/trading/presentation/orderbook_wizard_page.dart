@@ -248,15 +248,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _strategyParams[p.key] = p.defaultValue;
     }
     _loadPairs();
-    _pairScrollController.addListener(() {
-      if (_pairScrollController.position.pixels >=
-          _pairScrollController.position.maxScrollExtent - 200) {
-        if (_hasMorePairs && !_loadingPairs) {
-          setState(() => _pairPage++);
-          _loadPairs();
-        }
-      }
-    });
+    // Infinite scroll handled by ListView.builder in _buildPairList
     _searchPairController.addListener(() {
       _searchTimer?.cancel();
       _searchTimer = Timer(const Duration(milliseconds: 300), () {
@@ -585,130 +577,147 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           child: child,
         );
       },
-      child: SingleChildScrollView(
-        key: ValueKey('step_$_currentStep'),
-        padding: const EdgeInsets.all(PfSpacing.lg),
-        child: _buildStepWidget(theme, pc),
-      ),
-    );
-  }
-
-  Widget _buildStepWidget(ThemeData theme, PfColors pc) {
-    switch (_currentStep) {
-      case 0: return _buildStepPair(theme, pc);
-      case 1: return _buildStepStrategy(theme, pc);
-      case 2: return _buildStepBalance(theme, pc);
-      case 3: return _buildStepRisk(theme, pc);
-      case 4: return _buildStepPrecision(theme, pc);
-      case 5: return _buildStepProtections(theme, pc);
-      case 6: return _buildStepSummary(theme, pc);
-      default: return const SizedBox();
-    }
-  }
-
-  // ── Кастомный слайдер ──────────────────────────────────────────────
-  Widget _buildCustomSlider({
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required ValueChanged<double> onChange,
-    required ThemeData theme,
-    required PfColors pc,
-    String? label,
-    bool destructive = false,
-  }) {
-    return SliderTheme(
-      data: SliderTheme.of(context).copyWith(
-        trackHeight: 6,
-        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-        overlayShape: const RoundSliderOverlayShape(overlayRadius: 22),
-        activeTrackColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
-        inactiveTrackColor: pc.mutedC,
-        thumbColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
-        overlayColor: (destructive ? PfColors.destructive : theme.colorScheme.primary)
-            .withValues(alpha: 0.12),
-        valueIndicatorColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
-        valueIndicatorTextStyle: PfTypography.caption.copyWith(color: Colors.white),
-      ),
-      child: Slider(
-        value: value,
-        min: min,
-        max: max,
-        divisions: divisions,
-        label: label ?? value.toStringAsFixed(value < 1 ? 2 : 0),
-        onChanged: onChange,
-      ),
-    );
-  }
-
-  // ── Step 0: Pair ──────────────────────────────────────────────────
-  Widget _buildStepPair(ThemeData theme, PfColors pc) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            PhosphorIcon(_kStepIcons[0], size: 20, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Text('Выберите пару', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
-            const Spacer(),
-            _defaultsButton(theme),
-            _helpIcon('Выбор пары', 'Поиск среди 430+ USDT торговых пар с Binance. Выберите пару для Order Book стратегии. Можно фильтровать по названию в поле поиска.'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Поиск и выбор торговой пары для Order Book стратегии',
-          style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
-        ),
-        const SizedBox(height: 16),
-        // Search field
-        Container(
-          decoration: BoxDecoration(
-            color: pc.surfaceC,
-            borderRadius: PfRadius.borderRadiusMd,
-            border: Border.all(color: pc.borderC),
-          ),
-          child: TextField(
-            controller: _searchPairController,
-            style: PfTypography.bodyMd.copyWith(color: pc.foregroundC),
-            decoration: InputDecoration(
-              hintText: 'Поиск пары...',
-              hintStyle: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              prefixIcon: PhosphorIcon(
-                PhosphorIconsFill.magnifyingGlass,
-                size: 18,
-                color: pc.mutedForegroundC,
-              ),
-              suffixIcon: _searchPairController.text.isNotEmpty
-                  ? GestureDetector(
-                      onTap: () {
-                        _searchPairController.clear();
-                        _loadPairs(refresh: true);
-                      },
-                      child: PhosphorIcon(
-                        PhosphorIconsFill.x,
-                        size: 16,
-                        color: pc.mutedForegroundC,
-                      ),
-                    )
-                  : null,
+      // Step 0 (Pair selection) — sticky search + scrollable list
+      // Other steps — single scroll view
+      child: _currentStep == 0
+          ? _buildStepContentScrollable(theme, pc, key: const ValueKey('step_0'))
+          : SingleChildScrollView(
+              key: ValueKey('step_$_currentStep'),
+              padding: const EdgeInsets.all(PfSpacing.lg),
+              child: _buildStepWidget(theme, pc),
             ),
-            onChanged: (_) => setState(() {}),
+    );
+  }
+
+  /// Step 0 only: sticky header (title + search) + scrollable pair list
+  Widget _buildStepContentScrollable(ThemeData theme, PfColors pc, {Key? key}) {
+    return LayoutBuilder(
+      key: key,
+      builder: (context, constraints) {
+        return SizedBox(
+          width: constraints.maxWidth,
+          child: Column(
+            children: [
+              // ── Fixed header: title + description + search ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        PhosphorIcon(_kStepIcons[0], size: 20, color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text('Выберите пару', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
+                        const Spacer(),
+                        _defaultsButton(theme),
+                        _helpIcon('Выбор пары', 'Поиск среди 430+ USDT торговых пар с Binance. Выберите пару для Order Book стратегии. Можно фильтровать по названию в поле поиска.'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Поиск и выбор торговой пары для Order Book стратегии',
+                      style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+                    ),
+                    const SizedBox(height: 12),
+                    // Search field
+                    Container(
+                      decoration: BoxDecoration(
+                        color: pc.surfaceC,
+                        borderRadius: PfRadius.borderRadiusMd,
+                        border: Border.all(color: pc.borderC),
+                      ),
+                      child: TextField(
+                        controller: _searchPairController,
+                        style: PfTypography.bodyMd.copyWith(color: pc.foregroundC),
+                        decoration: InputDecoration(
+                          hintText: 'Поиск пары...',
+                          hintStyle: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          prefixIcon: PhosphorIcon(
+                            PhosphorIconsFill.magnifyingGlass,
+                            size: 18,
+                            color: pc.mutedForegroundC,
+                          ),
+                          suffixIcon: _searchPairController.text.isNotEmpty
+                              ? GestureDetector(
+                                  onTap: () {
+                                    _searchPairController.clear();
+                                    _loadPairs(refresh: true);
+                                  },
+                                  child: PhosphorIcon(
+                                    PhosphorIconsFill.x,
+                                    size: 16,
+                                    color: pc.mutedForegroundC,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              // ── Scrollable pair list ──
+              Expanded(
+                child: _buildPairList(theme, pc),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 4),
-        if (_loadingPairs && _loadedPairs.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        const SizedBox(height: 8),
-        // Pair list
-        ..._loadedPairs.map((pair) => Padding(
+        );
+      },
+    );
+  }
+
+  /// Scrollable pair list with infinite scroll
+  Widget _buildPairList(ThemeData theme, PfColors pc) {
+    if (_loadingPairs && _loadedPairs.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return ListView.builder(
+      controller: _pairScrollController,
+      padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+      itemCount: _loadedPairs.length + 1, // +1 for loader/end-of-list
+      itemBuilder: (ctx, index) {
+        // Loader trigger at the end
+        if (index == _loadedPairs.length) {
+          if (_hasMorePairs) {
+            // Auto-trigger next page when this item becomes visible
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_hasMorePairs && !_loadingPairs) {
+                setState(() => _pairPage++);
+                _loadPairs();
+              }
+            });
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          } else {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: Text(
+                  'Все пары загружены (${_loadedPairs.length})',
+                  style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
+                ),
+              ),
+            );
+          }
+        }
+
+        final pair = _loadedPairs[index];
+        return Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: PfCard(
             variant: _selectedPairSymbol == pair.symbol ? 'trading' : 'default',
@@ -762,50 +771,63 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
               ],
             ),
           ),
-        )),
-        // Load more trigger
-        if (_hasMorePairs && _loadingPairs)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          ),
-        if (_hasMorePairs && !_loadingPairs)
-          GestureDetector(
-            onTap: () {
-              setState(() => _pairPage++);
-              _loadPairs();
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: Text(
-                  'Загрузить ещё... (${_loadedPairs.length} показано)',
-                  style: PfTypography.bodySm.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        if (!_hasMorePairs && _loadedPairs.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Center(
-              child: Text(
-                'Все пары загружены (${_loadedPairs.length})',
-                style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC),
-              ),
-            ),
-          ),
-      ],
+        );
+      },
     );
+  }
+
+  Widget _buildStepWidget(ThemeData theme, PfColors pc) {
+    switch (_currentStep) {
+      case 0: return _buildStepPair(theme, pc);
+      case 1: return _buildStepStrategy(theme, pc);
+      case 2: return _buildStepBalance(theme, pc);
+      case 3: return _buildStepRisk(theme, pc);
+      case 4: return _buildStepPrecision(theme, pc);
+      case 5: return _buildStepProtections(theme, pc);
+      case 6: return _buildStepSummary(theme, pc);
+      default: return const SizedBox();
+    }
+  }
+
+  // ── Кастомный слайдер ──────────────────────────────────────────────
+  Widget _buildCustomSlider({
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChange,
+    required ThemeData theme,
+    required PfColors pc,
+    String? label,
+    bool destructive = false,
+  }) {
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 6,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 22),
+        activeTrackColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
+        inactiveTrackColor: pc.mutedC,
+        thumbColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
+        overlayColor: (destructive ? PfColors.destructive : theme.colorScheme.primary)
+            .withValues(alpha: 0.12),
+        valueIndicatorColor: destructive ? PfColors.destructive : theme.colorScheme.primary,
+        valueIndicatorTextStyle: PfTypography.caption.copyWith(color: Colors.white),
+      ),
+      child: Slider(
+        value: value,
+        min: min,
+        max: max,
+        divisions: divisions,
+        label: label ?? value.toStringAsFixed(value < 1 ? 2 : 0),
+        onChanged: onChange,
+      ),
+    );
+  }
+
+  // ── Step 0: Pair (old layout — replaced by _buildStepContentScrollable) ──
+  Widget _buildStepPair(ThemeData theme, PfColors pc) {
+    return const SizedBox.shrink();
   }
 
   // ── Step 1: Strategy ──────────────────────────────────────────────

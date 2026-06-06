@@ -131,14 +131,30 @@ class BinanceOrderBookStream:
     async def _on_message(self, raw: str):
         """Парсинг сообщения -> OrderBookSnapshot.
 
-        ccxt: parse_order_book()
+        The @depth20@100ms stream returns snapshots (not diffs):
+          {
+            "stream": "btcusdt@depth20@100ms",
+            "data": { "lastUpdateId": N, "bids": [["p","q"],...], "asks": [...] }
+          }
         """
         try:
             msg = json.loads(raw)
             data = msg.get("data", msg)
+            # depth20@100ms uses "lastUpdateId" + "bids"/"asks" (not "s"/"b"/"a")
+            has_snapshot = "lastUpdateId" in data or "bids" in data or "asks" in data
             pair = data.get("s", "")
-            bids_raw = data.get("b", [])
-            asks_raw = data.get("a", [])
+
+            if has_snapshot and not pair:
+                # Extract pair from stream name: "btcusdt@depth20@100ms" -> "BTCUSDT"
+                stream_name = msg.get("stream", "")
+                if stream_name:
+                    pair = stream_name.split("@")[0].upper()
+                if not pair and self._pairs:
+                    pair = self._pairs[0].upper()
+
+            bids_raw = data.get("bids", data.get("b", []))
+            asks_raw = data.get("asks", data.get("a", []))
+
             if not pair or not bids_raw or not asks_raw:
                 return
             bids = [(float(p), float(q)) for p, q in bids_raw if float(q) > 0]

@@ -11,9 +11,9 @@
     10|     9|     8|     7|     6|  — Все 3 стратегии (imbalance, spread, order_flow): каждый return None вызывает _reject()
     11|    10|     9|     8|     7|     6|  — status property: расширен recent_signals (последние 20 записей)
     12|    11|    10|     9|     8|     7|  — Python import check: ✅ все 5 файлов
-    13|    12|    11|    10|     9|     8| ||| 2026-06-06 | feat | OB Engine: file logging (ob_signals.log, 5MB rotation, 3 backups) + logger.debug на каждый отказ сигнала. | Hermes
-    14|    13|    12|    11|    10|     9| ||| 2026-06-06 | feat | OB Engine: фикс счётчиков rejected_spread/iceberg/confirm_ticks — теперь читаются из strategy._last_rejection | Hermes
-    15|    14|    13|    12|    11|    10| ||| 2026-06-06 | infra | Flutter build v87: включены индикаторы TradingPage (3dd6aaf). build v87 | Hermes
+    13|    12|    11|    10|     9|     8| ||| 2026-06-06 | infra | Flutter build v87: включены индикаторы TradingPage (3dd6aaf). build v87 | Hermes
+    14|    13|    12|    11|    10|     9| ||| 2026-06-06 | feat | OB Engine: фикс парсинга WS — depth20@100ms использует bids/asks/lastUpdateId вместо b/a/s. | Hermes
+    15|    14|    13|    12|    11|    10| ||| 2026-06-06 | feat | OB Wizard Step 0: sticky поиск + infinite scroll ListView вместо ручной «Загрузить ещё». build v88 | Hermes
     16|    15|    14|    13|    12|    11|     1| || 2026-06-06 | feat | OB Wizard: «?» подсказки во всех 7 шагах + «Стандартные» кнопка с пресетами под каждую стратегию. OB Run Detail: «?» подсказки в настройках. build v85 | Hermes
     14|    13|    12|    11|    10|     2|  — Все шаги визарда: заголовок + «Стандартные» + «?» (кроме сводки — только «?»)
     15|    14|    13|    12|    11|     3|  — Параметры стратегий: «?» с пояснением каждого параметра
