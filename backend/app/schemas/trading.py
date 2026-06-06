@@ -355,15 +355,28 @@ class OrderBookRunResponse(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def parse_config_json(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            config_json = data.get("config_json")
+        # ORM-режим (from_attributes=True): конвертируем в dict с config
+        if not isinstance(data, dict):
+            config_json = getattr(data, "config_json", None)
             if isinstance(config_json, str):
+                result = {}
+                for col in data.__table__.columns:
+                    result[col.name] = getattr(data, col.name)
                 try:
-                    data["config"] = json.loads(config_json)
+                    result["config"] = json.loads(config_json)
                 except (json.JSONDecodeError, TypeError):
-                    data["config"] = None
-            # Удаляем сырое поле, т.к. его нет в схеме
-            data.pop("config_json", None)
+                    result["config"] = None
+                return result
+            return data
+
+        # Dict-режим
+        config_json = data.get("config_json")
+        if isinstance(config_json, str):
+            try:
+                data["config"] = json.loads(config_json)
+            except (json.JSONDecodeError, TypeError):
+                data["config"] = None
+        data.pop("config_json", None)
         return data
 
 
