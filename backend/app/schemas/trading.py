@@ -326,8 +326,8 @@ class OrderBookRunResponse(BaseModel):
     started_at: datetime
     finished_at: Optional[datetime] = None
     error: Optional[str] = None
-    total_trades: int = 0
-    total_pnl: float = 0.0
+    total_trades: Optional[int] = None
+    total_pnl: Optional[float] = None
     final_balance: Optional[float] = None
     current_balance: Optional[float] = None
     open_trade_json: Optional[str] = None
