@@ -64,3 +64,4 @@ backend/*.egg-info/
 docker-compose.override.yml
 build/
 *.log
+backend/logs/
