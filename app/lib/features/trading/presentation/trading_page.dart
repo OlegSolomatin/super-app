@@ -235,30 +235,34 @@ class _TradingPageState extends State<TradingPage>
                 color: pc.surfaceC,
                 borderRadius: PfRadius.borderRadiusPill,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _PillTab(
-                    label: 'Запущенные',
-                    count: _activeRuns.length + _activeObRuns.length,
-                    isActive: _tabController.index == 0,
-                    onTap: () => _tabController.animateTo(0),
-                  ),
-                  const SizedBox(width: 2),
-                  _PillTab(
-                    label: 'История по свечам',
-                    count: _historyTotal,
-                    isActive: _tabController.index == 1,
-                    onTap: () => _tabController.animateTo(1),
-                  ),
-                  const SizedBox(width: 2),
-                  _PillTab(
-                    label: 'История по OB',
-                    count: _obRuns.length,
-                    isActive: _tabController.index == 2,
-                    onTap: () => _tabController.animateTo(2),
-                  ),
-                ],
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PillTab(
+                      label: 'Запущенные',
+                      count: _activeRuns.length + _activeObRuns.length,
+                      isActive: _tabController.index == 0,
+                      onTap: () => _tabController.animateTo(0),
+                    ),
+                    const SizedBox(width: 2),
+                    _PillTab(
+                      label: 'История по свечам',
+                      count: _historyTotal,
+                      isActive: _tabController.index == 1,
+                      onTap: () => _tabController.animateTo(1),
+                    ),
+                    const SizedBox(width: 2),
+                    _PillTab(
+                      label: 'История по OB',
+                      count: _obRuns.length,
+                      isActive: _tabController.index == 2,
+                      onTap: () => _tabController.animateTo(2),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: PfSpacing.md),
