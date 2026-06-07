@@ -311,6 +311,10 @@ class OrderBookStartRequest(BaseModel):
     min_flow_signals: Optional[int] = Field(default=None, ge=1, le=10)
     flow_exit_seconds: Optional[int] = Field(default=None, ge=5, le=300)
 
+    # Imbalance Scalping params
+    imbalance_threshold: Optional[float] = Field(default=None, ge=0.5, le=0.95)
+    surge_pct: Optional[float] = Field(default=None, ge=1, le=100)
+
 
 class OrderBookRunResponse(BaseModel):
     """Response model for an Order Book run."""
