@@ -48,6 +48,7 @@ async def fetch_all_usdt_pairs() -> list[str]:
                     s["symbol"]
                     for s in data.get("symbols", [])
                     if s["symbol"].endswith("USDT") and s["status"] == "TRADING"
+                    and s["symbol"].isascii()
                 ]
                 pairs.sort()
                 _binance_pairs_cache = pairs
