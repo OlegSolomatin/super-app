@@ -33,12 +33,14 @@ class _TradingPageState extends State<TradingPage>
 
   List<TradingRun> _activeRuns = [];
   List<TradingRun> _historyRuns = [];
+  int _historyTotal = 0; // реальное общее количество завершённых свечных запусков
   bool _loadingActive = true;
   bool _loadingHistory = true;
   Timer? _pollTimer;
 
   // OrderBook runs
-  List<Map<String, dynamic>> _obRuns = [];
+  List<Map<String, dynamic>> _activeObRuns = []; // только running OB
+  List<Map<String, dynamic>> _obRuns = [];        // завершённые OB (история)
   bool _loadingObRuns = false;
   /// Scan progress cache: run_id -> {status, scanned_pairs, total_pairs, ...}
   final Map<String, Map<String, dynamic>> _scanProgress = {};
@@ -80,11 +82,20 @@ class _TradingPageState extends State<TradingPage>
   Future<void> _pollActiveRuns() async {
     try {
       final result = await widget.repository.getRuns(status: 'running');
+      final obResult = await widget.repository.getOrderBookRuns(status: 'running');
       if (!mounted) return;
-      final hadActive = _activeRuns.isNotEmpty;
-      setState(() => _activeRuns = result.items);
-      if (hadActive && result.items.isEmpty) {
+      final hadActive = _activeRuns.isNotEmpty || _activeObRuns.isNotEmpty;
+      setState(() {
+        _activeRuns = result.items;
+        _activeObRuns = obResult.items;
+      });
+      if (hadActive && result.items.isEmpty && obResult.items.isEmpty) {
         _loadHistoryRuns();
+        _loadOrderBookRuns();
+      } else if (hadActive && result.items.isEmpty) {
+        _loadHistoryRuns();
+      } else if (hadActive && obResult.items.isEmpty) {
+        _loadOrderBookRuns();
       }
       // Poll scan progress for scanner runs (molot)
       for (final run in result.items) {
@@ -102,7 +113,13 @@ class _TradingPageState extends State<TradingPage>
     setState(() => _loadingActive = true);
     try {
       final result = await widget.repository.getRuns(status: 'running');
-      if (mounted) setState(() { _activeRuns = result.items; _loadingActive = false; });
+      // Also fetch running OB runs
+      final obResult = await widget.repository.getOrderBookRuns(status: 'running');
+      if (mounted) setState(() {
+        _activeRuns = result.items;
+        _activeObRuns = obResult.items;
+        _loadingActive = false;
+      });
     } catch (_) {
       if (mounted) setState(() => _loadingActive = false);
     }
@@ -111,16 +128,21 @@ class _TradingPageState extends State<TradingPage>
   Future<void> _loadHistoryRuns() async {
     setState(() => _loadingHistory = true);
     try {
-      final done = await widget.repository.getRuns(status: 'done');
-      final stopped = await widget.repository.getRuns(status: 'stopped');
-      final error = await widget.repository.getRuns(status: 'error');
+      // Fetch all pages or use large pageSize to get all history
+      final done = await widget.repository.getRuns(status: 'done', pageSize: 500);
+      final stopped = await widget.repository.getRuns(status: 'stopped', pageSize: 500);
+      final error = await widget.repository.getRuns(status: 'error', pageSize: 500);
       final all = [...done.items, ...stopped.items, ...error.items];
       all.sort((a, b) {
         final aDate = a.createdAt ?? DateTime(2000);
         final bDate = b.createdAt ?? DateTime(2000);
         return bDate.compareTo(aDate);
       });
-      if (mounted) setState(() { _historyRuns = all; _loadingHistory = false; });
+      if (mounted) setState(() {
+        _historyRuns = all;
+        _historyTotal = done.total + stopped.total + error.total;
+        _loadingHistory = false;
+      });
     } catch (_) {
       if (mounted) setState(() => _loadingHistory = false);
     }
@@ -129,9 +151,18 @@ class _TradingPageState extends State<TradingPage>
   Future<void> _loadOrderBookRuns() async {
     setState(() => _loadingObRuns = true);
     try {
-      final result = await widget.repository.getOrderBookRuns();
+      // History tab: only completed OB runs (done, stopped, error)
+      final done = await widget.repository.getOrderBookRuns(status: 'done', pageSize: 500);
+      final stopped = await widget.repository.getOrderBookRuns(status: 'stopped', pageSize: 500);
+      final error = await widget.repository.getOrderBookRuns(status: 'error', pageSize: 500);
+      final all = [...done.items, ...stopped.items, ...error.items];
+      all.sort((a, b) {
+        final aDate = (a['started_at'] as String? ?? '');
+        final bDate = (b['started_at'] as String? ?? '');
+        return bDate.compareTo(aDate);
+      });
       if (mounted) {
-        setState(() { _obRuns = result.items; _loadingObRuns = false; });
+        setState(() { _obRuns = all; _loadingObRuns = false; });
       }
     } catch (_) {
       if (mounted) setState(() => _loadingObRuns = false);
@@ -141,7 +172,7 @@ class _TradingPageState extends State<TradingPage>
   @override
   Widget build(BuildContext context) {
     final pc = PfColors.of(context);
-    final hasRuns = _activeRuns.isNotEmpty || _historyRuns.isNotEmpty || _obRuns.isNotEmpty;
+    final hasRuns = _activeRuns.isNotEmpty || _activeObRuns.isNotEmpty || _historyRuns.isNotEmpty || _obRuns.isNotEmpty;
     return AdaptiveScaffold(
       title: 'Трейдинг',
       currentPath: '/trading',
@@ -209,20 +240,20 @@ class _TradingPageState extends State<TradingPage>
                 children: [
                   _PillTab(
                     label: 'Запущенные',
-                    count: _activeRuns.length,
+                    count: _activeRuns.length + _activeObRuns.length,
                     isActive: _tabController.index == 0,
                     onTap: () => _tabController.animateTo(0),
                   ),
                   const SizedBox(width: 2),
                   _PillTab(
-                    label: 'История',
-                    count: _historyRuns.length,
+                    label: 'История по свечам',
+                    count: _historyTotal,
                     isActive: _tabController.index == 1,
                     onTap: () => _tabController.animateTo(1),
                   ),
                   const SizedBox(width: 2),
                   _PillTab(
-                    label: '📗 OB',
+                    label: 'История по OB',
                     count: _obRuns.length,
                     isActive: _tabController.index == 2,
                     onTap: () => _tabController.animateTo(2),
@@ -237,14 +268,7 @@ class _TradingPageState extends State<TradingPage>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildRunsList(
-                    runs: _activeRuns,
-                    loading: _loadingActive,
-                    emptyIcon: PhosphorIconsFill.rocket,
-                    emptyText: 'Нет активных стратегий',
-                    emptySubtext: 'Запустите новую стратегию, чтобы увидеть результаты',
-                    repository: widget.repository,
-                  ),
+                  _buildActiveContent(),
                   _buildRunsList(
                     runs: _historyRuns,
                     loading: _loadingHistory,
@@ -530,7 +554,82 @@ class _TradingPageState extends State<TradingPage>
     );
   }
 
-  // ── OrderBook Runs List ──────────────────────────────────────────────
+  // ── Active Tab Content (standard + OB) ──────────────────────────────────
+  Widget _buildActiveContent() {
+    final pc = PfColors.of(context);
+    final isLoading = _loadingActive;
+    final hasStandard = _activeRuns.isNotEmpty;
+    final hasOb = _activeObRuns.isNotEmpty;
+
+    if (isLoading && !hasStandard && !hasOb) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (!hasStandard && !hasOb) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhosphorIcon(
+              PhosphorIconsFill.rocket, size: 48,
+              color: pc.mutedForegroundC.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Нет активных стратегий',
+              style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Запустите новую стратегию, чтобы увидеть результаты',
+              style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC.withValues(alpha: 0.6)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadActiveRuns();
+        _pollActiveRuns();
+      },
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+        children: [
+          if (hasStandard) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('📊 По свечам',
+                style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC)),
+            ),
+            ..._activeRuns.map((run) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _TradingRunCard(
+                run: run,
+                scanProgress: _scanProgress[run.id],
+                onTap: () => context.go('/trading/run/${run.id}'),
+              ),
+            )),
+            if (hasOb) const SizedBox(height: 12),
+          ],
+          if (hasOb) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('📗 По ордербуку',
+                style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC)),
+            ),
+            ..._activeObRuns.map((run) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _buildObRunCard(run),
+            )),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── OrderBook History Tab ──────────────────────────────────────────────
   Widget _buildObRunsList() {
     final pc = PfColors.of(context);
     if (_loadingObRuns) {
@@ -544,10 +643,10 @@ class _TradingPageState extends State<TradingPage>
             PhosphorIcon(PhosphorIconsFill.stack, size: 48,
               color: pc.mutedForegroundC.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
-            Text('Нет OB-запусков',
+            Text('Нет завершённых OB-запусков',
               style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC)),
             const SizedBox(height: 4),
-            Text('Запустите стратегию по ордербуку',
+            Text('Завершённые стратегии по ордербуку появятся здесь',
               style: PfTypography.bodySm.copyWith(
                 color: pc.mutedForegroundC.withValues(alpha: 0.6))),
           ],
@@ -560,84 +659,87 @@ class _TradingPageState extends State<TradingPage>
         padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
         itemCount: _obRuns.length,
         separatorBuilder: (_, __) => const SizedBox(height: PfSpacing.sm),
-        itemBuilder: (context, index) {
-          final run = _obRuns[index];
-          final status = run['status'] as String? ?? 'unknown';
-          final pair = run['pair'] as String? ?? 'N/A';
-          final strategy = run['strategy'] as String? ?? 'N/A';
-          final signalsTotal = (run['signals_total'] as num?)?.toInt() ?? 0;
-          final spm = (run['signals_per_minute'] as num?)?.toDouble() ?? 0.0;
-          final isActive = status == 'running';
-          return PfCard(
-            padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
-            onTap: () => context.go('/trading/ob-run/${run['id']}'),
-            child: Column(
+        itemBuilder: (context, index) => _buildObRunCard(_obRuns[index]),
+      ),
+    );
+  }
+
+  /// Build an OB run card widget (used in both active and history tabs).
+  Widget _buildObRunCard(Map<String, dynamic> run) {
+    final pc = PfColors.of(context);
+    final status = run['status'] as String? ?? 'unknown';
+    final pair = run['pair'] as String? ?? 'N/A';
+    final strategy = run['strategy'] as String? ?? 'N/A';
+    final signalsTotal = (run['signals_total'] as num?)?.toInt() ?? 0;
+    final spm = (run['signals_per_minute'] as num?)?.toDouble() ?? 0.0;
+    final isActive = status == 'running';
+    return PfCard(
+      padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+      onTap: () => context.go('/trading/ob-run/${run['id']}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: isActive ? PfColors.success.withValues(alpha: 0.12) : pc.mutedC,
+                borderRadius: PfRadius.borderRadiusMd,
+              ),
+              child: Center(child: PhosphorIcon(
+                isActive ? PhosphorIconsFill.playCircle : PhosphorIconsFill.checkCircle,
+                size: 20,
+                color: isActive ? PfColors.success : pc.mutedForegroundC,
+              )),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Container(width: 40, height: 40,
-                    decoration: BoxDecoration(
-                      color: isActive ? PfColors.success.withValues(alpha: 0.12) : pc.mutedC,
-                      borderRadius: PfRadius.borderRadiusMd,
-                    ),
-                    child: Center(child: PhosphorIcon(
-                      isActive ? PhosphorIconsFill.playCircle : PhosphorIconsFill.checkCircle,
-                      size: 20,
-                      color: isActive ? PfColors.success : pc.mutedForegroundC,
-                    )),
+                Text(pair, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text('$strategy · ${isActive ? '🟢 Активна' : '⏹️ Завершена'}',
+                  style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+              ],
+            )),
+            if (isActive)
+              PfButton(variant: 'outline', size: 'sm', label: '⏹',
+                onPressed: () async {
+                  final id = run['id'] as int?;
+                  if (id != null) {
+                    await widget.repository.stopOrderBookRun(id);
+                    _loadOrderBookRuns();
+                    _loadActiveRuns();
+                  }
+                },
+              ),
+          ]),
+          // Signal activity row (only for running)
+          if (isActive) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  width: 6, height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: spm > 0 ? PfColors.success : PfColors.warning,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(pair, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text('$strategy · ${isActive ? '🟢 Активна' : '⏹️ Завершена'}',
-                        style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
-                    ],
-                  )),
-                  if (isActive)
-                    PfButton(variant: 'outline', size: 'sm', label: '⏹',
-                      onPressed: () async {
-                        final id = run['id'] as int?;
-                        if (id != null) {
-                          await widget.repository.stopOrderBookRun(id);
-                          _loadOrderBookRuns();
-                        }
-                      },
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    spm > 0
+                        ? '${spm.toStringAsFixed(0)} сигн/мин · $signalsTotal всего'
+                        : 'Нет сигналов ($signalsTotal обработано)',
+                    style: PfTypography.caption.copyWith(
+                      color: spm > 0 ? pc.mutedForegroundC : PfColors.warning,
                     ),
-                ]),
-                // Signal activity row (only for running)
-                if (isActive) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      // Alive dot
-                      Container(
-                        width: 6, height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: spm > 0 ? PfColors.success : PfColors.warning,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          spm > 0
-                              ? '${spm.toStringAsFixed(0)} сигн/мин · $signalsTotal всего'
-                              : 'Нет сигналов ($signalsTotal обработано)',
-                          style: PfTypography.caption.copyWith(
-                            color: spm > 0 ? pc.mutedForegroundC : PfColors.warning,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
-                ],
+                ),
               ],
             ),
-          );
-        },
+          ],
+        ],
       ),
     );
   }
