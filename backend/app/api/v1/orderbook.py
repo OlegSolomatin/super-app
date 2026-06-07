@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_session
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.models.trading import OrderBookRun as DBOrderBookRun
 from app.models.user import User
 from app.schemas.trading import (
@@ -195,3 +195,15 @@ async def stop_orderbook_run(
     await scheduler.stop_run(run_id=run_id)
 
     return {"detail": f"Run {run_id} stopping..."}
+
+
+@router.post("/admin/cleanup")
+async def cleanup_orphaned_runs(
+    current_user: User = Depends(require_admin),
+) -> dict:
+    """Admin: найти и починить orphaned OB-запуски (движки работают но scheduler потерял их)."""
+    cleaned = await scheduler.cleanup_orphaned_engines()
+    return {
+        "detail": f"Cleaned {len(cleaned)} orphaned runs",
+        "cleaned": cleaned,
+    }

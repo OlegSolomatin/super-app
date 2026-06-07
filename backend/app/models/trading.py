@@ -272,6 +272,9 @@ class OrderBookRun(Base):
     last_rejection_reason = Column(String(200), nullable=True)
     signal_summary_json = Column(Text, nullable=True)
 
+    # Heartbeat: обновляется каждые 3 сек пока engine жив
+    last_heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+
     __table_args__ = (
         Index("ix_ob_runs_user_status", "user_id", "status"),
         Index("ix_ob_runs_started_at", "started_at"),

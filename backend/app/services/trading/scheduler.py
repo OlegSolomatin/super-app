@@ -479,6 +479,49 @@ class TradingScheduler:
         """Return a mapping of run_id -> status for all active runs."""
         return {rid: (await self.get_status(rid) or "unknown") for rid in self._tasks}
 
+    async def cleanup_orphaned_engines(self) -> list[dict]:
+        """Find and stop orphaned OB engines, return summary of cleaned runs.
+
+        Orphaned = engines still running in event loop but lost from scheduler tracking.
+        """
+        cleaned = []
+        # Scan any running db runs not in _tasks/_engines
+        from app.core.database import async_session_factory
+        from sqlalchemy import select
+        from app.models.trading import OrderBookRun as DBOrderBookRun
+
+        async with async_session_factory() as session:
+            stmt = select(DBOrderBookRun).where(DBOrderBookRun.status == "running")
+            result = await session.execute(stmt)
+            for db_run in result.scalars().all():
+                run_id = db_run.id
+                engine = self._engines.get(run_id)
+                if engine:
+                    # Active engine — stop it
+                    try:
+                        await engine.stop()
+                    except Exception as e:
+                        logger.warning(f"Cleanup: engine stop failed for run {run_id}: {e}")
+                    self._engines.pop(run_id, None)
+                    self._tasks.pop(run_id, None)
+                    cleaned.append({"id": run_id, "action": "stopped"})
+                else:
+                    # Ghost run in DB but no engine — mark as error
+                    from sqlalchemy import update
+                    from datetime import datetime, timezone
+                    await session.execute(
+                        update(DBOrderBookRun)
+                        .where(DBOrderBookRun.id == run_id)
+                        .values(
+                            status="error",
+                            finished_at=datetime.now(timezone.utc),
+                            error="Cleanup: engine lost, marked as orphaned",
+                        )
+                    )
+                    cleaned.append({"id": run_id, "action": "marked_error"})
+            await session.commit()
+        return cleaned
+
     async def start_orderbook_run(
         self,
         run_id: int,
@@ -537,6 +580,9 @@ class TradingScheduler:
         from app.core.database import async_session_factory
         from app.models.trading import OrderBookRun as DBOrderBookRun
 
+        live_task = None
+        cancelled = False
+        error_msg: str | None = None
         try:
             await engine.start()
             # ── Фоновая задача: live-статус каждые 3 сек ──────────
@@ -567,25 +613,37 @@ class TradingScheduler:
                 if engine._manage_task is not None:
                     await engine._manage_task
         except asyncio.CancelledError:
+            cancelled = True
+            error_msg = "Stopped by user"
             logger.info(f"[OBScheduler] Run {run_id} cancelled, stopping engine...")
             await engine.stop()
         except Exception:
+            error_msg = "Engine crashed"
             logger.exception(f"[OBScheduler] Run {run_id} failed")
-            await self._save_ob_results(run_id, engine, status="error", error_msg="Engine crashed")
-            return
         finally:
-            live_task.cancel()
+            # ── Guarded cleanup: stop live loop, stop engine, clean scheduler state ──
+            if live_task is not None:
+                live_task.cancel()
+            try:
+                await engine.stop()
+            except Exception:
+                logger.exception(f"[OBScheduler] Run {run_id}: engine.stop() failed")
             self._engines.pop(run_id, None)
+            self._tasks.pop(run_id, None)
 
-        # Mark as done and save results
-        await self._save_ob_results(run_id, engine, status="done")
-        self._tasks.pop(run_id, None)
+        # Save final results to DB
+        status = "cancelled" if cancelled else ("error" if error_msg else "done")
+        await self._save_ob_results(
+            run_id, engine, status=status,
+            error_msg=error_msg,
+        )
 
     async def _save_ob_live_status(
         self, run_id: int, engine
     ) -> None:
-        """Сохранить live-статус OrderBook engine в БД."""
+        """Сохранить live-статус OrderBook engine в БД (каждые 3 сек)."""
         import json
+        from datetime import datetime, timezone
         from sqlalchemy import select, update
 
         from app.core.database import async_session_factory
@@ -650,6 +708,7 @@ class TradingScheduler:
                     signals_total=signals_total,
                     signals_rejected=signals_rejected,
                     signals_per_minute=spm,
+                    last_heartbeat_at=datetime.now(timezone.utc),
                     last_signal_at=last_signal.get("timestamp") if last_signal else None,
                     last_signal_type=last_signal.get("signal_type") if last_signal else None,
                     last_rejection_reason=last_signal.get("detail") if last_signal and last_signal.get("status") == "filtered" else None,
@@ -663,7 +722,7 @@ class TradingScheduler:
     ) -> None:
         """Сохранить метрики и трейды OrderBook engine в БД."""
         from datetime import datetime, timezone
-        from sqlalchemy import select
+        from sqlalchemy import select, update
 
         from app.core.database import async_session_factory
         from app.models.trading import OrderBookRun as DBOrderBookRun
@@ -687,29 +746,22 @@ class TradingScheduler:
             })
 
         async with async_session_factory() as session:
-            stmt = select(DBOrderBookRun).where(DBOrderBookRun.id == run_id)
-            result = await session.execute(stmt)
-            db_run = result.scalar_one_or_none()
-            if db_run:
-                db_run.status = status
-                db_run.finished_at = datetime.now(timezone.utc)
-                if error_msg:
-                    db_run.error = error_msg
-                async with session.begin_nested():
-                    from sqlalchemy import update
-                    await session.execute(
-                        update(DBOrderBookRun)
-                        .where(DBOrderBookRun.id == run_id)
-                        .values(
-                            metrics_json=json.dumps(metrics),
-                            total_pnl=total_pnl,
-                            total_trades=len(trade_history),
-                            win_trades=metrics.get("win_count", 0),
-                            loss_trades=metrics.get("loss_count", 0),
-                            final_balance=metrics.get("peak_balance", 0.0),
-                        )
-                    )
-                await session.commit()
+            await session.execute(
+                update(DBOrderBookRun)
+                .where(DBOrderBookRun.id == run_id)
+                .values(
+                    status=status,
+                    finished_at=datetime.now(timezone.utc),
+                    error=error_msg,
+                    metrics_json=json.dumps(metrics),
+                    total_pnl=total_pnl,
+                    total_trades=len(trade_history),
+                    win_trades=metrics.get("win_count", 0),
+                    loss_trades=metrics.get("loss_count", 0),
+                    final_balance=metrics.get("peak_balance", 0.0),
+                )
+            )
+            await session.commit()
 
 
 # Singleton scheduler instance
