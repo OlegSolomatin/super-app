@@ -13,11 +13,13 @@ class TradingRepository {
 
   Future<({List<TradingPair> items, int total})> getPairs({
     String? search,
+    String? sort,
     int page = 1,
     int pageSize = 20,
   }) async {
     final response = await _dio.get('/trading/pairs', queryParameters: {
       if (search != null && search.isNotEmpty) 'search': search,
+      if (sort != null && sort.isNotEmpty) 'sort': sort,
       'page': page,
       'page_size': pageSize,
     });

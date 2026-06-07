@@ -50,6 +50,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   int _pairPage = 1;
   bool _hasMorePairs = true;
   bool _loadingPairs = false;
+  bool _sortByVolume = false;
 
   // Step 3
   List<StrategyInfo> _strategies = [];
@@ -116,6 +117,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         search: _searchPairController.text.isNotEmpty
             ? _searchPairController.text
             : null,
+        sort: _sortByVolume ? 'liquidity' : null,
         page: _pairPage,
         pageSize: 500,
       );
@@ -872,6 +874,55 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
                 : null,
           ),
           onChanged: (_) => _loadPairs(refresh: true),
+        ),
+        const SizedBox(height: 8),
+        // Sort toggle
+        Row(
+          children: [
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _sortByVolume = !_sortByVolume;
+                  _pairPage = 1;
+                  _hasMorePairs = true;
+                  _pairs.clear();
+                });
+                _loadPairs();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _sortByVolume
+                      ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                      : theme.cardTheme.color,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _sortByVolume
+                        ? theme.colorScheme.primary
+                        : Colors.transparent,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const PhosphorIcon(
+                      PhosphorIconsFill.arrowDown,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _sortByVolume ? 'По объёму' : 'По умолчанию',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _sortByVolume
+                            ? theme.colorScheme.primary
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         if (_loadingPairs && _pairs.isEmpty)

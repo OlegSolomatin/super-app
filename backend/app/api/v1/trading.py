@@ -55,7 +55,7 @@ router = APIRouter(prefix="/trading", tags=["trading"])
 # ---------------------------------------------------------------------------
 # Hardcoded pair list
 # ---------------------------------------------------------------------------
-from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url, fetch_all_usdt_pairs
+from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url, fetch_all_usdt_pairs, fetch_24h_volumes
 
 HARDCODED_PAIRS = [
     PairInfo(symbol="BTCUSDT", base="BTC", quote="USDT", min_qty=0.001, tick_size=0.01),
@@ -532,14 +532,21 @@ async def cleanup_stale_runs(
 @router.get("/pairs", response_model=PairsListResponse)
 async def list_pairs(
     search: Optional[str] = Query(None, description="Filter by symbol substring"),
+    sort: Optional[str] = Query(None, description="Sort order: 'liquidity' (by 24h volume)"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=500, description="Items per page"),
 ) -> PairsListResponse:
-    """Return available trading pairs with optional search and pagination."""
+    """Return available trading pairs with optional search, sort and pagination."""
     items = await _get_pair_list()
+
+    # Sort by 24h liquidity (volume from Binance)
+    if sort == "liquidity":
+        volumes = await fetch_24h_volumes()
+        items.sort(key=lambda p: volumes.get(p.symbol, 0), reverse=True)
+
     if search:
         search_upper = search.upper()
-        items = [p for p in items if search_upper in p["symbol"].upper()]
+        items = [p for p in items if search_upper in p.symbol.upper()]
     total = len(items)
     offset = (page - 1) * page_size
     page_items = items[offset : offset + page_size]

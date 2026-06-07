@@ -207,6 +207,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   int _pairPage = 1;
   bool _hasMorePairs = true;
   bool _loadingPairs = false;
+  bool _sortByVolume = false;
 
   // Step 1: Strategy
   _ObStrategyOption? _selectedStrategy;
@@ -439,6 +440,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         search: _searchPairController.text.isNotEmpty
             ? _searchPairController.text
             : null,
+        sort: _sortByVolume ? 'liquidity' : null,
         page: _pairPage,
         pageSize: 500,
       );
@@ -670,11 +672,65 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                       ),
                     ),
                     const SizedBox(height: 8),
+                // Sort toggle
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _sortByVolume = !_sortByVolume;
+                          _loadedPairs.clear();
+                          _pairPage = 1;
+                          _hasMorePairs = true;
+                        });
+                        _loadPairs();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _sortByVolume
+                              ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                              : pc.surfaceC,
+                          borderRadius: PfRadius.borderRadiusMd,
+                          border: Border.all(
+                            color: _sortByVolume
+                                ? theme.colorScheme.primary
+                                : pc.borderC,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            PhosphorIcon(
+                              _sortByVolume
+                                  ? PhosphorIconsFill.arrowDown
+                                  : PhosphorIconsFill.arrowDown,
+                              size: 14,
+                              color: _sortByVolume
+                                  ? theme.colorScheme.primary
+                                  : pc.mutedForegroundC,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _sortByVolume ? 'По объёму' : 'По умолчанию',
+                              style: PfTypography.bodySm.copyWith(
+                                color: _sortByVolume
+                                    ? theme.colorScheme.primary
+                                    : pc.mutedForegroundC,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              // ── Scrollable pair list ──
-              Expanded(
+                const SizedBox(height: 4),
+              ],
+            ),
+          ),
+          // ── Scrollable pair list ──
+          Expanded(
                 child: _buildPairList(theme, pc),
               ),
             ],

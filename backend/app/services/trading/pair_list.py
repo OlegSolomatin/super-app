@@ -15,6 +15,47 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+# ── Cache for Binance 24h volume ──
+_binance_volume_cache: dict[str, float] | None = None
+_binance_volume_cache_time: float = 0.0
+BINANCE_VOLUME_CACHE_TTL = 60  # 1 minute
+
+
+async def fetch_24h_volumes() -> dict[str, float]:
+    """Fetch 24h quote volumes (in USDT) for all USDT pairs from Binance."""
+    global _binance_volume_cache, _binance_volume_cache_time
+
+    now = time.time()
+    if _binance_volume_cache is not None and (now - _binance_volume_cache_time) < BINANCE_VOLUME_CACHE_TTL:
+        return _binance_volume_cache
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.binance.com/api/v3/ticker/24hr",
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning("Binance 24hr ticker returned %d", resp.status)
+                    return {}
+
+                data = await resp.json()
+                volumes: dict[str, float] = {}
+                for t in data:
+                    symbol: str = t.get("symbol", "")
+                    if symbol.endswith("USDT") and symbol.isascii():
+                        qv = float(t.get("quoteVolume", 0) or 0)
+                        volumes[symbol] = qv
+                _binance_volume_cache = volumes
+                _binance_volume_cache_time = now
+                logger.info("Fetched 24h volumes for %d USDT pairs", len(volumes))
+                return volumes
+
+    except Exception as e:
+        logger.warning("Failed to fetch 24h volumes: %s", e)
+        return {}
+
+
 # ── Cache for Binance pair list ──
 _binance_pairs_cache: list[str] | None = None
 _binance_pairs_cache_time: float = 0.0
