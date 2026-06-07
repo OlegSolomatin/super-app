@@ -440,7 +440,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             ? _searchPairController.text
             : null,
         page: _pairPage,
-        pageSize: 50,
+        pageSize: 500,
       );
       if (mounted) {
         setState(() {

@@ -117,7 +117,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             ? _searchPairController.text
             : null,
         page: _pairPage,
-        pageSize: 50,
+        pageSize: 500,
       );
       if (mounted) {
         setState(() {

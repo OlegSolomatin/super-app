@@ -55,7 +55,7 @@ router = APIRouter(prefix="/trading", tags=["trading"])
 # ---------------------------------------------------------------------------
 # Hardcoded pair list
 # ---------------------------------------------------------------------------
-from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url
+from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url, fetch_all_usdt_pairs
 
 HARDCODED_PAIRS = [
     PairInfo(symbol="BTCUSDT", base="BTC", quote="USDT", min_qty=0.001, tick_size=0.01),
@@ -110,19 +110,24 @@ HARDCODED_PAIRS = [
     PairInfo(symbol="LSKUSDT", base="LSK", quote="USDT", min_qty=0.1, tick_size=0.001),
 ]
 
-def _get_pair_list() -> list[dict]:
-    """Build pair list with icon_url populated."""
-    items = []
-    for p in HARDCODED_PAIRS:
-        icon_url = get_coin_icon_url(p.base)
-        items.append({
-            "symbol": p.symbol,
-            "base": p.base,
-            "quote": p.quote,
-            "min_qty": p.min_qty,
-            "tick_size": p.tick_size,
-            "icon_url": icon_url,
-        })
+async def _get_pair_list() -> list[PairInfo]:
+    """Build pair list with icon_url populated from Binance."""
+    hardcoded: dict[str, PairInfo] = {p.symbol: p for p in HARDCODED_PAIRS}
+    symbols = await fetch_all_usdt_pairs()
+    items: list[PairInfo] = []
+    for symbol in symbols:
+        if not symbol.endswith("USDT"):
+            continue
+        base = symbol[:-4]
+        hard = hardcoded.get(symbol)
+        items.append(PairInfo(
+            symbol=symbol,
+            base=base,
+            quote="USDT",
+            min_qty=hard.min_qty if hard else 0.001,
+            tick_size=hard.tick_size if hard else 0.0001,
+            icon_url=get_coin_icon_url(base),
+        ))
     return items
 
 # ---------------------------------------------------------------------------
@@ -528,10 +533,10 @@ async def cleanup_stale_runs(
 async def list_pairs(
     search: Optional[str] = Query(None, description="Filter by symbol substring"),
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    page_size: int = Query(20, ge=1, le=500, description="Items per page"),
 ) -> PairsListResponse:
     """Return available trading pairs with optional search and pagination."""
-    items = _get_pair_list()
+    items = await _get_pair_list()
     if search:
         search_upper = search.upper()
         items = [p for p in items if search_upper in p["symbol"].upper()]
@@ -663,7 +668,7 @@ async def list_runs(
         None, alias="status", description="Filter by run status"
     ),
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    page_size: int = Query(20, ge=1, le=500, description="Items per page"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TradingRunListResponse:
@@ -719,7 +724,7 @@ async def get_run(
 async def get_run_trades(
     run_id: int,
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    page_size: int = Query(20, ge=1, le=500, description="Items per page"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TradeListResponse:
