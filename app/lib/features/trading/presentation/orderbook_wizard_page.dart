@@ -19,6 +19,7 @@ import 'package:dio/dio.dart';
 import 'package:app/shared/widgets/error_snackbar.dart';
 import 'package:app/features/trading/data/hardcoded_pairs.dart';
 import 'package:app/features/trading/data/models/pair_live_data.dart';
+import 'package:app/features/trading/data/models/pair_insight.dart';
 
 /// Cтатичные модели данных Order Book визарда.
 
@@ -212,6 +213,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   bool _sortByVolume = false;
   Map<String, PairLiveData> _liveData = {};
   bool _loadingLiveData = false;
+  PairInsight? _pairInsight;
+  bool _loadingInsight = false;
 
   // Step 1: Strategy
   _ObStrategyOption? _selectedStrategy;
@@ -447,6 +450,14 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       return p.symbol.contains(search) || p.base.contains(search);
     }).toList();
     if (!mounted) return;
+    // Сортировка по объёму, если включена и данные загружены
+    if (_sortByVolume && _liveData.isNotEmpty) {
+      filtered.sort((a, b) {
+        final va = _liveData[a.symbol]?.volume ?? 0;
+        final vb = _liveData[b.symbol]?.volume ?? 0;
+        return vb.compareTo(va);
+      });
+    }
     setState(() {
       _loadedPairs
         ..clear()
@@ -466,9 +477,35 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           _liveData = liveData;
           _loadingLiveData = false;
         });
+        // Пересортировать по объёму, если сортировка включена
+        if (_sortByVolume && _loadedPairs.isNotEmpty) {
+          setState(() {
+            _loadedPairs.sort((a, b) {
+              final va = liveData[a.symbol]?.volume ?? 0;
+              final vb = liveData[b.symbol]?.volume ?? 0;
+              return vb.compareTo(va);
+            });
+          });
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _loadingLiveData = false);
+    }
+  }
+
+  Future<void> _fetchPairInsight(String symbol) async {
+    if (_loadingInsight) return;
+    setState(() => _loadingInsight = true);
+    try {
+      final insight = await _repository.getPairInsight(symbol);
+      if (mounted) {
+        setState(() {
+          _pairInsight = insight;
+          _loadingInsight = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingInsight = false);
     }
   }
 
@@ -953,6 +990,132 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     return const SizedBox.shrink();
   }
 
+  // ── Insight card ───────────────────────────────────────────────────
+
+  Widget _buildInsightCard(PairInsight insight, ThemeData theme, PfColors pc) {
+    final symbol = insight.symbol.replaceAll('USDT', '/USDT');
+    return PfCard(
+      variant: 'default',
+      padding: const EdgeInsets.all(PfSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const PhosphorIcon(PhosphorIconsFill.lightbulb, size: 18, color: Color(0xFFF59E0B)),
+              const SizedBox(width: 8),
+              Text('Рекомендация для $symbol',
+                  style: PfTypography.titleMd.copyWith(color: pc.foregroundC)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _insightStat('Объём 24ч', _obFormatVolume(insight.volume24h), pc),
+              const SizedBox(width: 16),
+              _insightStat('Волатильность', '${insight.volatility24h.toStringAsFixed(1)}%', pc),
+              const SizedBox(width: 16),
+              _insightStat('Цена', _obFormatPrice(insight.price), pc),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...insight.recommendedStrategies.take(3).map((s) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                _medalIcon(s.score),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${s.label}  ${(s.score * 100).toInt()}%',
+                          style: PfTypography.bodyMd.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: pc.foregroundC,
+                          )),
+                      Text(s.reason,
+                          style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _insightStat(String label, String value, PfColors pc) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
+        const SizedBox(height: 2),
+        Text(value, style: PfTypography.bodyMd.copyWith(fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _medalIcon(double score) {
+    if (score >= 0.8) {
+      return const Icon(Icons.emoji_events, size: 20, color: Color(0xFFF59E0B));
+    } else if (score >= 0.5) {
+      return const Icon(Icons.emoji_events, size: 20, color: Color(0xFF9CA3AF));
+    }
+    return const Icon(Icons.emoji_events, size: 20, color: Color(0xFF92400E));
+  }
+
+  Widget _buildInsightSkeleton(ThemeData theme, PfColors pc) {
+    return PfCard(
+      variant: 'default',
+      padding: const EdgeInsets.all(PfSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 18, height: 18,
+                decoration: BoxDecoration(
+                  color: theme.disabledColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(width: 160, height: 16,
+                decoration: BoxDecoration(
+                  color: theme.disabledColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            _skeletonBlock(theme, 70, 14),
+            const SizedBox(width: 16),
+            _skeletonBlock(theme, 80, 14),
+            const SizedBox(width: 16),
+            _skeletonBlock(theme, 60, 14),
+          ]),
+          const SizedBox(height: 12),
+          _skeletonBlock(theme, double.infinity, 36),
+        ],
+      ),
+    );
+  }
+
+  Widget _skeletonBlock(ThemeData theme, double width, double height) {
+    return Container(
+      width: width, height: height,
+      decoration: BoxDecoration(
+        color: theme.disabledColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+
   // ── Step 1: Strategy ──────────────────────────────────────────────
   Widget _buildStepStrategy(ThemeData theme, PfColors pc) {
     return Column(
@@ -974,6 +1137,13 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
         ),
         const SizedBox(height: 24),
+        // ── Insight карточка с рекомендацией ──
+        if (_loadingInsight)
+          _buildInsightSkeleton(theme, pc)
+        else if (_pairInsight != null) ...[
+          _buildInsightCard(_pairInsight!, theme, pc),
+          const SizedBox(height: 24),
+        ],
         ..._kObStrategies.map((s) => Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: _buildStrategyCard(s, theme, pc),
@@ -1981,6 +2151,10 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                     _previousStep = _currentStep;
                     setState(() => _currentStep++);
                     _slideCtrl.forward(from: 0);
+                    // Загрузить insight при переходе на шаг стратегии
+                    if (_currentStep == 1 && _selectedPairSymbol.isNotEmpty) {
+                      _fetchPairInsight(_selectedPairSymbol);
+                    }
                   } else {
                     _startEngine();
                   }

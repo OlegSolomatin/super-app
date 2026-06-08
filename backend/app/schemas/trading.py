@@ -242,6 +242,26 @@ class PairsLiveDataResponse(BaseModel):
     items: dict[str, dict]  # symbol -> {price, volume, change_24h}
 
 
+class StrategyScore(BaseModel):
+    """Score and reason for a recommended strategy."""
+
+    name: str
+    label: str
+    score: float
+    reason: str
+
+
+class PairInsightResponse(BaseModel):
+    """Insight data for a specific pair with strategy recommendations."""
+
+    symbol: str
+    price: float
+    volume_24h: float
+    volatility_24h: float
+    spread: float
+    recommended_strategies: list[StrategyScore]
+
+
 class StrategiesListResponse(BaseModel):
     """Response with available strategies."""
 

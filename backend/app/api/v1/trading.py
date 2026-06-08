@@ -33,10 +33,12 @@ from app.schemas.trading import (
     ExchangeInfo,
     ExchangesListResponse,
     PairInfo,
+    PairInsightResponse,
     PairsListResponse,
     PairsLiveDataResponse,
     StrategiesListResponse,
     StrategyInfo,
+    StrategyScore,
     TradeListResponse,
     TradeResponse,
     TradingConfig,
@@ -559,6 +561,113 @@ async def list_pairs_live() -> PairsLiveDataResponse:
     """Return live 24hr data (price, volume, change %) for all USDT pairs."""
     tickers = await fetch_24h_tickers()
     return PairsLiveDataResponse(items=tickers)
+
+
+def _calculate_volatility(high: float, low: float) -> float:
+    """Calculate 24h volatility as percentage."""
+    if high <= 0 or low <= 0:
+        return 0.0
+    mid = (high + low) / 2
+    if mid <= 0:
+        return 0.0
+    return round(((high - low) / mid) * 100, 2)
+
+
+def _compute_strategy_scores(
+    volume: float, volatility: float, price: float,
+) -> list[dict]:
+    """Compute strategy recommendation scores for a pair."""
+    results: list[dict] = []
+
+    # Imbalance Scalping — high volatility
+    vol_norm = min(volatility / 5.0, 1.0)  # 5%+ = 1.0
+    imbalance_score = round(0.3 + 0.7 * vol_norm, 2)
+    if imbalance_score > 0.5:
+        reason = f"Волатильность {volatility}% — идеально для ловли дисбалансов в стакане"
+    else:
+        reason = f"Волатильность {volatility}% — низкая, сигналов может быть мало"
+    results.append({
+        "name": "imbalance_scalping",
+        "label": "Imbalance Scalping",
+        "score": min(imbalance_score, 0.95),
+        "reason": reason,
+    })
+
+    # Spread Capture — low volatility, high volume
+    vol_inv = max(1.0 - volatility / 3.0, 0.0)
+    vol_norm_v = min(volume / 500_000_000, 1.0) if volume > 0 else 0
+    spread_score = round(0.2 + 0.4 * vol_inv + 0.4 * vol_norm_v, 2)
+    if spread_score > 0.5:
+        reason = f"Спред узкий, объём ${_fmt_volume(volume)} — отлично для скальпирования"
+    else:
+        reason = f"Объём ${_fmt_volume(volume)} — для спред-торговли нужен стабильный поток"
+    results.append({
+        "name": "spread_capture",
+        "label": "Spread Capture",
+        "score": min(spread_score, 0.95),
+        "reason": reason,
+    })
+
+    # Order Flow Momentum — high volume + medium volatility
+    mom_score = round(0.2 + 0.5 * vol_norm_v + 0.3 * vol_norm, 2)
+    if mom_score > 0.5:
+        reason = f"Объём ${_fmt_volume(volume)} и волатильность {volatility}% — momentum-сигналы будут надёжными"
+    else:
+        reason = f"Низкий объём (${_fmt_volume(volume)}) — momentum может давать ложные сигналы"
+    results.append({
+        "name": "order_flow_momentum",
+        "label": "Order Flow Momentum",
+        "score": min(mom_score, 0.95),
+        "reason": reason,
+    })
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results
+
+
+def _fmt_volume(v: float) -> str:
+    if v >= 1_000_000_000:
+        return f"{v / 1_000_000_000:.1f}B"
+    if v >= 1_000_000:
+        return f"{v / 1_000_000:.1f}M"
+    if v >= 1_000:
+        return f"{v / 1_000:.1f}K"
+    return f"{v:.0f}"
+
+
+@router.get("/pairs/{symbol}/insight", response_model=PairInsightResponse)
+async def pair_insight(symbol: str) -> PairInsightResponse:
+    """Return market insight + strategy recommendations for a specific pair."""
+    symbol = symbol.upper()
+    if not symbol.endswith("USDT"):
+        symbol = f"{symbol}USDT"
+
+    tickers = await fetch_24h_tickers()
+    data = tickers.get(symbol)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Pair {symbol} not found")
+
+    price = data["price"]
+    volume = data["volume"]
+    high = data.get("high", 0)
+    low = data.get("low", 0)
+    volatility = _calculate_volatility(high, low)
+
+    # Approximate spread from ticker (not real OB spread)
+    spread = round(volatility * 0.05, 2) if volatility > 0 else 0.01
+
+    scores = _compute_strategy_scores(volume, volatility, price)
+
+    return PairInsightResponse(
+        symbol=symbol,
+        price=price,
+        volume_24h=volume,
+        volatility_24h=volatility,
+        spread=spread,
+        recommended_strategies=[
+            StrategyScore(**s) for s in scores
+        ],
+    )
 
 
 @router.get("/strategies", response_model=StrategiesListResponse)

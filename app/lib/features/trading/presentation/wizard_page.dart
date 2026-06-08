@@ -120,6 +120,14 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       return p.symbol.contains(search) || p.base.contains(search);
     }).toList();
     if (!mounted) return;
+    // Сортировка по объёму, если включена и данные загружены
+    if (_sortByVolume && _liveData.isNotEmpty) {
+      filtered.sort((a, b) {
+        final va = _liveData[a.symbol]?.volume ?? 0;
+        final vb = _liveData[b.symbol]?.volume ?? 0;
+        return vb.compareTo(va);
+      });
+    }
     setState(() {
       _pairs
         ..clear()
@@ -139,6 +147,16 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           _liveData = liveData;
           _loadingLiveData = false;
         });
+        // Пересортировать по объёму, если сортировка включена
+        if (_sortByVolume && _pairs.isNotEmpty) {
+          setState(() {
+            _pairs.sort((a, b) {
+              final va = liveData[a.symbol]?.volume ?? 0;
+              final vb = liveData[b.symbol]?.volume ?? 0;
+              return vb.compareTo(va);
+            });
+          });
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _loadingLiveData = false);

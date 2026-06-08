@@ -50,9 +50,11 @@ async def fetch_24h_volumes() -> dict[str, float]:
                         last_price = float(t.get("lastPrice", 0) or 0)
                         price_change = float(t.get("priceChangePercent", 0) or 0)
                         tickers[symbol] = {
-                            "price": last_price,
+                            "price": float(t.get("lastPrice", 0) or 0),
                             "volume": qv,
                             "change_24h": price_change,
+                            "high": float(t.get("highPrice", 0) or 0),
+                            "low": float(t.get("lowPrice", 0) or 0),
                         }
                 _binance_ticker_cache = tickers
                 _binance_ticker_cache_time = now
@@ -95,6 +97,8 @@ async def fetch_24h_tickers() -> dict[str, dict]:
                             "price": float(t.get("lastPrice", 0) or 0),
                             "volume": float(t.get("quoteVolume", 0) or 0),
                             "change_24h": float(t.get("priceChangePercent", 0) or 0),
+                            "high": float(t.get("highPrice", 0) or 0),
+                            "low": float(t.get("lowPrice", 0) or 0),
                         }
                 _binance_ticker_cache = tickers
                 _binance_ticker_cache_time = now
