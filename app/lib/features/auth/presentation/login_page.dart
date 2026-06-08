@@ -253,6 +253,7 @@ class _LoginPageState extends State<LoginPage> {
                               // Username
                               TextFormField(
                                 controller: _usernameController,
+                                autofocus: true,
                                 textCapitalization: TextCapitalization.none,
                                 textInputAction: TextInputAction.next,
                                 style: TextStyle(fontSize: 15, color: pc.foregroundC),
