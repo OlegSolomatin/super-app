@@ -167,4 +167,10 @@ class TradingRepository {
   Future<void> stopOrderBookRun(int runId) async {
     await _dio.post('/orderbook/stop', queryParameters: {'run_id': runId});
   }
+
+  Future<List<Map<String, dynamic>>> getOrderBookRunTrades(int runId) async {
+    final response = await _dio.get('/orderbook/runs/$runId/trades');
+    final data = response.data as Map<String, dynamic>;
+    return (data['trades'] as List).map((e) => e as Map<String, dynamic>).toList();
+  }
 }

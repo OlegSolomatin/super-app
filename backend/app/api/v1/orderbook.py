@@ -9,6 +9,7 @@ Provides:
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -207,3 +208,27 @@ async def cleanup_orphaned_runs(
         "detail": f"Cleaned {len(cleaned)} orphaned runs",
         "cleaned": cleaned,
     }
+
+
+@router.get("/runs/{run_id}/trades")
+async def get_orderbook_trades(
+    run_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Get closed trades history for an Order Book run."""
+    stmt = select(DBOrderBookRun).where(
+        DBOrderBookRun.id == run_id,
+        DBOrderBookRun.user_id == current_user.id,
+    )
+    result = await session.execute(stmt)
+    db_run = result.scalar_one_or_none()
+
+    if db_run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    trades = []
+    if db_run.closed_trades_json:
+        trades = json.loads(db_run.closed_trades_json)
+
+    return {"trades": trades}

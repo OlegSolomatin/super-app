@@ -262,6 +262,7 @@ class OrderBookRun(Base):
     # Live-status (обновляются engine в реальном времени)
     current_balance = Column(Float, nullable=True)
     open_trade_json = Column(Text, nullable=True)
+    closed_trades_json = Column(Text, nullable=True)
 
     # Signal metrics (обновляются каждые 3 сек)
     signals_total = Column(Integer, nullable=True, default=0)

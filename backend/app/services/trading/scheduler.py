@@ -759,6 +759,7 @@ class TradingScheduler:
                     win_trades=metrics.get("win_count", 0),
                     loss_trades=metrics.get("loss_count", 0),
                     final_balance=metrics.get("peak_balance", 0.0),
+                    closed_trades_json=json.dumps(trades_json) if trades_json else None,
                 )
             )
             await session.commit()

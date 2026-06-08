@@ -34,6 +34,7 @@ class OrderBookRunDetailPage extends StatefulWidget {
 class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
   Map<String, dynamic>? _run;
   Map<String, dynamic>? _signalStatus;
+  List<Map<String, dynamic>> _trades = [];
   bool _loading = true;
   Timer? _signalTimer;
 
@@ -68,6 +69,12 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
       if (mounted) setState(() { _run = data; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+    try {
+      final trades = await widget.repository.getOrderBookRunTrades(widget.runId);
+      if (mounted) setState(() => _trades = trades);
+    } catch (_) {
+      // trades are optional
     }
   }
 
@@ -117,6 +124,10 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                       if (_run!['open_trade_json'] != null) ...[
                         const SizedBox(height: PfSpacing.md),
                         _buildCurrentTradeCard(pc, _run!['open_trade_json'] as String),
+                      ],
+                      if (_trades.isNotEmpty) ...[
+                        const SizedBox(height: PfSpacing.md),
+                        _buildTradeHistory(pc),
                       ],
                     ],
                   ),
@@ -311,10 +322,11 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
   Widget _buildSignalActivity(PfColors pc) {
     final status = _signalStatus;
     final metrics = status?['metrics'] as Map<String, dynamic>? ?? {};
-    final signalsTotal = (metrics['signals_generated'] as num?)?.toInt() ?? 0;
+    final signalsGenerated = (metrics['signals_generated'] as num?)?.toInt() ?? 0;
     final signalsRejected = (metrics['signals_rejected'] as num?)?.toInt() ?? 0;
+    final signalsTotal = signalsGenerated + signalsRejected;
     final spm = (metrics['signals_per_minute'] as num?)?.toDouble() ?? 0.0;
-    final accepted = signalsTotal - signalsRejected;
+    final accepted = signalsGenerated;
     final recent = status?['recent_signals'] as List<dynamic>? ?? [];
 
     return PfCard(
@@ -467,7 +479,7 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
           ],
         ),
         Text(
-          '${(accepted / total * 100).toStringAsFixed(2)}% принято',
+          '${(accepted / total * 100).clamp(-100, 100).toStringAsFixed(2)}% принято',
           style: PfTypography.caption.copyWith(color: pc.mutedForegroundC),
         ),
       ],
@@ -749,11 +761,88 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
             Text(body, style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC)),
             const SizedBox(height: 24),
           ],
-        ),
       ),
     );
   }
 
+  // ── Trade History ────────────────────────────────────────────────
+  Widget _buildTradeHistory(PfColors pc) {
+    return PfCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              PhosphorIcon(PhosphorIconsFill.swap, size: 16, color: pc.foregroundC),
+              const SizedBox(width: 8),
+              Text('История сделок', style: PfTypography.titleMd.copyWith(fontSize: 14, color: pc.foregroundC)),
+              const Spacer(),
+              Text('${_trades.length} шт', style: PfTypography.caption.copyWith(color: pc.mutedForegroundC)),
+            ],
+          ),
+          const SizedBox(height: PfSpacing.sm),
+          const PfDivider(),
+          const SizedBox(height: PfSpacing.sm),
+          ..._trades.take(50).map((t) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 6, height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: (t['pnl'] as num?)?.toDouble() >= 0
+                        ? PfColors.success
+                        : PfColors.destructive,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    '\$${(t['entry_price'] as num?)?.toStringAsFixed(4) ?? '—'} → \$${(t['exit_price'] as num?)?.toStringAsFixed(4) ?? '—'}',
+                    style: PfTypography.bodySm.copyWith(color: pc.foregroundC, fontSize: 11),
+                  ),
+                ),
+                SizedBox(
+                  width: 60,
+                  child: Text(
+                    '\$${(t['pnl'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
+                    style: PfTypography.bodySm.copyWith(
+                      color: (t['pnl'] as num?)?.toDouble() >= 0
+                          ? PfColors.success
+                          : PfColors.destructive,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 50,
+                  child: Text(
+                    '${(t['pnl_pct'] as num?)?.toStringAsFixed(2) ?? '0.00'}%',
+                    style: PfTypography.caption.copyWith(
+                      color: pc.mutedForegroundC,
+                    ),
+                  ),
+                ),
+                if (t['exit_reason'] != null && (t['exit_reason'] as String).isNotEmpty)
+                  SizedBox(
+                    width: 80,
+                    child: Text(
+                      t['exit_reason'] as String,
+                      style: PfTypography.caption.copyWith(color: pc.mutedForegroundC, fontSize: 10),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  /// Показать модалку с подсказкой.
   Widget _helpIcon(String title, String body) {
     return GestureDetector(
       onTap: () => _showHelp(title, body),
