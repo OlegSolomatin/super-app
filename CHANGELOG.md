@@ -1,3 +1,6 @@
+- `fix` OB wizard: убрал верхний отступ SingleChildScrollView — контент теперь идёт сразу после прогресс-бара (1.0.1+5) | Hermes
+- `feat` Добавил live баланс и счётчик сделок в карточку активного OB-запуска на странице трейдинга (1.0.1+6) | Hermes
+- `fix` Синхронизировал app_version.dart с текущей версией сборки (было +4, стало +6) | Hermes
  || 2026-06-06 | feat | Список пар (429 USDT) зашит в сборку — hardcoded_pairs.dart, без API-запроса при открытии визарда. build 1.0.1+1 | Hermes
  || 2026-06-06 | feat | TradingPage: табы рендерятся сразу + скелетоны при загрузке (вместо CircularProgressIndicator). Убран empty state. build 1.0.0+101 | Hermes
  || 2026-06-06 | feat | LoginPage: автопереход фокуса на поле «Имя пользователя» (autofocus). build 1.0.0+101 | Hermes
