@@ -641,6 +641,7 @@ class _TradingPageState extends State<TradingPage>
   /// Build an OB run card widget (used in both active and history tabs).
   Widget _buildObRunCard(Map<String, dynamic> run) {
     final pc = PfColors.of(context);
+    final theme = Theme.of(context);
     final status = run['status'] as String? ?? 'unknown';
     final pair = run['pair'] as String? ?? 'N/A';
     final strategy = run['strategy'] as String? ?? 'N/A';
@@ -687,11 +688,62 @@ class _TradingPageState extends State<TradingPage>
                 },
               ),
           ]),
-          // Signal activity row (only for running)
+          // Live stats row (only for running)
           if (isActive) ...[
             const SizedBox(height: 8),
             Row(
               children: [
+                // Balance
+                if (run['current_balance'] != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: PfRadius.borderRadiusPill,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PhosphorIcon(PhosphorIconsFill.wallet, size: 12, color: theme.colorScheme.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          '\$${(run['current_balance'] as num?)?.toStringAsFixed(0) ?? '?'}',
+                          style: PfTypography.caption.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                // Trade count
+                if (((run['total_trades'] as num?)?.toInt() ?? 0) > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: PfColors.success.withValues(alpha: 0.1),
+                      borderRadius: PfRadius.borderRadiusPill,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PhosphorIcon(PhosphorIconsFill.arrowsLeftRight, size: 12, color: PfColors.success),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${run['total_trades']} сделок',
+                          style: PfTypography.caption.copyWith(
+                            color: PfColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                // Signal activity dot + count
                 Container(
                   width: 6, height: 6,
                   decoration: BoxDecoration(
