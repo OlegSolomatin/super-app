@@ -34,6 +34,7 @@ from app.schemas.trading import (
     ExchangesListResponse,
     PairInfo,
     PairsListResponse,
+    PairsLiveDataResponse,
     StrategiesListResponse,
     StrategyInfo,
     TradeListResponse,
@@ -55,7 +56,7 @@ router = APIRouter(prefix="/trading", tags=["trading"])
 # ---------------------------------------------------------------------------
 # Hardcoded pair list
 # ---------------------------------------------------------------------------
-from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url, fetch_all_usdt_pairs, fetch_24h_volumes
+from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url, fetch_all_usdt_pairs, fetch_24h_volumes, fetch_24h_tickers
 
 HARDCODED_PAIRS = [
     PairInfo(symbol="BTCUSDT", base="BTC", quote="USDT", min_qty=0.001, tick_size=0.01),
@@ -551,6 +552,13 @@ async def list_pairs(
     offset = (page - 1) * page_size
     page_items = items[offset : offset + page_size]
     return PairsListResponse(items=page_items, total=total)
+
+
+@router.get("/pairs/live", response_model=PairsLiveDataResponse)
+async def list_pairs_live() -> PairsLiveDataResponse:
+    """Return live 24hr data (price, volume, change %) for all USDT pairs."""
+    tickers = await fetch_24h_tickers()
+    return PairsLiveDataResponse(items=tickers)
 
 
 @router.get("/strategies", response_model=StrategiesListResponse)

@@ -236,6 +236,12 @@ class PairsListResponse(BaseModel):
     total: int
 
 
+class PairsLiveDataResponse(BaseModel):
+    """Mass live data for all available pairs."""
+
+    items: dict[str, dict]  # symbol -> {price, volume, change_24h}
+
+
 class StrategiesListResponse(BaseModel):
     """Response with available strategies."""
 

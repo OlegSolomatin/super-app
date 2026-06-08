@@ -21,6 +21,7 @@ import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/features/settings/data/settings_repository.dart';
 import 'package:app/features/trading/data/hardcoded_pairs.dart';
+import 'package:app/features/trading/data/models/pair_live_data.dart';
 
 enum RunMode { historical, virtual, real }
 
@@ -52,6 +53,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   bool _hasMorePairs = true;
   bool _loadingPairs = false;
   bool _sortByVolume = false;
+  Map<String, PairLiveData> _liveData = {};
+  bool _loadingLiveData = false;
 
   // Step 3
   List<StrategyInfo> _strategies = [];
@@ -126,6 +129,22 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     });
   }
 
+  Future<void> _fetchLiveData() async {
+    if (_loadingLiveData) return;
+    setState(() => _loadingLiveData = true);
+    try {
+      final liveData = await widget.repository.getPairsLive();
+      if (mounted) {
+        setState(() {
+          _liveData = liveData;
+          _loadingLiveData = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingLiveData = false);
+    }
+  }
+
   Future<void> _loadExchanges() async {
     try {
       final result = await widget.repository.getExchanges();
@@ -189,6 +208,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           _loadExchanges();
         } else {
           _loadPairs();
+          _fetchLiveData();
         }
       }
       if (_currentStep == 1 && _runMode == RunMode.real && _exchanges.isEmpty) {
@@ -935,6 +955,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
             return _PairTile(
               pair: pair,
               isSelected: isSelected,
+              isLoadingLive: _loadingLiveData,
+              liveData: _liveData[pair.symbol],
               onTap: () => setState(() => _selectedPair = pair),
             );
           }),
@@ -1996,12 +2018,16 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 class _PairTile extends StatelessWidget {
   final TradingPair pair;
   final bool isSelected;
+  final bool isLoadingLive;
+  final PairLiveData? liveData;
   final VoidCallback onTap;
 
   const _PairTile({
     required this.pair,
     required this.isSelected,
     required this.onTap,
+    this.isLoadingLive = false,
+    this.liveData,
   });
 
   @override
@@ -2063,11 +2089,53 @@ class _PairTile extends StatelessWidget {
                 ],
               ),
             ),
+            // Live data column
+            if (isLoadingLive)
+              _skeletonColumn(theme)
+            else if (liveData != null) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _formatPrice(liveData!.price),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatChange(liveData!.change24h),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: liveData!.change24h >= 0
+                              ? const Color(0xFF22C55E)
+                              : const Color(0xFFEF4444),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatVolume(liveData!.volume),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
             if (isSelected)
-              PhosphorIcon(
-                PhosphorIconsFill.check,
-                size: 20,
-                color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: PhosphorIcon(
+                  PhosphorIconsFill.check,
+                  size: 20,
+                  color: theme.colorScheme.primary,
+                ),
               ),
           ],
         ),
@@ -2107,6 +2175,71 @@ class _PairTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  String _formatPrice(double price) {
+    if (price >= 1000) return '\$${(price / 1000).toStringAsFixed(1)}K';
+    if (price >= 1) return '\$${price.toStringAsFixed(2)}';
+    if (price >= 0.01) return '\$${price.toStringAsFixed(4)}';
+    return '\$${price.toStringAsFixed(6)}';
+  }
+
+  String _formatChange(double change) {
+    final sign = change >= 0 ? '+' : '';
+    return '$sign${change.toStringAsFixed(2)}%';
+  }
+
+  String _formatVolume(double volume) {
+    if (volume >= 1_000_000_000) {
+      return '${(volume / 1_000_000_000).toStringAsFixed(1)}B';
+    }
+    if (volume >= 1_000_000) {
+      return '${(volume / 1_000_000).toStringAsFixed(1)}M';
+    }
+    if (volume >= 1_000) {
+      return '${(volume / 1_000).toStringAsFixed(1)}K';
+    }
+    return volume.toStringAsFixed(0);
+  }
+
+  Widget _skeletonColumn(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 60,
+          height: 14,
+          decoration: BoxDecoration(
+            color: theme.disabledColor.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 45,
+              height: 11,
+              decoration: BoxDecoration(
+                color: theme.disabledColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              width: 35,
+              height: 11,
+              decoration: BoxDecoration(
+                color: theme.disabledColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

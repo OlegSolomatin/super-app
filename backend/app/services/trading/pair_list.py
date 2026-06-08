@@ -15,19 +15,19 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-# ── Cache for Binance 24h volume ──
-_binance_volume_cache: dict[str, float] | None = None
-_binance_volume_cache_time: float = 0.0
+# ── Cache for Binance 24h tickers (price, volume, change) ──
+_binance_ticker_cache: dict[str, dict] | None = None
+_binance_ticker_cache_time: float = 0.0
 BINANCE_VOLUME_CACHE_TTL = 60  # 1 minute
 
 
 async def fetch_24h_volumes() -> dict[str, float]:
     """Fetch 24h quote volumes (in USDT) for all USDT pairs from Binance."""
-    global _binance_volume_cache, _binance_volume_cache_time
+    global _binance_ticker_cache, _binance_ticker_cache_time
 
     now = time.time()
-    if _binance_volume_cache is not None and (now - _binance_volume_cache_time) < BINANCE_VOLUME_CACHE_TTL:
-        return _binance_volume_cache
+    if _binance_ticker_cache is not None and (now - _binance_ticker_cache_time) < BINANCE_VOLUME_CACHE_TTL:
+        return {s: d["volume"] for s, d in _binance_ticker_cache.items()}
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -40,19 +40,69 @@ async def fetch_24h_volumes() -> dict[str, float]:
                     return {}
 
                 data = await resp.json()
+                tickers: dict[str, dict] = {}
                 volumes: dict[str, float] = {}
                 for t in data:
                     symbol: str = t.get("symbol", "")
                     if symbol.endswith("USDT") and symbol.isascii():
                         qv = float(t.get("quoteVolume", 0) or 0)
                         volumes[symbol] = qv
-                _binance_volume_cache = volumes
-                _binance_volume_cache_time = now
-                logger.info("Fetched 24h volumes for %d USDT pairs", len(volumes))
+                        last_price = float(t.get("lastPrice", 0) or 0)
+                        price_change = float(t.get("priceChangePercent", 0) or 0)
+                        tickers[symbol] = {
+                            "price": last_price,
+                            "volume": qv,
+                            "change_24h": price_change,
+                        }
+                _binance_ticker_cache = tickers
+                _binance_ticker_cache_time = now
+                logger.info("Fetched 24hr data for %d USDT pairs", len(volumes))
                 return volumes
 
     except Exception as e:
         logger.warning("Failed to fetch 24h volumes: %s", e)
+        return {}
+
+
+async def fetch_24h_tickers() -> dict[str, dict]:
+    """Fetch 24hr ticker data (price, volume, change_24h) for all USDT pairs.
+
+    Returns dict mapping symbol -> {price, volume, change_24h}.
+    Cached for 60 seconds.
+    """
+    global _binance_ticker_cache, _binance_ticker_cache_time
+
+    now = time.time()
+    if _binance_ticker_cache is not None and (now - _binance_ticker_cache_time) < BINANCE_VOLUME_CACHE_TTL:
+        return _binance_ticker_cache
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.binance.com/api/v3/ticker/24hr",
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning("Binance 24hr ticker returned %d", resp.status)
+                    return {}
+
+                data = await resp.json()
+                tickers: dict[str, dict] = {}
+                for t in data:
+                    symbol: str = t.get("symbol", "")
+                    if symbol.endswith("USDT") and symbol.isascii():
+                        tickers[symbol] = {
+                            "price": float(t.get("lastPrice", 0) or 0),
+                            "volume": float(t.get("quoteVolume", 0) or 0),
+                            "change_24h": float(t.get("priceChangePercent", 0) or 0),
+                        }
+                _binance_ticker_cache = tickers
+                _binance_ticker_cache_time = now
+                logger.info("Fetched 24hr tickers for %d USDT pairs", len(tickers))
+                return tickers
+
+    except Exception as e:
+        logger.warning("Failed to fetch 24hr tickers: %s", e)
         return {}
 
 

@@ -18,6 +18,7 @@ import 'package:app/features/trading/data/models/trading_pair.dart';
 import 'package:dio/dio.dart';
 import 'package:app/shared/widgets/error_snackbar.dart';
 import 'package:app/features/trading/data/hardcoded_pairs.dart';
+import 'package:app/features/trading/data/models/pair_live_data.dart';
 
 /// Cтатичные модели данных Order Book визарда.
 
@@ -209,6 +210,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   bool _hasMorePairs = true;
   bool _loadingPairs = false;
   bool _sortByVolume = false;
+  Map<String, PairLiveData> _liveData = {};
+  bool _loadingLiveData = false;
 
   // Step 1: Strategy
   _ObStrategyOption? _selectedStrategy;
@@ -252,6 +255,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _strategyParams[p.key] = p.defaultValue;
     }
     _loadPairs();
+    _fetchLiveData();
     // Infinite scroll via scroll controller listener
     _pairScrollController.addListener(() {
       if (!_hasMorePairs || _loadingPairs) return;
@@ -450,6 +454,22 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _hasMorePairs = false;
       _loadingPairs = false;
     });
+  }
+
+  Future<void> _fetchLiveData() async {
+    if (_loadingLiveData) return;
+    setState(() => _loadingLiveData = true);
+    try {
+      final liveData = await _repository.getPairsLive();
+      if (mounted) {
+        setState(() {
+          _liveData = liveData;
+          _loadingLiveData = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingLiveData = false);
+    }
   }
 
   // ── Helper: иконка "?" с подсказкой ──────────────────────────────
@@ -816,15 +836,61 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                     ],
                   ),
                 ),
-                if (_selectedPairSymbol == pair.symbol)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+                // Live data column
+                if (_loadingLiveData)
+                  _obSkeletonColumn(theme)
+                else
+                  ...[
+                    Builder(builder: (ctx) {
+                      final ld = _liveData[pair.symbol];
+                      if (ld == null) return const SizedBox.shrink();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _obFormatPrice(ld.price),
+                            style: PfTypography.caption.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _obFormatChange(ld.change24h),
+                                style: PfTypography.bodySm.copyWith(
+                                  color: ld.change24h >= 0
+                                      ? const Color(0xFF22C55E)
+                                      : const Color(0xFFEF4444),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _obFormatVolume(ld.volume),
+                                style: PfTypography.caption.copyWith(
+                                  color: pc.mutedForegroundC,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }),
+                    const SizedBox(width: 12),
+                    if (_selectedPairSymbol == pair.symbol)
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                  ],
               ],
             ),
           ),
@@ -2002,5 +2068,86 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         showErrorSnackbar(context, msg);
       }
     }
+  }
+
+  // ── Live data helpers ──────────────────────────────────────────────
+
+  String _obFormatPrice(double price) {
+    if (price >= 1000) return '\$${(price / 1000).toStringAsFixed(1)}K';
+    if (price >= 1) return '\$${price.toStringAsFixed(2)}';
+    if (price >= 0.01) return '\$${price.toStringAsFixed(4)}';
+    return '\$${price.toStringAsFixed(6)}';
+  }
+
+  String _obFormatChange(double change) {
+    final sign = change >= 0 ? '+' : '';
+    return '$sign${change.toStringAsFixed(2)}%';
+  }
+
+  String _obFormatVolume(double volume) {
+    if (volume >= 1_000_000_000) {
+      return '${(volume / 1_000_000_000).toStringAsFixed(1)}B';
+    }
+    if (volume >= 1_000_000) {
+      return '${(volume / 1_000_000).toStringAsFixed(1)}M';
+    }
+    if (volume >= 1_000) {
+      return '${(volume / 1_000).toStringAsFixed(1)}K';
+    }
+    return volume.toStringAsFixed(0);
+  }
+
+  Widget _obSkeletonColumn(ThemeData theme) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 14,
+              decoration: BoxDecoration(
+                color: theme.disabledColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 45,
+                  height: 11,
+                  decoration: BoxDecoration(
+                    color: theme.disabledColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 35,
+                  height: 11,
+                  decoration: BoxDecoration(
+                    color: theme.disabledColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(width: 12),
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ],
+    );
   }
 }

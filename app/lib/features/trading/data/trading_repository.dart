@@ -5,6 +5,7 @@ import 'package:app/features/trading/data/models/strategy_info.dart';
 import 'package:app/features/trading/data/models/exchange_info.dart';
 import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/models/trading_trade.dart';
+import 'package:app/features/trading/data/models/pair_live_data.dart';
 
 class TradingRepository {
   final Dio _dio;
@@ -29,6 +30,14 @@ class TradingRepository {
         .toList();
     final total = data['total'] as int;
     return (items: items, total: total);
+  }
+
+  Future<Map<String, PairLiveData>> getPairsLive() async {
+    final response = await _dio.get('/trading/pairs/live');
+    final data = response.data as Map<String, dynamic>;
+    final items = data['items'] as Map<String, dynamic>;
+    return items.map((symbol, json) =>
+        MapEntry(symbol, PairLiveData.fromJson(json as Map<String, dynamic>)));
   }
 
   Future<({List<StrategyInfo> items, int total})> getStrategies() async {
