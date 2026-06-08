@@ -17,6 +17,7 @@ import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/trading/data/models/trading_pair.dart';
 import 'package:dio/dio.dart';
 import 'package:app/shared/widgets/error_snackbar.dart';
+import 'package:app/features/trading/data/hardcoded_pairs.dart';
 
 /// Cтатичные модели данных Order Book визарда.
 
@@ -435,25 +436,20 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _hasMorePairs = true;
     }
     setState(() => _loadingPairs = true);
-    try {
-      final result = await _repository.getPairs(
-        search: _searchPairController.text.isNotEmpty
-            ? _searchPairController.text
-            : null,
-        sort: _sortByVolume ? 'liquidity' : null,
-        page: _pairPage,
-        pageSize: 500,
-      );
-      if (mounted) {
-        setState(() {
-          _loadedPairs.addAll(result.items);
-          _hasMorePairs = _loadedPairs.length < result.total;
-          _loadingPairs = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingPairs = false);
-    }
+    // Локальная фильтрация из hardcoded_pairs.dart — без API-запроса
+    final search = _searchPairController.text.trim().toUpperCase();
+    var filtered = allTradingPairs.where((p) {
+      if (search.isEmpty) return true;
+      return p.symbol.contains(search) || p.base.contains(search);
+    }).toList();
+    if (!mounted) return;
+    setState(() {
+      _loadedPairs
+        ..clear()
+        ..addAll(filtered);
+      _hasMorePairs = false;
+      _loadingPairs = false;
+    });
   }
 
   // ── Helper: иконка "?" с подсказкой ──────────────────────────────

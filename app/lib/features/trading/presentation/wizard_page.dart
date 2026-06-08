@@ -20,6 +20,7 @@ import 'package:app/shared/widgets/responsive_layout.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
 import 'package:app/features/settings/data/settings_repository.dart';
+import 'package:app/features/trading/data/hardcoded_pairs.dart';
 
 enum RunMode { historical, virtual, real }
 
@@ -105,32 +106,24 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   }
 
   Future<void> _loadPairs({bool refresh = false}) async {
-    if (_loadingPairs) return;
     if (refresh) {
       _pairPage = 1;
-      _hasMorePairs = true;
-      _pairs.clear();
     }
     setState(() => _loadingPairs = true);
-    try {
-      final result = await widget.repository.getPairs(
-        search: _searchPairController.text.isNotEmpty
-            ? _searchPairController.text
-            : null,
-        sort: _sortByVolume ? 'liquidity' : null,
-        page: _pairPage,
-        pageSize: 500,
-      );
-      if (mounted) {
-        setState(() {
-          _pairs.addAll(result.items);
-          _hasMorePairs = _pairs.length < result.total;
-          _loadingPairs = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingPairs = false);
-    }
+    // Локальная фильтрация из hardcoded_pairs.dart — без API-запроса
+    final search = _searchPairController.text.trim().toUpperCase();
+    var filtered = allTradingPairs.where((p) {
+      if (search.isEmpty) return true;
+      return p.symbol.contains(search) || p.base.contains(search);
+    }).toList();
+    if (!mounted) return;
+    setState(() {
+      _pairs
+        ..clear()
+        ..addAll(filtered);
+      _hasMorePairs = false;
+      _loadingPairs = false;
+    });
   }
 
   Future<void> _loadExchanges() async {
