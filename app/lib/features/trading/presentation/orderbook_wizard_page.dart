@@ -650,7 +650,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           ? _buildStepContentScrollable(theme, pc, key: const ValueKey('step_0'))
           : SingleChildScrollView(
               key: ValueKey('step_$_currentStep'),
-              padding: const EdgeInsets.all(PfSpacing.lg),
+              padding: const EdgeInsets.fromLTRB(PfSpacing.lg, 0, PfSpacing.lg, PfSpacing.lg),
               child: _buildStepWidget(theme, pc),
             ),
     );
