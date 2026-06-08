@@ -761,6 +761,7 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
             Text(body, style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC)),
             const SizedBox(height: 24),
           ],
+        ),
       ),
     );
   }
@@ -791,7 +792,7 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                   width: 6, height: 6,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: (t['pnl'] as num?)?.toDouble() >= 0
+                    color: ((t['pnl'] as num?)?.toDouble() ?? 0) >= 0
                         ? PfColors.success
                         : PfColors.destructive,
                   ),
@@ -809,7 +810,7 @@ class _OrderBookRunDetailPageState extends State<OrderBookRunDetailPage> {
                   child: Text(
                     '\$${(t['pnl'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
                     style: PfTypography.bodySm.copyWith(
-                      color: (t['pnl'] as num?)?.toDouble() >= 0
+                      color: ((t['pnl'] as num?)?.toDouble() ?? 0) >= 0
                           ? PfColors.success
                           : PfColors.destructive,
                       fontWeight: FontWeight.w600,
