@@ -23,6 +23,37 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.core.database import engine
     # Engine is already created at import time; we just log readiness
     print(f"🚀 Super-App backend starting on {settings.APP_HOST}:{settings.APP_PORT}")
+    # Cleanup orphaned OB engines from previous runs
+    try:
+        from app.services.trading.scheduler import scheduler
+        cleaned = await scheduler.cleanup_orphaned_engines()
+        if cleaned:
+            print(f"🧹 Cleaned {len(cleaned)} orphaned OB engines: {[r['id'] for r in cleaned]}")
+        else:
+            print("✅ No orphaned OB engines found")
+    except Exception as e:
+        print(f"⚠️  Orphaned engine cleanup failed: {e}")
+
+    # Cleanup orphaned regular trading runs
+    try:
+        from datetime import datetime, timezone
+        from sqlalchemy import select
+        from app.core.database import async_session_factory
+        from app.models.trading import TradingRun as DBTradingRun
+        async with async_session_factory() as session:
+            stmt = select(DBTradingRun).where(DBTradingRun.status == "running")
+            result = await session.execute(stmt)
+            orphaned_runs = result.scalars().all()
+            for run in orphaned_runs:
+                run.status = "error"
+                run.error = "Cleanup: engine lost on server restart"
+                run.finished_at = datetime.now(timezone.utc)
+            await session.commit()
+            if orphaned_runs:
+                print(f"🧹 Cleaned {len(orphaned_runs)} orphaned regular runs: {[r.id for r in orphaned_runs]}")
+    except Exception as e:
+        print(f"⚠️  Regular run cleanup failed: {e}")
+
     yield
     # Shutdown
     await engine.dispose()

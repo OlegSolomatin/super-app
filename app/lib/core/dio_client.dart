@@ -6,8 +6,10 @@ class DioClient {
 
   late final Dio dio;
   final SecureStorage _storage;
+  final void Function()? _onAuthFailure;
 
-  DioClient(this._storage) {
+  DioClient(this._storage, {void Function()? onAuthFailure})
+      : _onAuthFailure = onAuthFailure {
     dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
@@ -61,6 +63,7 @@ class DioClient {
               } catch (_) {
                 // Refresh failed, clear tokens
                 await _storage.clearTokens();
+                _onAuthFailure?.call();
               }
             }
           }

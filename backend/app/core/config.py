@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # --- JWT ---
     SECRET_KEY: str = "change-me-to-a-long-random-secret-key"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # --- Redis ---

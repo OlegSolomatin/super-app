@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:go_router/go_router.dart';
 import 'package:app/core/secure_storage.dart';
 import 'package:app/core/dio_client.dart';
@@ -21,7 +23,10 @@ class AppRouter {
   late final TradingRepository _tradingRepository;
 
   AppRouter(this._storage) {
-    _dioClient = DioClient(_storage);
+    _dioClient = DioClient(
+      _storage,
+      onAuthFailure: () => router.go('/login'),
+    );
     _tradingRepository = TradingRepository(_dioClient);
   }
 
@@ -113,6 +118,23 @@ class AppRouter {
 
   Future<bool> _isAuthenticated() async {
     final token = await _storage.getAccessToken();
-    return token != null && token.isNotEmpty;
+    if (token == null || token.isEmpty) return false;
+    // Декодируем payload JWT (без проверки подписи — просто читаем exp)
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return false;
+      // Base64url decode payload
+      final normalized = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+      final padded = normalized.padRight(normalized.length + (4 - normalized.length % 4) % 4, '=');
+      final decoded = utf8.decode(base64.decode(padded));
+      final payload = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp = payload['exp'] as int?;
+      if (exp == null) return false;
+      // Проверяем что токен ещё не истёк (+ 60 сек запаса)
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return expiry.isAfter(DateTime.now().add(const Duration(seconds: 60)));
+    } catch (_) {
+      return false;
+    }
   }
 }
