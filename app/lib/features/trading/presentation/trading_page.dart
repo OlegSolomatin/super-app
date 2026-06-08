@@ -14,6 +14,7 @@ import 'package:app/shared/widgets/pf_card.dart';
 import 'package:app/shared/widgets/pf_badge.dart';
 import 'package:app/shared/widgets/pf_button.dart';
 import 'package:app/shared/widgets/pf_divider.dart';
+import 'package:app/shared/widgets/pf_skeleton.dart';
 import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/trading/data/strategy_names.dart';
@@ -172,7 +173,6 @@ class _TradingPageState extends State<TradingPage>
   @override
   Widget build(BuildContext context) {
     final pc = PfColors.of(context);
-    final hasRuns = _activeRuns.isNotEmpty || _activeObRuns.isNotEmpty || _historyRuns.isNotEmpty || _obRuns.isNotEmpty;
     return AdaptiveScaffold(
       title: 'Трейдинг',
       currentPath: '/trading',
@@ -227,93 +227,63 @@ class _TradingPageState extends State<TradingPage>
           const SizedBox(height: PfSpacing.lg),
 
           // ── Pill Tabs ─────────────────────────────────
-          if (hasRuns) ...[
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: pc.surfaceC,
-                borderRadius: PfRadius.borderRadiusPill,
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _PillTab(
-                      label: 'Запущенные',
-                      count: _activeRuns.length + _activeObRuns.length,
-                      isActive: _tabController.index == 0,
-                      onTap: () => _tabController.animateTo(0),
-                    ),
-                    const SizedBox(width: 2),
-                    _PillTab(
-                      label: 'История по свечам',
-                      count: _historyTotal,
-                      isActive: _tabController.index == 1,
-                      onTap: () => _tabController.animateTo(1),
-                    ),
-                    const SizedBox(width: 2),
-                    _PillTab(
-                      label: 'История по OB',
-                      count: _obRuns.length,
-                      isActive: _tabController.index == 2,
-                      onTap: () => _tabController.animateTo(2),
-                    ),
-                  ],
-                ),
-              ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: pc.surfaceC,
+              borderRadius: PfRadius.borderRadiusPill,
             ),
-            const SizedBox(height: PfSpacing.md),
-
-            // ── Tab Content ─────────────────────────────
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildActiveContent(),
-                  _buildRunsList(
-                    runs: _historyRuns,
-                    loading: _loadingHistory,
-                    emptyIcon: PhosphorIconsFill.clockCounterClockwise,
-                    emptyText: 'История пуста',
-                    emptySubtext: 'Завершённые стратегии появятся здесь',
-                    repository: widget.repository,
-                  ),
-                  _buildObRunsList(),
-                ],
-              ),
-            ),
-          ],
-
-          // ── Empty state ───────────────────────────────
-          if (!hasRuns) ...[
-            const Spacer(),
-            Center(
-              child: Column(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  PhosphorIcon(
-                    PhosphorIconsFill.rocket,
-                    size: 48,
-                    color: pc.mutedForegroundC.withValues(alpha: 0.3),
+                  _PillTab(
+                    label: 'Запущенные',
+                    count: _activeRuns.length + _activeObRuns.length,
+                    isActive: _tabController.index == 0,
+                    onTap: () => _tabController.animateTo(0),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Нет активных стратегий',
-                    style: PfTypography.titleMd.copyWith(color: pc.mutedForegroundC),
+                  const SizedBox(width: 2),
+                  _PillTab(
+                    label: 'История по свечам',
+                    count: _historyTotal,
+                    isActive: _tabController.index == 1,
+                    onTap: () => _tabController.animateTo(1),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Выберите тип стратегии выше, чтобы начать',
-                    style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
+                  const SizedBox(width: 2),
+                  _PillTab(
+                    label: 'История по OB',
+                    count: _obRuns.length,
+                    isActive: _tabController.index == 2,
+                    onTap: () => _tabController.animateTo(2),
                   ),
                 ],
               ),
             ),
-            const Spacer(flex: 2),
-          ],
+          ),
+          const SizedBox(height: PfSpacing.md),
+
+          // ── Tab Content ─────────────────────────────
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildActiveContent(),
+                _buildRunsList(
+                  runs: _historyRuns,
+                  loading: _loadingHistory,
+                  emptyIcon: PhosphorIconsFill.clockCounterClockwise,
+                  emptyText: 'История пуста',
+                  emptySubtext: 'Завершённые стратегии появятся здесь',
+                  repository: widget.repository,
+                ),
+                _buildObRunsList(),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -329,7 +299,7 @@ class _TradingPageState extends State<TradingPage>
   }) {
     final pc = PfColors.of(context);
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return _skeletonList();
     }
 
     if (runs.isEmpty) {
@@ -566,7 +536,7 @@ class _TradingPageState extends State<TradingPage>
     final hasOb = _activeObRuns.isNotEmpty;
 
     if (isLoading && !hasStandard && !hasOb) {
-      return const Center(child: CircularProgressIndicator());
+      return _skeletonList();
     }
 
     if (!hasStandard && !hasOb) {
@@ -637,7 +607,7 @@ class _TradingPageState extends State<TradingPage>
   Widget _buildObRunsList() {
     final pc = PfColors.of(context);
     if (_loadingObRuns) {
-      return const Center(child: CircularProgressIndicator());
+      return _skeletonList();
     }
     if (_obRuns.isEmpty) {
       return Center(
@@ -747,6 +717,17 @@ class _TradingPageState extends State<TradingPage>
       ),
     );
   }
+}
+
+// ─── Skeleton loader ─────────────────────────────────────────────────────
+Widget _skeletonList() {
+  return ListView(
+    padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+    children: List.generate(3, (_) => Padding(
+      padding: const EdgeInsets.only(bottom: PfSpacing.sm),
+      child: PfSkeleton(width: double.infinity, height: 88, borderRadius: 12),
+    )),
+  );
 }
 
 // ─── Pill Tab ──────────────────────────────────────────────────────────
