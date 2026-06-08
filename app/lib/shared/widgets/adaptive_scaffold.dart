@@ -98,14 +98,7 @@ class AdaptiveScaffold extends StatelessWidget {
                   color: pc.foregroundC,
                   size: 22,
                 ),
-                onPressed: () {
-                  final router = GoRouter.of(context);
-                  if (router.canPop()) {
-                    router.pop();
-                  } else {
-                    router.go('/');
-                  }
-                },
+                onPressed: () => _goBack(context, currentPath),
               )
             : Builder(
                 builder: (ctx) => IconButton(
@@ -491,14 +484,7 @@ class AdaptiveScaffold extends StatelessWidget {
                 color: pc.foregroundC,
                 size: 20,
               ),
-              onPressed: () {
-                final router = GoRouter.of(context);
-                if (router.canPop()) {
-                  router.pop();
-                } else {
-                  router.go('/');
-                }
-              },
+              onPressed: () => _goBack(context, currentPath),
               visualDensity: VisualDensity.compact,
               tooltip: 'Назад',
             ),
@@ -680,6 +666,28 @@ class _SidebarItem extends StatelessWidget {
 }
 
 // ─── Theme Option ───────────────────────────────────────────────────────
+/// Navigate back based on current path.
+/// Flattens GoRouter stack: trading sub-pages → /trading, everything else → /.
+void _goBack(BuildContext context, [String? currentPath]) {
+  final router = GoRouter.of(context);
+  final path = currentPath ?? GoRouterState.of(context).matchedLocation;
+
+  // Determine parent route
+  String? parent;
+  if (path.startsWith('/trading/')) {
+    parent = '/trading';
+  } else if (path.startsWith('/admin/')) {
+    parent = '/admin';
+  } else if (path == '/login' || path == '/register') {
+    parent = '/';
+  }
+
+  if (parent != null) {
+    router.go(parent);
+  } else {
+    router.go('/');
+  }
+}
 class _ThemeOption extends StatelessWidget {
   final PhosphorIconData icon;
   final SectionTheme section;

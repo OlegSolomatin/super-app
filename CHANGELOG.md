@@ -1,3 +1,4 @@
+ || 2026-06-06 | fix | Кнопка «Назад»: path-based навигация вместо GoRouter.canPop() (всегда false для плоских маршрутов). build v100 | Hermes
  || 2026-06-06 | fix | OB stop_run: теперь останавливает orphaned-запуски (нет в _tasks/_engines) — принудительно обновляет статус в БД на "cancelled". build v99 | Hermes
  || 2026-06-06 | fix | OB TradingPage: pageSize 500 → 100 (API max) — история OB-запусков перестала грузиться из-за 422 ошибки. build v99 | Hermes
  || 2026-06-06 | fix | OB Run Detail: сигналы обработано → принятые (signalsGenerated). История сделок: сохранение closed_trades_json в БД + API эндпоинт GET /runs/{id}/trades. build v98 | Hermes
