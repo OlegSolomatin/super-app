@@ -1,3 +1,4 @@
+ || 2026-06-06 | fix | OB Run Detail: сигналы обработано → принятые (signalsGenerated). История сделок: сохранение closed_trades_json в БД + API эндпоинт GET /runs/{id}/trades. build v98 | Hermes
  || 2026-06-06 | feat | OB Engine: file logging (ob_signals.log, 5MB rotation, 3 backups) + logger.debug на каждый отказ сигнала. | Hermes
     1| || 2026-06-06 | feat | TradingPage: индикаторы активности сигналов в карточках OB-запусков (точка + signals/мин). | Hermes
      2|    1| || 2026-06-06 | feat | OB Run Detail: блок «Активность сигналов» (счётчики, прогресс-бар принято/отсеяно, разбивка отказов, лента сигналов). API метод getOrderBookRunStatus. build v86 | Hermes
