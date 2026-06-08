@@ -152,9 +152,9 @@ class _TradingPageState extends State<TradingPage>
     setState(() => _loadingObRuns = true);
     try {
       // History tab: only completed OB runs (done, stopped, error)
-      final done = await widget.repository.getOrderBookRuns(status: 'done', pageSize: 500);
-      final stopped = await widget.repository.getOrderBookRuns(status: 'stopped', pageSize: 500);
-      final error = await widget.repository.getOrderBookRuns(status: 'error', pageSize: 500);
+      final done = await widget.repository.getOrderBookRuns(status: 'done', pageSize: 100);
+      final stopped = await widget.repository.getOrderBookRuns(status: 'stopped', pageSize: 100);
+      final error = await widget.repository.getOrderBookRuns(status: 'error', pageSize: 100);
       final all = [...done.items, ...stopped.items, ...error.items];
       all.sort((a, b) {
         final aDate = (a['started_at'] as String? ?? '');

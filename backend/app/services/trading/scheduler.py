@@ -453,14 +453,45 @@ class TradingScheduler:
     async def stop_run(self, run_id: int) -> None:
         """Stop a running strategy by run_id.
 
-        Cancels the asyncio task and removes it from the tracking dict.
+        Cancels the asyncio task, stops the engine, and updates DB status.
+        Handles orphaned runs (in DB as running but lost from scheduler state).
         """
+        from datetime import datetime, timezone
+        from sqlalchemy import update
+        from app.core.database import async_session_factory
+        from app.models.trading import OrderBookRun as DBOrderBookRun
+
         task = self._tasks.pop(run_id, None)
-        if task is None:
-            logger.warning(f"Run {run_id}: not active, nothing to stop")
-            return
-        task.cancel()
-        logger.info("Run %d: stop requested", run_id)
+        if task:
+            task.cancel()
+            logger.info("Run %d: stop requested (task cancelled)", run_id)
+        else:
+            logger.warning("Run %d: no active task found, checking DB/engine", run_id)
+
+        # Always try to stop the engine if present
+        engine = self._engines.pop(run_id, None)
+        if engine:
+            try:
+                await engine.stop()
+                logger.info("Run %d: engine stopped", run_id)
+            except Exception as e:
+                logger.warning(f"Run {run_id}: engine.stop() failed: {e}")
+
+        # Update DB status to cancelled regardless of engine/task state
+        try:
+            async with async_session_factory() as session:
+                await session.execute(
+                    update(DBOrderBookRun)
+                    .where(DBOrderBookRun.id == run_id)
+                    .values(
+                        status="cancelled",
+                        finished_at=datetime.now(timezone.utc),
+                    )
+                )
+                await session.commit()
+                logger.info("Run %d: DB status set to cancelled", run_id)
+        except Exception as e:
+            logger.warning(f"Run {run_id}: failed to update DB status: {e}")
 
     async def get_status(self, run_id: int) -> Optional[str]:
         """Return current status of a run, or None if not found."""

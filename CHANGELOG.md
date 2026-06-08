@@ -1,3 +1,5 @@
+ || 2026-06-06 | fix | OB stop_run: теперь останавливает orphaned-запуски (нет в _tasks/_engines) — принудительно обновляет статус в БД на "cancelled". build v99 | Hermes
+ || 2026-06-06 | fix | OB TradingPage: pageSize 500 → 100 (API max) — история OB-запусков перестала грузиться из-за 422 ошибки. build v99 | Hermes
  || 2026-06-06 | fix | OB Run Detail: сигналы обработано → принятые (signalsGenerated). История сделок: сохранение closed_trades_json в БД + API эндпоинт GET /runs/{id}/trades. build v98 | Hermes
  || 2026-06-06 | feat | OB Engine: file logging (ob_signals.log, 5MB rotation, 3 backups) + logger.debug на каждый отказ сигнала. | Hermes
     1| || 2026-06-06 | feat | TradingPage: индикаторы активности сигналов в карточках OB-запусков (точка + signals/мин). | Hermes
