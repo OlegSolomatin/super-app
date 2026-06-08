@@ -985,7 +985,61 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     );
   }
 
-  // ── Step 0: Pair (old layout — replaced by _buildStepContentScrollable) ──
+  // ── Strategy tips per step ─────────────────────────────────────────
+
+  static const Map<String, Map<int, String>> _strategyTips = {
+    'imbalance_scalping': {
+      2: '💡 Imbalance Scalping: начните с \$500–\$2000, 1–2 макс. сделки. Частые входы требуют небольшого баланса.',
+      3: '💡 Imbalance Scalping: стоп-лосс –1% до –1.5%, трейлинг 0.3–0.5%. Агрессивные входы — без широких стопов.',
+      4: '💡 Imbalance Scalping: 1–2 тика подтверждения, макс. спред 0.05–0.10%. Ловите резкие движения.',
+      5: '💡 Imbalance Scalping: кулдаун 30–60с, авто-стоп 2–4ч. Быстрые входы = частые паузы.',
+    },
+    'spread_capture': {
+      2: '💡 Spread Capture: \$2000–\$5000 оптимально. Для глубины стакана нужен запас.',
+      3: '💡 Spread Capture: стоп-лосс –0.5% до –1% (очень узкий), трейлинг 0.4–0.8%.',
+      4: '💡 Spread Capture: 2–3 тика подтверждения (терпеливо), макс. спред 0.02–0.05%.',
+      5: '💡 Spread Capture: кулдаун 10–30с (частые ре-входы), авто-стоп 1–2ч.',
+    },
+    'order_flow_momentum': {
+      2: '💡 Order Flow Momentum: \$1000–\$3000. Баланс должен пережить накопление моментума.',
+      3: '💡 Order Flow Momentum: стоп-лосс –1.5% до –2.5%, трейлинг 0.5–1%. Моментум требует простора.',
+      4: '💡 Order Flow Momentum: 1–2 тика подтверждения, макс. спред 0.08–0.15%.',
+      5: '💡 Order Flow Momentum: кулдаун 60–120с, авто-стоп 3–6ч. Моментум строится не мгновенно.',
+    },
+  };
+
+  Widget _buildStepTip(int step, PfColors pc) {
+    if (_selectedStrategy == null) return const SizedBox.shrink();
+    final tip = _strategyTips[_selectedStrategy!.name]?[step];
+    if (tip == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: pc.surfaceC,
+          borderRadius: PfRadius.borderRadiusMd,
+          border: Border.all(color: pc.borderC),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('💡', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                tip.replaceFirst('💡 ', ''),
+                style: PfTypography.bodySm.copyWith(color: pc.foregroundC),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Step 0: Pair (old layout) ──
   Widget _buildStepPair(ThemeData theme, PfColors pc) {
     return const SizedBox.shrink();
   }
@@ -1308,6 +1362,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
         ),
         const SizedBox(height: 24),
+        _buildStepTip(2, pc),
         // Баланс — крупная цифра
         Center(
           child: Text(
@@ -1415,6 +1470,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
         ),
         const SizedBox(height: 24),
+        _buildStepTip(3, pc),
         _riskCard(
           title: 'Stop Loss',
           subtitle: 'Автоматический выход при падении цены',
@@ -1561,6 +1617,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
         ),
         const SizedBox(height: 24),
+        _buildStepTip(4, pc),
         PfCard(
           padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
           child: Column(
@@ -1695,6 +1752,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
         ),
         const SizedBox(height: 24),
+        _buildStepTip(5, pc),
         // Cooldown
         PfCard(
           padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),

@@ -22,6 +22,7 @@ import 'package:app/core/dio_client.dart';
 import 'package:app/features/settings/data/settings_repository.dart';
 import 'package:app/features/trading/data/hardcoded_pairs.dart';
 import 'package:app/features/trading/data/models/pair_live_data.dart';
+import 'package:app/features/trading/data/models/pair_insight.dart';
 
 enum RunMode { historical, virtual, real }
 
@@ -55,6 +56,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
   bool _sortByVolume = false;
   Map<String, PairLiveData> _liveData = {};
   bool _loadingLiveData = false;
+  PairInsight? _pairInsight;
+  bool _loadingInsight = false;
 
   // Step 3
   List<StrategyInfo> _strategies = [];
@@ -163,6 +166,22 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
     }
   }
 
+  Future<void> _fetchPairInsight(String symbol) async {
+    if (_loadingInsight) return;
+    setState(() => _loadingInsight = true);
+    try {
+      final insight = await widget.repository.getPairInsight(symbol);
+      if (mounted) {
+        setState(() {
+          _pairInsight = insight;
+          _loadingInsight = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingInsight = false);
+    }
+  }
+
   Future<void> _loadExchanges() async {
     try {
       final result = await widget.repository.getExchanges();
@@ -236,6 +255,10 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         _loadBots();
       }
       setState(() => _currentStep++);
+      // Загрузить insight при переходе на шаг стратегии (step 2)
+      if (_currentStep == 2 && _selectedPair != null) {
+        _fetchPairInsight(_selectedPair!.symbol);
+      }
     }
   }
 
@@ -1081,6 +1104,13 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 16),
+        // ── Insight карточка ──
+        if (_loadingInsight)
+          _buildInsightSkeleton(theme)
+        else if (_pairInsight != null) ...[
+          _buildInsightCard(_pairInsight!, theme),
+          const SizedBox(height: 16),
+        ],
         if (_loadingStrategies)
           const Center(child: CircularProgressIndicator())
         else if (filteredStrategies.isEmpty)
@@ -2028,6 +2058,157 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
         ],
       ),
     );
+  }
+
+  // ── Insight card ───────────────────────────────────────────────────
+
+  Widget _buildInsightCard(PairInsight insight, ThemeData theme) {
+    final symbol = insight.symbol.replaceAll('USDT', '/USDT');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lightbulb_outline, size: 18, color: Color(0xFFF59E0B)),
+              const SizedBox(width: 8),
+              Text('Рекомендация для $symbol',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _insightStat('Объём 24ч', _formatVolume(insight.volume24h), theme),
+              const SizedBox(width: 16),
+              _insightStat('Волатильность', '${insight.volatility24h.toStringAsFixed(1)}%', theme),
+              const SizedBox(width: 16),
+              _insightStat('Цена', _formatPrice(insight.price), theme),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...insight.recommendedStrategies.take(3).map((s) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _medalIcon(s.score),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${s.label}  ${(s.score * 100).toInt()}%',
+                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(s.reason,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                          )),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _insightStat(String label, String value, ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: theme.textTheme.bodySmall),
+        const SizedBox(height: 2),
+        Text(value, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _medalIcon(double score) {
+    if (score >= 0.8) {
+      return const Icon(Icons.emoji_events, size: 20, color: Color(0xFFF59E0B));
+    } else if (score >= 0.5) {
+      return const Icon(Icons.emoji_events, size: 20, color: Color(0xFF9CA3AF));
+    }
+    return const Icon(Icons.emoji_events, size: 20, color: Color(0xFF92400E));
+  }
+
+  Widget _buildInsightSkeleton(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.disabledColor.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 18, height: 18,
+                decoration: BoxDecoration(
+                  color: theme.disabledColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(width: 160, height: 16,
+                decoration: BoxDecoration(
+                  color: theme.disabledColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            _skeletonBlock(theme, 70, 14),
+            const SizedBox(width: 16),
+            _skeletonBlock(theme, 80, 14),
+            const SizedBox(width: 16),
+            _skeletonBlock(theme, 60, 14),
+          ]),
+          const SizedBox(height: 12),
+          _skeletonBlock(theme, double.infinity, 36),
+        ],
+      ),
+    );
+  }
+
+  Widget _skeletonBlock(ThemeData theme, double width, double height) {
+    return Container(
+      width: width, height: height,
+      decoration: BoxDecoration(
+        color: theme.disabledColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+
+  String _formatVolume(double volume) {
+    if (volume >= 1_000_000_000) return '${(volume / 1_000_000_000).toStringAsFixed(1)}B';
+    if (volume >= 1_000_000) return '${(volume / 1_000_000).toStringAsFixed(1)}M';
+    if (volume >= 1_000) return '${(volume / 1_000).toStringAsFixed(1)}K';
+    return volume.toStringAsFixed(0);
+  }
+
+  String _formatPrice(double price) {
+    if (price >= 1000) return '\$${(price / 1000).toStringAsFixed(1)}K';
+    if (price >= 1) return '\$${price.toStringAsFixed(2)}';
+    if (price >= 0.01) return '\$${price.toStringAsFixed(4)}';
+    return '\$${price.toStringAsFixed(6)}';
   }
 }
 
