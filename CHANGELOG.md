@@ -1,5 +1,5 @@
- || 2026-06-06 | feat | TradingPage: табы рендерятся сразу + скелетоны при загрузке (вместо CircularProgressIndicator). Убран empty state. Версия bump: 1.0.2+1 | Hermes
- || 2026-06-06 | feat | LoginPage: автопереход фокуса на поле «Имя пользователя» (autofocus). Версия bump: 1.0.1+1 | Hermes
+ || 2026-06-06 | feat | TradingPage: табы рендерятся сразу + скелетоны при загрузке (вместо CircularProgressIndicator). Убран empty state. build 1.0.0+101 | Hermes
+ || 2026-06-06 | feat | LoginPage: автопереход фокуса на поле «Имя пользователя» (autofocus). build 1.0.0+101 | Hermes
  || 2026-06-06 | fix | Кнопка «Назад»: path-based навигация вместо GoRouter.canPop() (всегда false для плоских маршрутов). build v100 | Hermes
  || 2026-06-06 | fix | OB stop_run: теперь останавливает orphaned-запуски (нет в _tasks/_engines) — принудительно обновляет статус в БД на "cancelled". build v99 | Hermes
  || 2026-06-06 | fix | OB TradingPage: pageSize 500 → 100 (API max) — история OB-запусков перестала грузиться из-за 422 ошибки. build v99 | Hermes
