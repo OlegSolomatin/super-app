@@ -1,3 +1,4 @@
+|||- `feat` OB визард: кнопка «Рекоменд.» динамически рассчитывает параметры стратегии под рынок — vol, volume, spread влияют на balance, confirmationTicks, stoploss, спред-параметры, пороги дисбаланса, flow threshold и др. (1.0.1+14) | Hermes
 |||- `fix` OB визард: кнопка «Рекоменд.» больше не переключает стратегию — подбирает только режим для текущей выбранной стратегии (1.0.1+13) | Hermes
 |||- `fix` OB визард: debugPrint ошибки _fetchPairInsight + сброс _pairInsight при смене пары + SnackBar при ошибке загрузки рекомендаций (1.0.1+12) | Hermes
 |||- `fix` OB ghost-run protection: try/except в API при старте запуска + startup cleanup orphaned engines (1.0.1+11) | Hermes

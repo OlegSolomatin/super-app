@@ -839,6 +839,214 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     });
   }
 
+  /// Динамический расчёт параметров стратегии под текущее состояние рынка.
+  /// Использует PairInsight (volatility, volume, spread) для каждой стратегии.
+  void _applyDynamicParams(String strategyName, PairInsight insight) {
+    final vol = insight.volatility24h;
+    final volume = insight.volume24h;
+    final spread = insight.spread;
+
+    // ── Общие параметры (для всех стратегий) ──
+    // Баланс: выше волатильность → больше баланс
+    double balance;
+    if (vol > 5.0) {
+      balance = 2000.0;
+    } else if (vol > 2.0) {
+      balance = 1000.0;
+    } else {
+      balance = 500.0;
+    }
+
+    // Тики подтверждения: выше волатильность → больше тиков (фильтр шума)
+    int confirmationTicks;
+    if (vol > 5.0) {
+      confirmationTicks = 3;
+    } else if (vol > 2.0) {
+      confirmationTicks = 2;
+    } else {
+      confirmationTicks = 1;
+    }
+
+    // Макс. спред: выше волатильность → шире спред (проскальзывание)
+    double maxSpread;
+    if (vol > 5.0) {
+      maxSpread = 0.08;
+    } else if (vol > 2.0) {
+      maxSpread = 0.05;
+    } else {
+      maxSpread = 0.03;
+    }
+
+    // Кулдаун: выше волатильность → короче (чаще входы)
+    int cooldownSeconds;
+    if (vol > 5.0) {
+      cooldownSeconds = 30;
+    } else if (vol > 2.0) {
+      cooldownSeconds = 60;
+    } else {
+      cooldownSeconds = 120;
+    }
+
+    // Стоп-лосс: выше волатильность → шире стоп
+    double stoploss;
+    if (vol > 5.0) {
+      stoploss = -1.5;
+    } else if (vol > 2.0) {
+      stoploss = -1.0;
+    } else {
+      stoploss = -0.5;
+    }
+
+    // Auto-stop: выше волатильность → короче (безопасность)
+    int autoStopHours;
+    if (vol > 5.0) {
+      autoStopHours = 2;
+    } else if (vol > 2.0) {
+      autoStopHours = 4;
+    } else {
+      autoStopHours = 0;
+    }
+
+    // Max open trades: от волатильности
+    int maxOpenTrades;
+    if (vol > 5.0) {
+      maxOpenTrades = 3;
+    } else if (vol > 2.0) {
+      maxOpenTrades = 2;
+    } else {
+      maxOpenTrades = 1;
+    }
+
+    // ── Специфичные параметры для каждой стратегии ──
+    final strategyParams = <String, double>{};
+
+    switch (strategyName) {
+      case 'imbalance_scalping':
+        // Порог дисбаланса: выше объём → ниже порог (больше сигналов)
+        double imbalanceThreshold;
+        if (volume > 200_000_000) {
+          imbalanceThreshold = 0.60;
+        } else if (volume > 50_000_000) {
+          imbalanceThreshold = 0.65;
+        } else {
+          imbalanceThreshold = 0.70;
+        }
+        strategyParams['imbalance_threshold'] = imbalanceThreshold;
+
+        // Всплеск объёма: выше волатильность → выше порог всплеска
+        double surgePct;
+        if (vol > 5.0) {
+          surgePct = 30.0;
+        } else if (vol > 2.0) {
+          surgePct = 20.0;
+        } else {
+          surgePct = 10.0;
+        }
+        strategyParams['surge_pct'] = surgePct;
+        break;
+
+      case 'spread_capture':
+        // Мин. спред = текущий спред × 2 (с запасом), но не ниже 0.01
+        double minSpread = (spread * 2).clamp(0.01, 0.1);
+        strategyParams['min_spread_pct'] = minSpread;
+
+        // Порог входа = мин. спред × 1.5
+        strategyParams['spread_entry_threshold'] = (minSpread * 1.5).clamp(0.01, 0.1);
+
+        // Порог выхода = мин. спред × 0.5
+        strategyParams['spread_exit_threshold'] = (minSpread * 0.5).clamp(0.005, 0.05);
+
+        // Баланс для spread: выше объём → больше баланс
+        if (volume > 200_000_000) {
+          balance = 5000.0;
+        } else if (volume > 50_000_000) {
+          balance = 3000.0;
+        } else {
+          balance = 1000.0;
+        }
+        break;
+
+      case 'order_flow_momentum':
+        // Порог объёма = среднедневной объём / 100000 (для ETH 682M → 6820)
+        double flowThreshold = (volume / 100000).clamp(1000, 50000);
+        strategyParams['flow_threshold_volume'] = flowThreshold;
+
+        // Мин. сигналов: выше объём → меньше сигналов (чище)
+        if (volume > 200_000_000) {
+          strategyParams['min_flow_signals'] = 1;
+        } else {
+          strategyParams['min_flow_signals'] = 2;
+        }
+
+        // Выход: выше волатильность → быстрее выход
+        if (vol > 5.0) {
+          strategyParams['flow_exit_seconds'] = 15;
+        } else {
+          strategyParams['flow_exit_seconds'] = 30;
+        }
+
+        // Баланс для momentum: от объёма
+        if (volume > 500_000_000) {
+          balance = 2000.0;
+        } else if (volume > 100_000_000) {
+          balance = 1000.0;
+        } else {
+          balance = 500.0;
+        }
+        break;
+
+      case 'ers_scalping':
+        // Порог дисбаланса: выше волатильность → ниже порог (чувствительнее)
+        double ersImbalance;
+        if (vol > 5.0) {
+          ersImbalance = 0.50;
+        } else if (vol > 2.0) {
+          ersImbalance = 0.52;
+        } else {
+          ersImbalance = 0.55;
+        }
+        strategyParams['ers_min_imbalance'] = ersImbalance;
+
+        // Мин. профит: от спреда (узкий спред → малый профит, частые входы)
+        double ersProfit;
+        if (spread < 0.02) {
+          ersProfit = 0.005;
+        } else if (spread < 0.05) {
+          ersProfit = 0.01;
+        } else {
+          ersProfit = 0.02;
+        }
+        strategyParams['ers_min_profit_pct'] = ersProfit;
+
+        // Max hold: выше волатильность → короче
+        if (vol > 5.0) {
+          strategyParams['ers_max_hold_seconds'] = 8;
+        } else {
+          strategyParams['ers_max_hold_seconds'] = 15;
+        }
+
+        // Баланс для ЕРШ: минимальный, стратегия на микро-профитах
+        balance = 50.0;
+        break;
+    }
+
+    setState(() {
+      _balance = balance;
+      _maxOpenTrades = maxOpenTrades;
+      _stoploss = stoploss;
+      _maxHoldSeconds = vol > 5.0 ? 60 : (vol > 2.0 ? 120 : 180);
+      _confirmationTicks = confirmationTicks;
+      _maxSpread = maxSpread;
+      _cooldownSeconds = cooldownSeconds;
+      _autoStopHours = autoStopHours;
+      _trailingStop = vol > 5.0 ? 0.2 : (vol > 2.0 ? 0.3 : 0.5);
+      _trailingOffset = vol > 5.0 ? 0.2 : (vol > 2.0 ? 0.3 : 0.5);
+      // Параметры стратегии
+      _strategyParams.addAll(strategyParams);
+      _activePresetMode = null; // сбрасываем пресет — это динамический расчёт
+    });
+  }
+
   /// Рекомендации — подбор режима по рынку через PairInsight.
   /// Если стратегия уже выбрана — не меняет её, подбирает только режим.
   /// Если стратегия не выбрана — подбирает и стратегию, и режим.
@@ -876,8 +1084,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     }
 
     if (_selectedStrategy != null) {
-      // Стратегия уже выбрана — только применяем режим
-      _applyModePreset(bestMode);
+      // Стратегия уже выбрана — динамический расчёт параметров под рынок
+      _applyDynamicParams(_selectedStrategy!.name, insight);
       return;
     }
 
