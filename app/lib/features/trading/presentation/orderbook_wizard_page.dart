@@ -442,6 +442,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   bool _loadingLiveData = false;
   PairInsight? _pairInsight;
   bool _loadingInsight = false;
+  Completer<void>? _insightCompleter;
 
   // Step 1: Strategy
   _ObStrategyOption? _selectedStrategy;
@@ -724,7 +725,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   }
 
   Future<void> _fetchPairInsight(String symbol) async {
-    if (_loadingInsight) return;
+    if (_loadingInsight) {
+      // Уже грузится — дожидаемся завершения
+      await _insightCompleter?.future;
+      return;
+    }
+    _insightCompleter = Completer<void>();
     setState(() => _loadingInsight = true);
     try {
       final insight = await _repository.getPairInsight(symbol);
@@ -737,6 +743,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     } catch (e) {
       debugPrint('[WIZARD] _fetchPairInsight error for $symbol: $e');
       if (mounted) setState(() => _loadingInsight = false);
+    } finally {
+      _insightCompleter?.complete();
+      _insightCompleter = null;
     }
   }
 
@@ -1043,7 +1052,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _trailingOffset = vol > 5.0 ? 0.2 : (vol > 2.0 ? 0.3 : 0.5);
       // Параметры стратегии
       _strategyParams.addAll(strategyParams);
-      _activePresetMode = null; // сбрасываем пресет — это динамический расчёт
+      _activePresetMode = 'recommended'; // подсвечиваем кнопку "Рекоменд."
     });
   }
 
@@ -1127,6 +1136,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
 
     // Применяем пресет
     _applyModePreset(bestMode);
+    // Подсвечиваем кнопку "Рекоменд." (поверх пресета)
+    setState(() => _activePresetMode = 'recommended');
   }
 
   /// Сброс активного пресета при ручном изменении любого параметра.
