@@ -185,7 +185,8 @@ class _TradingPageState extends State<TradingPage>
     return AdaptiveScaffold(
       title: 'Трейдинг',
       currentPath: '/trading',
-      body: Column(
+      body: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ─────────────────────────────────────
@@ -283,25 +284,26 @@ class _TradingPageState extends State<TradingPage>
           ),
           const SizedBox(height: PfSpacing.md),
 
-          // ── Tab Content ─────────────────────────────
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildActiveContent(),
-                _buildRunsList(
-                  runs: _historyRuns,
-                  loading: _loadingHistory,
-                  emptyIcon: PhosphorIconsFill.clockCounterClockwise,
-                  emptyText: 'История пуста',
-                  emptySubtext: 'Завершённые стратегии появятся здесь',
-                  repository: widget.repository,
-                ),
-                _buildObRunsList(),
-              ],
+          // ── Tab Content (inline, скроллится вместе со страницей) ──
+          if (_tabController.index == 0)
+            _buildActiveContent(scrollable: false),
+          if (_tabController.index == 1)
+            _buildRunsList(
+              runs: _historyRuns,
+              loading: _loadingHistory,
+              emptyIcon: PhosphorIconsFill.clockCounterClockwise,
+              emptyText: 'История пуста',
+              emptySubtext: 'Завершённые стратегии появятся здесь',
+              repository: widget.repository,
+              scrollable: false,
             ),
-          ),
+          if (_tabController.index == 2)
+            _buildObRunsList(scrollable: false),
+
+          // Bottom padding for scroll
+          const SizedBox(height: PfSpacing.lg),
         ],
+      ),
       ),
     );
   }
@@ -313,6 +315,7 @@ class _TradingPageState extends State<TradingPage>
     required String emptyText,
     required String emptySubtext,
     required TradingRepository repository,
+    bool scrollable = true,
   }) {
     final pc = PfColors.of(context);
     if (loading) {
@@ -350,6 +353,8 @@ class _TradingPageState extends State<TradingPage>
           : _loadHistoryRuns(),
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+        shrinkWrap: !scrollable,
+        physics: scrollable ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
         itemCount: runs.length,
         separatorBuilder: (_, __) => const SizedBox(height: PfSpacing.sm),
         itemBuilder: (context, index) {
@@ -553,7 +558,7 @@ class _TradingPageState extends State<TradingPage>
   }
 
   // ── Active Tab Content (standard + OB) ──────────────────────────────────
-  Widget _buildActiveContent() {
+  Widget _buildActiveContent({bool scrollable = true}) {
     final pc = PfColors.of(context);
     final isLoading = _loadingActive;
     final hasStandard = _activeRuns.isNotEmpty;
@@ -594,6 +599,8 @@ class _TradingPageState extends State<TradingPage>
       },
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+        shrinkWrap: !scrollable,
+        physics: scrollable ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
         children: [
           if (hasStandard) ...[
             Padding(
@@ -628,7 +635,7 @@ class _TradingPageState extends State<TradingPage>
   }
 
   // ── OrderBook History Tab ──────────────────────────────────────────────
-  Widget _buildObRunsList() {
+  Widget _buildObRunsList({bool scrollable = true}) {
     final pc = PfColors.of(context);
     if (_loadingObRuns) {
       return _skeletonList();
@@ -655,6 +662,8 @@ class _TradingPageState extends State<TradingPage>
       onRefresh: _loadOrderBookRuns,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+        shrinkWrap: !scrollable,
+        physics: scrollable ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
         itemCount: _obRuns.length,
         separatorBuilder: (_, __) => const SizedBox(height: PfSpacing.sm),
         itemBuilder: (context, index) => _buildObRunCard(_obRuns[index]),
