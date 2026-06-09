@@ -110,6 +110,17 @@ class TradingScheduler:
         """Return list of active run IDs."""
         return list(self._tasks.keys())
 
+    def get_active_ob_count(self) -> int:
+        """Return number of active OrderBook engines."""
+        from app.services.trading.orderbook.engine import OrderBookEngine
+        count = 0
+        for rid, engine in list(self._engines.items()):
+            task = self._tasks.get(rid)
+            if task is not None and not task.done():
+                if isinstance(engine, OrderBookEngine):
+                    count += 1
+        return count
+
     async def start_run(
         self,
         run_id: int,
