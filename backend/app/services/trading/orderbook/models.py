@@ -189,6 +189,13 @@ class OrderBookConfig:
     min_flow_signals: int = 2
     flow_exit_seconds: int = 30
 
+    # Strategy 4: ЕРШ Scalping
+    ers_min_imbalance: float = 0.52
+    ers_min_profit_pct: float = 0.01
+    ers_exit_on_reversion: bool = True
+    ers_max_hold_seconds: int = 15
+    ers_min_volume: float = 0.0
+
 
 CACHE_MAXLEN = 100
 WARMUP_THRESHOLD = 10

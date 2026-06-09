@@ -311,7 +311,7 @@ class OrderBookStartRequest(BaseModel):
         default="imbalance_scalping", description="OB strategy name"
     )
     initial_balance: float = Field(
-        default=1000.0, ge=100, le=1_000_000, description="Virtual balance"
+        default=1000.0, ge=10, le=1_000_000, description="Virtual balance"
     )
     max_open_trades: int = Field(
         default=1, ge=1, le=10, description="Max concurrent trades"
@@ -340,6 +340,13 @@ class OrderBookStartRequest(BaseModel):
     # Imbalance Scalping params
     imbalance_threshold: Optional[float] = Field(default=None, ge=0.5, le=0.95)
     surge_pct: Optional[float] = Field(default=None, ge=1, le=100)
+
+    # ЕРШ Scalping params
+    ers_min_imbalance: Optional[float] = Field(default=None, ge=0.5, le=0.95)
+    ers_min_profit_pct: Optional[float] = Field(default=None, ge=0.001, le=1.0)
+    ers_exit_on_reversion: Optional[bool] = Field(default=None)
+    ers_max_hold_seconds: Optional[int] = Field(default=None, ge=3, le=120)
+    ers_min_volume: Optional[float] = Field(default=None, ge=0, le=100000)
 
 
 class OrderBookRunResponse(BaseModel):

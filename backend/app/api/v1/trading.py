@@ -624,6 +624,22 @@ def _compute_strategy_scores(
     results.sort(key=lambda r: r["score"], reverse=True)
     return results
 
+    # ЕРШ Scalping — любит высокий объём + любую волатильность (сверхчувствительный)
+    ers_score = round(0.3 + 0.4 * vol_norm_v + 0.3 * vol_norm, 2)
+    if ers_score > 0.5:
+        reason = f"Объём ${_fmt_volume(volume)} и волатильность {volatility}% — ЕРШ будет ловить микро-движения"
+    else:
+        reason = f"Низкая активность — ЕРШ может не найти достаточно микро-сигналов"
+    results.append({
+        "name": "ers_scalping",
+        "label": "ЕРШ Scalping",
+        "score": min(ers_score, 0.95),
+        "reason": reason,
+    })
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results
+
 
 def _fmt_volume(v: float) -> str:
     if v >= 1_000_000_000:

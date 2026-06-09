@@ -129,6 +129,31 @@ const _kObStrategies = [
       ),
     ],
   ),
+  _ObStrategyOption(
+    name: 'ers_scalping',
+    label: 'ЕРШ Scalping',
+    description: 'Сверхчувствительный скальпинг — ловит даже микро-дисбалансы стакана',
+    params: [
+      _ObStrategyParam(
+        key: 'ers_min_imbalance',
+        label: 'Порог дисбаланса',
+        unit: '',
+        defaultValue: 0.52, min: 0.50, max: 0.65, divisions: 15,
+      ),
+      _ObStrategyParam(
+        key: 'ers_min_profit_pct',
+        label: 'Мин. профит',
+        unit: '%',
+        defaultValue: 0.01, min: 0.005, max: 0.1, divisions: 19,
+      ),
+      _ObStrategyParam(
+        key: 'ers_max_hold_seconds',
+        label: 'Max hold',
+        unit: 'с',
+        defaultValue: 15, min: 3, max: 60, divisions: 19,
+      ),
+    ],
+  ),
 ];
 
 /// Короткие подписи под шагами.
@@ -182,6 +207,18 @@ const _kStrategyPresets = {
     'maxSpread': 0.08,
     'cooldownSeconds': 60,
     'autoStopHours': 4,
+  },
+  'ers_scalping': {
+    'balance': 50.0,
+    'maxOpenTrades': 3,
+    'stoploss': -0.5,
+    'trailingStop': 0.1,
+    'trailingOffset': 0.1,
+    'maxHoldSeconds': 15,
+    'confirmationTicks': 1,
+    'maxSpread': 0.1,
+    'cooldownSeconds': 5,
+    'autoStopHours': 0,
   },
 };
 
@@ -575,6 +612,11 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _maxSpread = preset['maxSpread'] as double;
       _cooldownSeconds = preset['cooldownSeconds'] as int;
       _autoStopHours = preset['autoStopHours'] as int;
+      // Сброс параметров стратегии к дефолтным
+      _strategyParams.clear();
+      for (final p in _selectedStrategy?.params ?? []) {
+        _strategyParams[p.key] = p.defaultValue;
+      }
     });
   }
 
@@ -1006,6 +1048,12 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       4: '💡 Order Flow Momentum: 1–2 тика подтверждения, макс. спред 0.08–0.15%.',
       5: '💡 Order Flow Momentum: кулдаун 60–120с, авто-стоп 3–6ч. Моментум строится не мгновенно.',
     },
+    'ers_scalping': {
+      2: '💡 ЕРШ Scalping: от \$10! Микро-сделки, частые входы. Баланс почти не нужен — прибыль от частоты.',
+      3: '💡 ЕРШ Scalping: стоп-лосс –0.5% макс, трейлинг 0.1–0.2%. Жёсткие стопы — микро-движения не прощают.',
+      4: '💡 ЕРШ Scalping: без подтверждения, макс. спред 0.05–0.10%. Вход по первому дисбалансу.',
+      5: '💡 ЕРШ Scalping: кулдаун 3–10с (мгновенный ре-вход), авто-стоп выкл — крутится бесконечно.',
+    },
   };
 
   Widget _buildStepTip(int step, PfColors pc) {
@@ -1038,6 +1086,66 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       ),
     );
   }
+
+  /// Подсказка о минимальном балансе для выбранной стратегии.
+  Widget _buildMinBalanceHint(ThemeData theme, PfColors pc) {
+    if (_selectedStrategy == null) return const SizedBox.shrink();
+
+    // Минимальный рекомендуемый баланс для каждой стратегии
+    final minBalances = {
+      'imbalance_scalping': 100.0,
+      'spread_capture': 500.0,
+      'order_flow_momentum': 200.0,
+      'ers_scalping': 10.0,
+    };
+
+    final minBalance = minBalances[_selectedStrategy!.name] ?? 100.0;
+    final perTrade = (minBalance / _maxOpenTrades).toStringAsFixed(2);
+
+    // Если текущий баланс ниже minBalance — подсветить красным
+    final isLow = _balance < minBalance;
+    final borderColor = isLow ? PfColors.destructive : pc.borderC;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isLow ? PfColors.destructive.withValues(alpha: 0.08) : pc.surfaceC,
+          borderRadius: PfRadius.borderRadiusMd,
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            PhosphorIcon(
+              isLow ? PhosphorIconsFill.warning : PhosphorIconsFill.info,
+              size: 16,
+              color: isLow ? PfColors.destructive : pc.mutedForegroundC,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isLow
+                    ? '⚠ Минимальный баланс для $_selectedStrategyLabel: \$${minBalance.toStringAsFixed(0)}. '
+                        'Текущий баланс \$${_balance.toStringAsFixed(0)} может быть недостаточен. '
+                        'На сделку: ~\$$perTrade'
+                    : '💡 Минимальный баланс для $_selectedStrategyLabel: \$${minBalance.toStringAsFixed(0)}. '
+                        'На сделку: ~\$$perTrade',
+                style: PfTypography.bodySm.copyWith(
+                  color: isLow ? PfColors.destructive : pc.foregroundC,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String get _selectedStrategyLabel =>
+      _selectedStrategy?.label ?? 'стратегии';
 
   // ── Step 0: Pair (old layout) ──
   Widget _buildStepPair(ThemeData theme, PfColors pc) {
@@ -1073,7 +1181,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             ],
           ),
           const SizedBox(height: 12),
-          ...insight.recommendedStrategies.take(3).map((s) => Padding(
+          ...insight.recommendedStrategies.map((s) => Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
@@ -1182,7 +1290,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             Text('Выберите стратегию', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
             const Spacer(),
             _defaultsButton(theme),
-            _helpIcon('Стратегия', 'Алгоритм анализа стакана заявок. Каждая стратегия ищет свои паттерны:\n\n• Imbalance Scalping — ловит дисбаланс Bid/Ask\n• Spread Capture — торгует расширение/сужение спреда\n• Order Flow Momentum — реагирует на агрессивные market orders'),
+            _helpIcon('Стратегия', 'Алгоритм анализа стакана заявок. Каждая стратегия ищет свои паттерны:\n\n• Imbalance Scalping — ловит дисбаланс Bid/Ask\n• Spread Capture — торгует расширение/сужение спреда\n• Order Flow Momentum — реагирует на агрессивные market orders\n• ЕРШ Scalping — сверхчувствительный скальпинг, ловит даже микро-дисбалансы'),
           ],
         ),
         const SizedBox(height: 8),
@@ -1296,6 +1404,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     'flow_threshold_volume': 'Объём market order (в USDT) для засчитывания сигнала. 10000 = \$10,000.',
     'min_flow_signals': 'Минимальное количество рыночных заявок подряд для подтверждения тренда.',
     'flow_exit_seconds': 'Выход из позиции через N секунд после входа (таймер).',
+    'ers_min_imbalance': 'Порог дисбаланса Bid/Ask для входа. 0.52 = 52% — срабатывает даже при слабом доминировании одной стороны. Чем ниже, тем чувствительнее.',
+    'ers_min_profit_pct': 'Минимальный профит для выхода в %. 0.01% = ~1 тик на большинстве пар. Выход сразу при движении в +.',
+    'ers_max_hold_seconds': 'Максимальное время удержания позиции в секундах. Если за это время нет ни профита, ни реверсии — аварийный выход.',
   };
 
   Widget _buildParamSlider(_ObStrategyParam param, ThemeData theme, PfColors pc) {
@@ -1342,7 +1453,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
 
   // ── Step 2: Balance ───────────────────────────────────────────────
   Widget _buildStepBalance(ThemeData theme, PfColors pc) {
-    const presets = [100, 500, 1000, 5000, 10000];
+    const presets = [10, 25, 50, 100, 500, 1000, 5000, 10000];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1363,6 +1474,10 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         ),
         const SizedBox(height: 24),
         _buildStepTip(2, pc),
+        // Подсказка о минимальном балансе для выбранной стратегии
+        if (_selectedStrategy != null)
+          _buildMinBalanceHint(theme, pc),
+        const SizedBox(height: 16),
         // Баланс — крупная цифра
         Center(
           child: Text(
@@ -1375,7 +1490,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         const SizedBox(height: 16),
         _buildCustomSlider(
           value: _balance,
-          min: 100,
+          min: 10,
           max: 10000,
           divisions: 99,
           label: '\$${_balance.toStringAsFixed(0)}',
@@ -2240,7 +2355,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         'confirmation_ticks': _confirmationTicks,
         'max_spread': _maxSpread,
         'cooldown_seconds': _cooldownSeconds,
+        'auto_stop_hours': _autoStopHours,
       };
+
       // Add strategy-specific params
       for (final entry in _strategyParams.entries) {
         request[entry.key] = entry.value;

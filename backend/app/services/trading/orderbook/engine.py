@@ -45,6 +45,9 @@ from app.services.trading.orderbook.strategies.spread_capture import (
 from app.services.trading.orderbook.strategies.order_flow_momentum import (
     OrderFlowMomentumStrategy,
 )
+from app.services.trading.orderbook.strategies.ers_scalping import (
+    ErsScalpingStrategy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +70,7 @@ STRATEGY_REGISTRY = {
     "imbalance_scalping": ImbalanceScalpingStrategy,
     "spread_capture": SpreadCaptureStrategy,
     "order_flow_momentum": OrderFlowMomentumStrategy,
+    "ers_scalping": ErsScalpingStrategy,
 }
 
 MANAGE_LOOP_INTERVAL = 0.5  # проверка позиций каждые 500ms

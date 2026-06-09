@@ -590,6 +590,12 @@ class TradingScheduler:
             flow_threshold_volume=config.get("flow_threshold_volume", 10000.0),
             min_flow_signals=config.get("min_flow_signals", 2),
             flow_exit_seconds=config.get("flow_exit_seconds", 30),
+            # ЕРШ Scalping params
+            ers_min_imbalance=config.get("ers_min_imbalance", 0.52),
+            ers_min_profit_pct=config.get("ers_min_profit_pct", 0.01),
+            ers_exit_on_reversion=config.get("ers_exit_on_reversion", True),
+            ers_max_hold_seconds=config.get("ers_max_hold_seconds", 15),
+            ers_min_volume=config.get("ers_min_volume", 0.0),
         )
 
         engine = OrderBookEngine(ob_config)
