@@ -24,12 +24,29 @@ class _LoginPageState extends State<LoginPage> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final _usernameFocusNode = FocusNode();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _isTablet = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final w = MediaQuery.of(context).size.width;
+      _isTablet = w >= 600 && w < 1200;
+      if (!_isTablet) {
+        _usernameFocusNode.requestFocus();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _usernameFocusNode.dispose();
     super.dispose();
   }
 
@@ -253,7 +270,7 @@ class _LoginPageState extends State<LoginPage> {
                               // Username
                               TextFormField(
                                 controller: _usernameController,
-                                autofocus: true,
+                                focusNode: _usernameFocusNode,
                                 textCapitalization: TextCapitalization.none,
                                 textInputAction: TextInputAction.next,
                                 style: TextStyle(fontSize: 15, color: pc.foregroundC),
