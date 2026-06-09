@@ -839,7 +839,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     });
   }
 
-  /// Рекомендации — подбор режима и стратегии по рынку через PairInsight.
+  /// Рекомендации — подбор режима по рынку через PairInsight.
+  /// Если стратегия уже выбрана — не меняет её, подбирает только режим.
+  /// Если стратегия не выбрана — подбирает и стратегию, и режим.
   Future<void> _applyRecommendations() async {
     if (_selectedPairSymbol.isEmpty) return;
     // Загружаем insight если ещё нет
@@ -862,37 +864,43 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     }
 
     final vol = insight.volatility24h;
+
+    // Режим выбираем по волатильности
+    String bestMode;
+    if (vol > 5.0) {
+      bestMode = 'aggressive';
+    } else if (vol > 2.0) {
+      bestMode = 'standard';
+    } else {
+      bestMode = 'conservative';
+    }
+
+    if (_selectedStrategy != null) {
+      // Стратегия уже выбрана — только применяем режим
+      _applyModePreset(bestMode);
+      return;
+    }
+
+    // Стратегия не выбрана — подбираем обе
     final volume = insight.volume24h;
     final isHighVol = volume > 50_000_000;
 
     String bestStrategy;
-    String bestMode;
-
     if (vol > 5.0) {
       // Высокая волатильность → imbalance_scalping aggressive или ers aggressive
       if (insight.spread < 0.05) {
         bestStrategy = 'ers_scalping';
-        bestMode = 'aggressive';
       } else {
         bestStrategy = 'imbalance_scalping';
-        bestMode = 'aggressive';
       }
     } else if (vol < 1.0 && isHighVol) {
-      // Низкая волатильность + высокий объём → spread_capture
       bestStrategy = 'spread_capture';
-      bestMode = 'standard';
     } else if (volume > 100_000_000) {
-      // Очень высокий объём → order_flow_momentum
       bestStrategy = 'order_flow_momentum';
-      bestMode = 'standard';
     } else if (vol > 3.0 && insight.spread < 0.08) {
-      // Средняя волатильность + узкий спред → ers_scalping
       bestStrategy = 'ers_scalping';
-      bestMode = 'standard';
     } else {
-      // По умолчанию
       bestStrategy = 'imbalance_scalping';
-      bestMode = 'standard';
     }
 
     // Находим стратегию в списке и выбираем её

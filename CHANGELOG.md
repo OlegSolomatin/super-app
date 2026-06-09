@@ -1,3 +1,4 @@
+|||- `fix` OB визард: кнопка «Рекоменд.» больше не переключает стратегию — подбирает только режим для текущей выбранной стратегии (1.0.1+13) | Hermes
 |||- `fix` OB визард: debugPrint ошибки _fetchPairInsight + сброс _pairInsight при смене пары + SnackBar при ошибке загрузки рекомендаций (1.0.1+12) | Hermes
 |||- `fix` OB ghost-run protection: try/except в API при старте запуска + startup cleanup orphaned engines (1.0.1+11) | Hermes
 ||- `perf` OB cache warm: WARMUP_THRESHOLD снижен с 10 до 5 — ETH теперь прогревается быстрее (1.0.1+11) | Hermes
