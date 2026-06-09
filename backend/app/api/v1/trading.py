@@ -621,9 +621,6 @@ def _compute_strategy_scores(
         "reason": reason,
     })
 
-    results.sort(key=lambda r: r["score"], reverse=True)
-    return results
-
     # ЕРШ Scalping — любит высокий объём + любую волатильность (сверхчувствительный)
     ers_score = round(0.3 + 0.4 * vol_norm_v + 0.3 * vol_norm, 2)
     if ers_score > 0.5:
