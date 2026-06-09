@@ -250,6 +250,10 @@ class OrderBookEngine:
             return
 
         # Protection: global stop
+        self.protection.update_balance(
+            self.wallets.total_balance,
+            self.metrics["peak_balance"],
+        )
         if self.protection.global_stop():
             logger.warning("[OBEngine] Global stop triggered")
             self.metrics["global_stop_filtered"] += 1

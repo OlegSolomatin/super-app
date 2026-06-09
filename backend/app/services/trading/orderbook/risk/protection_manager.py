@@ -74,36 +74,39 @@ class LowProfitProtection(IProtection):
 
 
 class MaxDrawdownProtection(IProtection):
-    """Защита 3: глобальный стоп при просадке > порога.
+    """Защита 3: глобальный стоп при просадке баланса > порога.
 
-    freqtrade: MaxDrawdownProtection
+    Считает реальную просадку от пикового баланса:
+    dd = (peak - current) / peak * 100
+
+    Отличие от freqtrade: считаем от баланса, а не от соотношения PnL.
     """
     has_global_stop = True
 
     def __init__(self, max_drawdown_pct: float = 5.0,
-                 lookback_trades: int = 30,
                  stop_duration_seconds: int = 3600):
         self._max_dd = max_drawdown_pct
-        self._lookback = lookback_trades
         self._stop_duration = stop_duration_seconds
-        self._history: deque[Trade] = deque(maxlen=lookback_trades)
+        self._peak_balance: Optional[float] = None
+        self._current_balance: Optional[float] = None
 
-    def on_trade(self, trade: Trade) -> None:
-        self._history.append(trade)
+    def update_balance(self, current: float, peak: float) -> None:
+        """Обновить текущий и пиковый баланс (вызывается перед global_stop)."""
+        self._current_balance = current
+        self._peak_balance = peak
 
     def global_stop(self) -> Optional[ProtectionReturn]:
-        if len(self._history) < self._lookback:
+        if self._peak_balance is None or self._current_balance is None:
             return None
-        losses = sum(t.pnl for t in self._history if t.pnl < 0)
-        wins = sum(t.pnl for t in self._history if t.pnl > 0)
-        gross = wins if wins != 0 else 1
-        dd = abs(losses) / gross * 100
+        if self._peak_balance <= 0:
+            return None
+        dd = (self._peak_balance - self._current_balance) / self._peak_balance * 100
         if dd > self._max_dd:
             return ProtectionReturn(
                 stop=True,
                 until=datetime.now(timezone.utc)
                      + timedelta(seconds=self._stop_duration),
-                reason=f"MaxDrawdown: {dd:.1f}% > {self._max_dd:.1f}%",
+                reason=f"MaxDrawdown: {dd:.2f}% > {self._max_dd:.1f}% (peak=${self._peak_balance:.2f})",
             )
         return None
 
@@ -158,6 +161,12 @@ class ProtectionManager:
     def on_trade_exit(self, trade: Trade) -> None:
         for p in self._protections:
             p.on_trade(trade)
+
+    def update_balance(self, current: float, peak: float) -> None:
+        """Обновить баланс для защит, которые следят за просадкой."""
+        for p in self._protections:
+            if hasattr(p, 'update_balance'):
+                p.update_balance(current, peak)
 
     def global_stop(self) -> Optional[ProtectionReturn]:
         for p in self._protections:
