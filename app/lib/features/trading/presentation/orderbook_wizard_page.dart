@@ -222,6 +222,196 @@ const _kStrategyPresets = {
   },
 };
 
+/// Пресеты режимов — 3 режима под каждую стратегию.
+const _kStrategyModePresets = {
+  'imbalance_scalping': {
+    'conservative': {
+      'balance': 2000.0,
+      'maxOpenTrades': 1,
+      'stoploss': -1.5,
+      'trailingStop': 0.5,
+      'trailingOffset': 0.5,
+      'maxHoldSeconds': 180,
+      'confirmationTicks': 5,
+      'maxSpread': 0.03,
+      'cooldownSeconds': 180,
+      'autoStopHours': 4,
+      'imbalance_threshold': 0.75,
+      'surge_pct': 30.0,
+    },
+    'standard': {
+      'balance': 1000.0,
+      'maxOpenTrades': 2,
+      'stoploss': -1.0,
+      'trailingStop': 0.3,
+      'trailingOffset': 0.5,
+      'maxHoldSeconds': 120,
+      'confirmationTicks': 3,
+      'maxSpread': 0.05,
+      'cooldownSeconds': 120,
+      'autoStopHours': 0,
+      'imbalance_threshold': 0.65,
+      'surge_pct': 20.0,
+    },
+    'aggressive': {
+      'balance': 500.0,
+      'maxOpenTrades': 3,
+      'stoploss': -0.5,
+      'trailingStop': 0.2,
+      'trailingOffset': 0.2,
+      'maxHoldSeconds': 60,
+      'confirmationTicks': 1,
+      'maxSpread': 0.08,
+      'cooldownSeconds': 30,
+      'autoStopHours': 0,
+      'imbalance_threshold': 0.58,
+      'surge_pct': 10.0,
+    },
+  },
+  'spread_capture': {
+    'conservative': {
+      'balance': 10000.0,
+      'maxOpenTrades': 2,
+      'stoploss': -0.3,
+      'trailingStop': 0.6,
+      'trailingOffset': 0.4,
+      'maxHoldSeconds': 120,
+      'confirmationTicks': 4,
+      'maxSpread': 0.02,
+      'cooldownSeconds': 60,
+      'autoStopHours': 4,
+      'min_spread_pct': 0.05,
+      'spread_entry_threshold': 0.06,
+      'spread_exit_threshold': 0.02,
+    },
+    'standard': {
+      'balance': 5000.0,
+      'maxOpenTrades': 3,
+      'stoploss': -0.5,
+      'trailingStop': 0.5,
+      'trailingOffset': 0.3,
+      'maxHoldSeconds': 60,
+      'confirmationTicks': 2,
+      'maxSpread': 0.03,
+      'cooldownSeconds': 30,
+      'autoStopHours': 2,
+      'min_spread_pct': 0.02,
+      'spread_entry_threshold': 0.03,
+      'spread_exit_threshold': 0.01,
+    },
+    'aggressive': {
+      'balance': 1000.0,
+      'maxOpenTrades': 5,
+      'stoploss': -0.3,
+      'trailingStop': 0.3,
+      'trailingOffset': 0.2,
+      'maxHoldSeconds': 30,
+      'confirmationTicks': 1,
+      'maxSpread': 0.05,
+      'cooldownSeconds': 10,
+      'autoStopHours': 0,
+      'min_spread_pct': 0.01,
+      'spread_entry_threshold': 0.02,
+      'spread_exit_threshold': 0.005,
+    },
+  },
+  'order_flow_momentum': {
+    'conservative': {
+      'balance': 5000.0,
+      'maxOpenTrades': 1,
+      'stoploss': -2.0,
+      'trailingStop': 0.8,
+      'trailingOffset': 0.6,
+      'maxHoldSeconds': 300,
+      'confirmationTicks': 3,
+      'maxSpread': 0.05,
+      'cooldownSeconds': 120,
+      'autoStopHours': 6,
+      'flow_threshold_volume': 50000.0,
+      'min_flow_signals': 3,
+      'flow_exit_seconds': 60,
+    },
+    'standard': {
+      'balance': 2000.0,
+      'maxOpenTrades': 1,
+      'stoploss': -1.5,
+      'trailingStop': 0.4,
+      'trailingOffset': 0.4,
+      'maxHoldSeconds': 180,
+      'confirmationTicks': 1,
+      'maxSpread': 0.08,
+      'cooldownSeconds': 60,
+      'autoStopHours': 4,
+      'flow_threshold_volume': 10000.0,
+      'min_flow_signals': 2,
+      'flow_exit_seconds': 30,
+    },
+    'aggressive': {
+      'balance': 500.0,
+      'maxOpenTrades': 2,
+      'stoploss': -0.8,
+      'trailingStop': 0.2,
+      'trailingOffset': 0.2,
+      'maxHoldSeconds': 60,
+      'confirmationTicks': 1,
+      'maxSpread': 0.12,
+      'cooldownSeconds': 20,
+      'autoStopHours': 0,
+      'flow_threshold_volume': 2000.0,
+      'min_flow_signals': 1,
+      'flow_exit_seconds': 15,
+    },
+  },
+  'ers_scalping': {
+    'conservative': {
+      'balance': 100.0,
+      'maxOpenTrades': 2,
+      'stoploss': -0.3,
+      'trailingStop': 0.15,
+      'trailingOffset': 0.15,
+      'maxHoldSeconds': 30,
+      'confirmationTicks': 1,
+      'maxSpread': 0.08,
+      'cooldownSeconds': 10,
+      'autoStopHours': 0,
+      'ers_min_imbalance': 0.58,
+      'ers_min_profit_pct': 0.03,
+      'ers_max_hold_seconds': 30,
+    },
+    'standard': {
+      'balance': 50.0,
+      'maxOpenTrades': 3,
+      'stoploss': -0.5,
+      'trailingStop': 0.1,
+      'trailingOffset': 0.1,
+      'maxHoldSeconds': 15,
+      'confirmationTicks': 1,
+      'maxSpread': 0.1,
+      'cooldownSeconds': 5,
+      'autoStopHours': 0,
+      'ers_min_imbalance': 0.52,
+      'ers_min_profit_pct': 0.01,
+      'ers_max_hold_seconds': 15,
+    },
+    'aggressive': {
+      'balance': 10.0,
+      'maxOpenTrades': 5,
+      'stoploss': -0.2,
+      'trailingStop': 0.05,
+      'trailingOffset': 0.05,
+      'maxHoldSeconds': 8,
+      'confirmationTicks': 1,
+      'maxSpread': 0.15,
+      'cooldownSeconds': 3,
+      'autoStopHours': 0,
+      'ers_min_imbalance': 0.50,
+      'ers_min_profit_pct': 0.005,
+      'ers_max_hold_seconds': 5,
+    },
+  },
+};
+
+
 class OrderBookWizardPage extends StatefulWidget {
   final TradingRepository repository;
 
@@ -274,6 +464,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   // Step 5: Protections
   int _cooldownSeconds = 120;
   int _autoStopHours = 0; // 0 = отключено
+
+  // Активный режим пресета на шаге стратегии
+  String? _activePresetMode;
 
   bool _isLoading = false;
 
@@ -620,6 +813,101 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     });
   }
 
+  /// Применить пресет режима (консервативный / стандарт / агрессивный).
+  void _applyModePreset(String mode) {
+    final preset = _kStrategyModePresets[_selectedStrategy?.name ?? '']?[mode];
+    if (preset == null) return;
+    setState(() {
+      _balance = (preset['balance'] as num).toDouble();
+      _maxOpenTrades = (preset['maxOpenTrades'] as num).toInt();
+      _stoploss = (preset['stoploss'] as num).toDouble();
+      _trailingStop = (preset['trailingStop'] as num).toDouble();
+      _trailingOffset = (preset['trailingOffset'] as num).toDouble();
+      _maxHoldSeconds = (preset['maxHoldSeconds'] as num).toInt();
+      _confirmationTicks = (preset['confirmationTicks'] as num).toInt();
+      _maxSpread = (preset['maxSpread'] as num).toDouble();
+      _cooldownSeconds = (preset['cooldownSeconds'] as num).toInt();
+      _autoStopHours = (preset['autoStopHours'] as num).toInt();
+      // Параметры стратегии
+      _strategyParams.clear();
+      for (final p in _selectedStrategy?.params ?? []) {
+        final val = preset[p.key];
+        _strategyParams[p.key] = (val is num) ? val.toDouble() : p.defaultValue;
+      }
+      _activePresetMode = mode;
+    });
+  }
+
+  /// Рекомендации — подбор режима и стратегии по рынку через PairInsight.
+  Future<void> _applyRecommendations() async {
+    if (_selectedPairSymbol.isEmpty) return;
+    // Загружаем insight если ещё нет
+    if (_pairInsight == null) {
+      await _fetchPairInsight(_selectedPairSymbol);
+      if (!mounted) return;
+    }
+    final insight = _pairInsight;
+    if (insight == null) return;
+
+    final vol = insight.volatility24h;
+    final volume = insight.volume24h;
+    final isHighVol = volume > 50_000_000;
+
+    String bestStrategy;
+    String bestMode;
+
+    if (vol > 5.0) {
+      // Высокая волатильность → imbalance_scalping aggressive или ers aggressive
+      if (insight.spread < 0.05) {
+        bestStrategy = 'ers_scalping';
+        bestMode = 'aggressive';
+      } else {
+        bestStrategy = 'imbalance_scalping';
+        bestMode = 'aggressive';
+      }
+    } else if (vol < 1.0 && isHighVol) {
+      // Низкая волатильность + высокий объём → spread_capture
+      bestStrategy = 'spread_capture';
+      bestMode = 'standard';
+    } else if (volume > 100_000_000) {
+      // Очень высокий объём → order_flow_momentum
+      bestStrategy = 'order_flow_momentum';
+      bestMode = 'standard';
+    } else if (vol > 3.0 && insight.spread < 0.08) {
+      // Средняя волатильность + узкий спред → ers_scalping
+      bestStrategy = 'ers_scalping';
+      bestMode = 'standard';
+    } else {
+      // По умолчанию
+      bestStrategy = 'imbalance_scalping';
+      bestMode = 'standard';
+    }
+
+    // Находим стратегию в списке и выбираем её
+    final target = _kObStrategies.cast<_ObStrategyOption?>().firstWhere(
+      (s) => s!.name == bestStrategy,
+      orElse: () => null,
+    );
+    if (target == null) return;
+
+    // Выбираем стратегию
+    _strategyParams.clear();
+    for (final p in target.params) {
+      _strategyParams[p.key] = p.defaultValue;
+    }
+    setState(() => _selectedStrategy = target);
+
+    // Применяем пресет
+    _applyModePreset(bestMode);
+  }
+
+  /// Сброс активного пресета при ручном изменении любого параметра.
+  void _onAnyParamChanged() {
+    if (_activePresetMode != null) {
+      _activePresetMode = null;
+    }
+  }
+
   Widget _defaultsButton(ThemeData theme) {
     return GestureDetector(
       onTap: _applyDefaults,
@@ -645,6 +933,91 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           ],
         ),
       ),
+    );
+  }
+
+  /// Панель выбора режима пресетов (Консерв / Стандарт / Агрессив / Рекоменд).
+  Widget _buildPresetBar(ThemeData theme, PfColors pc) {
+    final isSelected = <String, bool>{
+      'conservative': _activePresetMode == 'conservative',
+      'standard': _activePresetMode == 'standard',
+      'aggressive': _activePresetMode == 'aggressive',
+      'recommended': _activePresetMode == 'recommended',
+    };
+
+    Widget _modeBtn(String label, PhosphorIconData icon, String mode) {
+      final active = isSelected[mode] ?? false;
+      return GestureDetector(
+        onTap: () {
+          if (mode == 'recommended') {
+            _applyRecommendations();
+          } else {
+            _applyModePreset(mode);
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: active
+                ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                : pc.surfaceC,
+            borderRadius: PfRadius.borderRadiusMd,
+            border: Border.all(
+              color: active
+                  ? theme.colorScheme.primary
+                  : pc.borderC,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              PhosphorIcon(
+                icon,
+                size: 14,
+                color: active
+                    ? theme.colorScheme.primary
+                    : pc.mutedForegroundC,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: PfTypography.caption.copyWith(
+                  color: active
+                      ? theme.colorScheme.primary
+                      : pc.mutedForegroundC,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Мобилка (<500px): Wrap в 2 ряда, десктоп: Row
+        final isMobile = constraints.maxWidth < 500;
+        final buttons = [
+          _modeBtn('Консерв.', PhosphorIconsFill.shieldCheck, 'conservative'),
+          _modeBtn('Стандарт', PhosphorIconsFill.lightning, 'standard'),
+          _modeBtn('Агрессив', PhosphorIconsFill.fire, 'aggressive'),
+          _modeBtn('Рекоменд.', PhosphorIconsFill.robot, 'recommended'),
+        ];
+
+        if (isMobile) {
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: buttons,
+          );
+        }
+        return Row(
+          children: [
+            ...buttons.expand((b) => [b, const SizedBox(width: 8)]),
+          ],
+        );
+      },
     );
   }
 
@@ -719,7 +1092,6 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                         const SizedBox(width: 8),
                         Text('Выберите пару', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
                         const Spacer(),
-                        _defaultsButton(theme),
                         _helpIcon('Выбор пары', 'Поиск среди 430+ USDT торговых пар с Binance. Выберите пару для Order Book стратегии. Можно фильтровать по названию в поле поиска.'),
                       ],
                     ),
@@ -1289,7 +1661,6 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             const SizedBox(width: 8),
             Text('Выберите стратегию', style: PfTypography.titleLg.copyWith(color: pc.foregroundC)),
             const Spacer(),
-            _defaultsButton(theme),
             _helpIcon('Стратегия', 'Алгоритм анализа стакана заявок. Каждая стратегия ищет свои паттерны:\n\n• Imbalance Scalping — ловит дисбаланс Bid/Ask\n• Spread Capture — торгует расширение/сужение спреда\n• Order Flow Momentum — реагирует на агрессивные market orders\n• ЕРШ Scalping — сверхчувствительный скальпинг, ловит даже микро-дисбалансы'),
           ],
         ),
@@ -1298,6 +1669,9 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           'Алгоритм для анализа Order Book и принятия решений',
           style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
         ),
+        const SizedBox(height: 24),
+        // ── Панель пресетов ──
+        _buildPresetBar(theme, pc),
         const SizedBox(height: 24),
         // ── Insight карточка с рекомендацией ──
         if (_loadingInsight)
@@ -1443,7 +1817,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
               divisions: param.divisions,
               label: '${val.toStringAsFixed(val < 1 ? 2 : 0)}${param.unit}',
               theme: theme, pc: pc,
-              onChange: (v) => setState(() => _strategyParams[param.key] = v),
+              onChange: (v) { _onAnyParamChanged(); setState(() => _strategyParams[param.key] = v); },
             ),
           ],
         ),
@@ -1495,7 +1869,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           divisions: 99,
           label: '\$${_balance.toStringAsFixed(0)}',
           theme: theme, pc: pc,
-          onChange: (v) => setState(() => _balance = v),
+          onChange: (v) { _onAnyParamChanged(); setState(() => _balance = v); },
         ),
         const SizedBox(height: 12),
         // Быстрые пресеты
@@ -1508,7 +1882,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
               label: Text('\$${v.toStringAsFixed(0)}'),
               selected: isActive,
               selectedColor: theme.colorScheme.primary,
-              onSelected: (_) => setState(() => _balance = v.toDouble()),
+              onSelected: (_) { _onAnyParamChanged(); setState(() => _balance = v.toDouble()); },
               labelStyle: TextStyle(
                 color: isActive ? theme.colorScheme.onPrimary : pc.foregroundC,
               ),
@@ -1555,7 +1929,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                     fontWeight: FontWeight.w600,
                   )),
                 )).toList(),
-                onChanged: (v) => setState(() => _maxOpenTrades = v!),
+                onChanged: (v) { _onAnyParamChanged(); setState(() => _maxOpenTrades = v!); },
               ),
             ],
           ),
@@ -1594,7 +1968,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           helpText: 'Автоматический выход из позиции при падении цены на N% от цены входа. Защищает от крупных убытков.',
           slider: _riskSlider(
             value: _stoploss, min: -5.0, max: 0.0, divisions: 50,
-            onChange: (v) => setState(() => _stoploss = v),
+            onChange: (v) { _onAnyParamChanged(); setState(() => _stoploss = v); },
             theme: theme, pc: pc,
           ),
           theme: theme, pc: pc,
@@ -1608,7 +1982,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           helpText: 'Стоп-лосс, который двигается за ценой. Если цена растёт, стоп подтягивается. Если цена падает — стоп остаётся на месте.',
           slider: _riskSlider(
             value: _trailingStop, min: 0.0, max: 2.0, divisions: 40,
-            onChange: (v) => setState(() => _trailingStop = v),
+            onChange: (v) { _onAnyParamChanged(); setState(() => _trailingStop = v); },
             theme: theme, pc: pc,
           ),
           theme: theme, pc: pc,
@@ -1622,7 +1996,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           helpText: 'Отступ от максимума цены, при котором активируется трейлинг-стоп. Меньше значение = раньше начнёт двигаться.',
           slider: _riskSlider(
             value: _trailingOffset, min: 0.0, max: 2.0, divisions: 40,
-            onChange: (v) => setState(() => _trailingOffset = v),
+            onChange: (v) { _onAnyParamChanged(); setState(() => _trailingOffset = v); },
             theme: theme, pc: pc,
           ),
           theme: theme, pc: pc,
@@ -1636,7 +2010,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           helpText: 'Максимальное время удержания позиции в секундах. После истечения времени позиция закрывается принудительно.',
           slider: _riskSlider(
             value: _maxHoldSeconds.toDouble(), min: 10, max: 300, divisions: 29,
-            onChange: (v) => setState(() => _maxHoldSeconds = v.round()),
+            onChange: (v) { _onAnyParamChanged(); setState(() => _maxHoldSeconds = v.round()); },
             theme: theme, pc: pc,
           ),
           theme: theme, pc: pc,
@@ -1776,7 +2150,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                 min: 1, max: 10, divisions: 9,
                 label: '$_confirmationTicks тиков',
                 theme: theme, pc: pc,
-                onChange: (v) => setState(() => _confirmationTicks = v.round()),
+                onChange: (v) { _onAnyParamChanged(); setState(() => _confirmationTicks = v.round()); },
               ),
               const SizedBox(height: 16),
               // Текстовая подсказка
@@ -1837,7 +2211,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                 min: 0.01, max: 0.5, divisions: 49,
                 label: '${(_maxSpread * 100).toStringAsFixed(1)}%',
                 theme: theme, pc: pc,
-                onChange: (v) => setState(() => _maxSpread = v),
+                onChange: (v) { _onAnyParamChanged(); setState(() => _maxSpread = v); },
               ),
             ],
           ),
@@ -1918,7 +2292,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                       min: 10, max: 600, divisions: 59,
                       label: '${_cooldownSeconds}s',
                       theme: theme, pc: pc,
-                      onChange: (v) => setState(() => _cooldownSeconds = v.round()),
+                      onChange: (v) { _onAnyParamChanged(); setState(() => _cooldownSeconds = v.round()); },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1997,7 +2371,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                       label: _autoStopHours > 0 ? '$_autoStopHours ч.' : 'Выкл',
                       destructive: true,
                       theme: theme, pc: pc,
-                      onChange: (v) => setState(() => _autoStopHours = v.round()),
+                      onChange: (v) { _onAnyParamChanged(); setState(() => _autoStopHours = v.round()); },
                     ),
                   ),
                   const SizedBox(width: 12),
