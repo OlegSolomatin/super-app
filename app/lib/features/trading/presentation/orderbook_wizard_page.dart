@@ -734,7 +734,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           _loadingInsight = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[WIZARD] _fetchPairInsight error for $symbol: $e');
       if (mounted) setState(() => _loadingInsight = false);
     }
   }
@@ -847,7 +848,18 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       if (!mounted) return;
     }
     final insight = _pairInsight;
-    if (insight == null) return;
+    if (insight == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Не удалось загрузить рекомендации. Проверьте соединение.'),
+            backgroundColor: PfColors.destructive,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
     final vol = insight.volatility24h;
     final volume = insight.volume24h;
@@ -1249,7 +1261,10 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           padding: const EdgeInsets.only(bottom: 6),
           child: PfCard(
             variant: _selectedPairSymbol == pair.symbol ? 'trading' : 'default',
-            onTap: () => setState(() => _selectedPairSymbol = pair.symbol),
+            onTap: () => setState(() {
+              _selectedPairSymbol = pair.symbol;
+              _pairInsight = null;
+            }),
             padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
             child: Row(
               children: [
