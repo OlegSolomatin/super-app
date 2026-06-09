@@ -198,7 +198,7 @@ class OrderBookConfig:
 
 
 CACHE_MAXLEN = 100
-WARMUP_THRESHOLD = 10
+WARMUP_THRESHOLD = 5
 
 
 class OrderBookCache:
