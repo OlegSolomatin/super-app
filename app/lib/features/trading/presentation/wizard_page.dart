@@ -66,6 +66,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
   // Step 4
   double _leverage = 1;
+  bool _microPreset = false;  // Активен ли микро-пресет для Supertrend
   // Hardcoded in strategy: SL=2%, TP=5%
 
   // Step 5
@@ -1129,6 +1130,7 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
               onTap: () {
                 setState(() {
                   _selectedStrategy = strategy;
+                  _microPreset = false; // сброс микро-пресета при смене стратегии
                   // Pair-scanner only works with history mode
                   if (strategy.isPairScanner && _runMode != RunMode.historical) {
                     _runMode = RunMode.historical;
@@ -1218,6 +1220,76 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
               ),
             );
           }),
+          // ── Микро-пресет (только для Supertrend) ──
+          if (_selectedStrategy?.name == 'supertrend') ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _applyMicroPreset,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _microPreset
+                      ? AppTheme.accentColor.withValues(alpha: 0.15)
+                      : theme.cardTheme.color,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _microPreset
+                        ? AppTheme.accentColor
+                        : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    PhosphorIcon(
+                      PhosphorIconsFill.rocket,
+                      size: 20,
+                      color: _microPreset
+                          ? AppTheme.accentColor
+                          : theme.textTheme.bodyMedium?.color,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '🚀 Микро-режим',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _microPreset
+                                  ? AppTheme.accentColor
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _microPreset
+                                ? '✅ \$10 · 5× · 15m · без фильтра'
+                                : 'Агрессивный старт с \$10 и плечом 5×',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontSize: 12,
+                              color: _microPreset
+                                  ? AppTheme.accentColor.withValues(alpha: 0.8)
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_microPreset)
+                      PhosphorIcon(
+                        PhosphorIconsFill.checkCircle,
+                        size: 20,
+                        color: AppTheme.accentColor,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           // ── Trend Filter ──
           Container(
@@ -1281,6 +1353,25 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           ),
       ],
     );
+  }
+
+  /// Применить микро-пресет для Supertrend: $10, 5× плечо, агрессивные настройки.
+  void _applyMicroPreset() {
+    setState(() {
+      _microPreset = !_microPreset;
+      if (_microPreset) {
+        _balance = 10;
+        _leverage = 5;
+        _maxTrade = 10;
+        _timeframe = '15m';
+        _trendFilterEnabled = false; // Микро — без фильтра, больше сигналов
+        _dateRange = DateTimeRange(
+          start: DateTime.now().subtract(const Duration(days: 7)),
+          end: DateTime.now(),
+        );
+        _duration = null;
+      }
+    });
   }
 
   // ─── Step 4: Leverage ────────────────────────────────────────────
@@ -1834,6 +1925,26 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
           _summaryRow(theme, 'Пара', _selectedPair?.displayName ?? '—'),
         const SizedBox(height: 12),
         _summaryRow(theme, 'Стратегия', _selectedStrategy?.name ?? '—'),
+        if (_microPreset) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              PhosphorIcon(
+                PhosphorIconsFill.rocket,
+                size: 16,
+                color: AppTheme.accentColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '🚀 Микро-режим: \$10 · 5× · 15m',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.accentColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 12),
         _summaryRow(theme, 'Плечо', 'x${_leverage.toInt()}'),
         if (_runMode != RunMode.real) ...[
