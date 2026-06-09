@@ -53,6 +53,15 @@ class TradingScheduler:
         self._engines: Dict[int, Any] = {}  # run_id -> OrderBookEngine (store for status)
         self._scan_progress: Dict[int, dict] = {}  # run_id -> progress info
 
+    async def startup(self) -> None:
+        """Run startup tasks: cleanup orphaned engines from DB."""
+        try:
+            cleaned = await self.cleanup_orphaned_engines()
+            if cleaned:
+                logger.info(f"[OBScheduler] Startup: cleaned {len(cleaned)} orphaned runs: {cleaned}")
+        except Exception as e:
+            logger.warning(f"[OBScheduler] Startup cleanup failed (non-fatal): {e}")
+
     def get_engine_status(self, run_id: int) -> Optional[dict]:
         """Return live status for an OB engine run, or None if not running."""
         engine = self._engines.get(run_id)

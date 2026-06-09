@@ -10,13 +10,16 @@ Provides:
 from __future__ import annotations
 
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import UUID4
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user, require_admin
@@ -68,10 +71,28 @@ async def start_orderbook_run(
     db_run = result.scalar_one()
 
     # Schedule the run (fire-and-forget via asyncio task)
-    await scheduler.start_orderbook_run(
-        run_id=db_run.id,
-        config=config.model_dump(),
-    )
+    try:
+        await scheduler.start_orderbook_run(
+            run_id=db_run.id,
+            config=config.model_dump(),
+        )
+    except Exception as e:
+        # Rollback DB status — engine was never created
+        logger.error(f"Failed to start OB run {db_run.id}: {e}")
+        stmt = (
+            update(DBOrderBookRun)
+            .where(DBOrderBookRun.id == db_run.id)
+            .values(
+                status="error",
+                error=f"Startup failed: {e}",
+            )
+        )
+        await session.execute(stmt)
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Не удалось запустить стратегию: {e}",
+        )
 
     return OrderBookRunResponse.model_validate(db_run)
 

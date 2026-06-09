@@ -26,11 +26,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Cleanup orphaned OB engines from previous runs
     try:
         from app.services.trading.scheduler import scheduler
-        cleaned = await scheduler.cleanup_orphaned_engines()
-        if cleaned:
-            print(f"🧹 Cleaned {len(cleaned)} orphaned OB engines: {[r['id'] for r in cleaned]}")
-        else:
-            print("✅ No orphaned OB engines found")
+        await scheduler.startup()
+        # startup() already logs what it did
     except Exception as e:
         print(f"⚠️  Orphaned engine cleanup failed: {e}")
 
