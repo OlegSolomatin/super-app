@@ -18,6 +18,8 @@ import 'package:app/shared/widgets/pf_skeleton.dart';
 import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/trading/data/strategy_names.dart';
+import 'package:app/features/trading/data/models/system_load.dart';
+import 'package:app/features/trading/presentation/widgets/system_load_panel.dart';
 
 class TradingPage extends StatefulWidget {
   final TradingRepository repository;
@@ -38,6 +40,10 @@ class _TradingPageState extends State<TradingPage>
   bool _loadingActive = true;
   bool _loadingHistory = true;
   Timer? _pollTimer;
+
+  // System load
+  SystemLoad? _systemLoad;
+  Timer? _loadTimer;
 
   // OrderBook runs
   List<Map<String, dynamic>> _activeObRuns = []; // только running OB
@@ -65,11 +71,14 @@ class _TradingPageState extends State<TradingPage>
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _pollActiveRuns();
     });
+    _fetchSystemLoad();
+    _loadTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchSystemLoad());
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _loadTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -226,6 +235,14 @@ class _TradingPageState extends State<TradingPage>
           ),
           const SizedBox(height: PfSpacing.lg),
 
+          // ── System Load Indicators ─────────────────────
+          if (_systemLoad != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
+              child: SystemLoadPanel(load: _systemLoad!),
+            ),
+          const SizedBox(height: PfSpacing.lg),
+
           // ── Pill Tabs ─────────────────────────────────
           Container(
             margin: const EdgeInsets.symmetric(horizontal: PfSpacing.lg),
@@ -345,6 +362,13 @@ class _TradingPageState extends State<TradingPage>
         },
       ),
     );
+  }
+
+  Future<void> _fetchSystemLoad() async {
+    try {
+      final load = await widget.repository.getSystemLoad();
+      if (mounted) setState(() => _systemLoad = load);
+    } catch (_) {}
   }
 
   /// Show Order Book mode selector bottom sheet.

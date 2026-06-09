@@ -7,6 +7,7 @@ import 'package:app/features/trading/data/models/trading_run.dart';
 import 'package:app/features/trading/data/models/trading_trade.dart';
 import 'package:app/features/trading/data/models/pair_live_data.dart';
 import 'package:app/features/trading/data/models/pair_insight.dart';
+import 'package:app/features/trading/data/models/system_load.dart';
 
 class TradingRepository {
   final Dio _dio;
@@ -44,6 +45,11 @@ class TradingRepository {
   Future<PairInsight> getPairInsight(String symbol) async {
     final response = await _dio.get('/trading/pairs/$symbol/insight');
     return PairInsight.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<SystemLoad> getSystemLoad() async {
+    final response = await _dio.get('/system/load');
+    return SystemLoad.fromJson(response.data as Map<String, dynamic>);
   }
 
   Future<({List<StrategyInfo> items, int total})> getStrategies() async {
