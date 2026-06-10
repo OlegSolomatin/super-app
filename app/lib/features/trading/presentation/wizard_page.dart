@@ -1497,7 +1497,8 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
 
   Widget _buildStep6MaxTrade(ThemeData theme) {
     final maxAllowed = _balance / _leverage;
-    if (_maxTrade > maxAllowed) {
+    // Микро-режим: Supertrend сам управляет риском через SL 1%
+    if (!_microPreset && _maxTrade > maxAllowed) {
       _maxTrade = maxAllowed;
     }
     final presets = [
