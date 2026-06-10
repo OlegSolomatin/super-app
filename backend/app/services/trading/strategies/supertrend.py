@@ -120,10 +120,16 @@ class SupertrendStrategy(AbstractStrategy):
 
     @staticmethod
     def _compute_confidence(value: float, reference: float) -> float:
-        """Compute confidence as normalised distance."""
+        """Compute confidence as % distance from reference, mapped to 0-1.
+
+        A close 0.5% from band → confidence ~0.5
+        A close 1% from band → confidence ~1.0
+        """
         if reference == 0:
             return 0.0
-        return min(1.0, abs(value - reference) / reference)
+        raw = abs(value - reference) / reference
+        # Scale: 0.5% distance = ~0.5 confidence; 1%+ = 1.0
+        return min(1.0, raw * 100.0)
 
     def _compute_supertrend(self, candles: List[Candle]) -> tuple[List[float], List[float], List[float]]:
         """Compute Supertrend values.
