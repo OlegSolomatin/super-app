@@ -787,6 +787,7 @@ async def start_run(
         take_profit_percent=config.take_profit_percent or 5.0,
         trend_filter_enabled=config.trend_filter_enabled,
         trend_filter_period=config.trend_filter_period,
+        min_confidence=config.min_confidence or 0.3,
     )
 
     # Schedule the run (fire-and-forget via async task)

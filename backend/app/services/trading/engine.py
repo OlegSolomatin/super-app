@@ -105,7 +105,7 @@ class TradingEngine:
         self.config = config
         self.run = TradingRun(config=config)
         self._locked_pairs: set[str] = set()
-        self._min_confidence: float = 0.3
+        self._min_confidence: float = config.min_confidence
 
     async def _notify_trade_closed(self, trade: Trade, exit_reason: str) -> None:
         """Fire-and-forget Telegram notification for a closed trade.

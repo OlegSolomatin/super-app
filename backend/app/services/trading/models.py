@@ -102,6 +102,7 @@ class TradingConfig:
     notification_chat_id: Optional[str] = None
     trend_filter_enabled: bool = True
     trend_filter_period: int = 200
+    min_confidence: float = 0.3  # override default 0.3 threshold (used by micro-preset)
 
 
 @dataclass

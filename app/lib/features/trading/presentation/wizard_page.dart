@@ -339,6 +339,10 @@ class _TradingWizardPageState extends State<TradingWizardPage> {
       config['trend_filter_enabled'] = _trendFilterEnabled;
       config['trend_filter_period'] = _trendFilterPeriod;
 
+      if (_microPreset) {
+        config['min_confidence'] = 0.01;
+      }
+
       await widget.repository.createRun(config);
 
       if (mounted) {

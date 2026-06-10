@@ -129,7 +129,7 @@ class SupertrendStrategy(AbstractStrategy):
             return 0.0
         raw = abs(value - reference) / reference
         # Scale: 0.5% distance = ~0.5 confidence; 1%+ = 1.0
-        return min(1.0, raw * 100.0)
+        return min(1.0, raw)
 
     def _compute_supertrend(self, candles: List[Candle]) -> tuple[List[float], List[float], List[float]]:
         """Compute Supertrend values.

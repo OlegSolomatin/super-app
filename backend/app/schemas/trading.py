@@ -78,6 +78,9 @@ class TradingConfig(BaseModel):
     trend_filter_period: int = Field(
         default=50, ge=10, le=500, description="SMA period for trend filter"
     )
+    min_confidence: Optional[float] = Field(
+        default=None, ge=0, le=1, description="Override min confidence threshold for signals (e.g. 0.01 for Supertrend micro)"
+    )
 
 
 # ---------- responses ----------
