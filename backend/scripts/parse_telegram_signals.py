@@ -35,10 +35,12 @@ async def save_signals(signals) -> list[int]:
     from app.core.database import async_session_factory
     from app.models.trading_signal import TradingSignal
 
-    new_ids = []
+    new_ids: list[int] = []
+    skipped_dedup = 0      # duplicate within 30 min window
+    skipped_duplicate = 0  # older duplicate (will save anyway? no — just count)
+
     async with async_session_factory() as session:
         for sig in signals:
-            # Check if this signal already exists (same pair + channel + recent)
             from sqlalchemy import select
 
             stmt = (
@@ -53,11 +55,10 @@ async def save_signals(signals) -> list[int]:
             result = await session.execute(stmt)
             existing = result.scalar_one_or_none()
 
-            if existing:
-                # Skip if we already have this signal recently (within 30 min)
-                if existing.created_at and (
-                    datetime.now(timezone.utc) - existing.created_at
-                ).total_seconds() < 1800:
+            if existing and existing.created_at:
+                age_sec = (datetime.now(timezone.utc) - existing.created_at).total_seconds()
+                if age_sec < 1800:
+                    skipped_dedup += 1
                     continue
 
             signal = TradingSignal(
@@ -145,7 +146,7 @@ async def main():
     logger.info("Found %d raw signals", len(signals))
 
     if not signals:
-        logger.info("No new signals found")
+        logger.info("No signals found from Telegram channels")
         return
 
     new_ids = await save_signals(signals)
@@ -163,9 +164,34 @@ async def main():
             except Exception as e:
                 logger.warning("Failed to map signal #%d: %s", sid, e)
 
+    # ── User-facing output ────────────────────────────────────────────────
+    total = len(signals)
+    skipped = total - len(new_ids)
+
     if new_ids:
-        print(f"NEW_SIGNALS:{':'.join(str(i) for i in new_ids)}")
-    logger.info("Done — saved %d new signals", len(new_ids))
+        # Fetch details for notification
+        from app.core.database import async_session_factory as asf2
+        from app.models.trading_signal import TradingSignal
+        from sqlalchemy import select
+
+        lines = [f"🔥 *Новые сигналы ({len(new_ids)})*"]
+        async with asf2() as session:
+            for sid in new_ids:
+                stmt = select(TradingSignal).where(TradingSignal.id == sid)
+                r = await session.execute(stmt)
+                s = r.scalar_one_or_none()
+                if s:
+                    lines.append(
+                        f"• #{s.id} {s.pair} @ {s.channel} — "
+                        f"range={s.price_range}, vol10m={s.vol_10m}"
+                    )
+        lines.append("")
+        lines.append(f"Пропущено (дубликаты <30м): {skipped}")
+        print("\n".join(lines))
+    else:
+        print(f"⏸ Новых сигналов нет. Найдено {total}, пропущено {skipped} (дубликаты <30 мин)")
+
+    logger.info("Done — saved %d new signals (skipped %d duplicates)", len(new_ids), skipped)
 
 
 if __name__ == "__main__":
