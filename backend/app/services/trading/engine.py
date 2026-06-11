@@ -106,6 +106,9 @@ class TradingEngine:
         self.run = TradingRun(config=config)
         self._locked_pairs: set[str] = set()
         self._min_confidence: float = config.min_confidence
+        with open('/tmp/engine_debug.log', 'a') as f:
+            f.write(f"Run: engine init strategy={config.strategy} pair={config.pair} "
+                    f"min_confidence={config.min_confidence} mode={config.mode.value}\n")
 
     async def _notify_trade_closed(self, trade: Trade, exit_reason: str) -> None:
         """Fire-and-forget Telegram notification for a closed trade.
@@ -389,7 +392,11 @@ class TradingEngine:
                         timeframe=self.config.timeframe,
                         limit=2,  # Last 2 candles
                     )
+                    with open('/tmp/engine_debug.log', 'a') as f:
+                        f.write(f"Poll: got {len(candles)} candles, latest={candles[-1].timestamp if candles else 'N/A'} close={candles[-1].close if candles else 'N/A'}\n")
                 except Exception as e:
+                    with open('/tmp/engine_debug.log', 'a') as f:
+                        f.write(f"Poll ERROR: {e}\n")
                     logger.warning("Virtual live: poll error %s, retrying in %ds", e, poll_interval)
                     await asyncio.sleep(poll_interval)
                     continue
@@ -518,9 +525,17 @@ class TradingEngine:
                 # ── Check entry ──
                 if open_trade is None:
                     signals = await strategy.analyze(window)
+                    with open('/tmp/engine_debug.log', 'a') as f:
+                        f.write(f"ANALYZE: window={len(window)} candles, got {len(signals)} signals\n")
+                        for sig in signals:
+                            f.write(f"  SIGNAL: {sig.side} type={sig.type} confidence={sig.confidence:.4f}\n")
                     for sig in signals:
                         if sig.type == "entry":
                             # Min confidence filter
+                            with open('/tmp/engine_debug.log', 'a') as f:
+                                f.write(f"Run: signal {sig.side} {self.config.pair} "
+                                        f"confidence={sig.confidence:.4f} min={self._min_confidence:.4f} "
+                                        f"time={sig.time}\n")
                             if sig.confidence < self._min_confidence:
                                 logger.info(
                                     "Virtual live: entry SKIPPED %s %s (confidence %.2f < %.2f)",

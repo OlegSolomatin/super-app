@@ -20,6 +20,7 @@ import 'package:app/features/trading/data/trading_repository.dart';
 import 'package:app/features/trading/data/strategy_names.dart';
 import 'package:app/features/trading/data/models/system_load.dart';
 import 'package:app/features/trading/presentation/widgets/system_load_panel.dart';
+import 'package:app/features/trading/presentation/trading_signals_tab.dart';
 
 class TradingPage extends StatefulWidget {
   final TradingRepository repository;
@@ -259,22 +260,22 @@ class _TradingPageState extends State<TradingPage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _PillTab(
-                    label: 'Запущенные',
+                    label: 'Запуски',
                     count: _activeRuns.length + _activeObRuns.length,
                     isActive: _tabController.index == 0,
                     onTap: () => _tabController.animateTo(0),
                   ),
                   const SizedBox(width: 2),
                   _PillTab(
-                    label: 'История по свечам',
-                    count: _historyTotal,
+                    label: 'Сигналы',
+                    count: null,
                     isActive: _tabController.index == 1,
                     onTap: () => _tabController.animateTo(1),
                   ),
                   const SizedBox(width: 2),
                   _PillTab(
-                    label: 'История по OB',
-                    count: _obRuns.length,
+                    label: 'История',
+                    count: _historyTotal + _obRuns.length,
                     isActive: _tabController.index == 2,
                     onTap: () => _tabController.animateTo(2),
                   ),
@@ -288,17 +289,42 @@ class _TradingPageState extends State<TradingPage>
           if (_tabController.index == 0)
             _buildActiveContent(scrollable: false),
           if (_tabController.index == 1)
-            _buildRunsList(
-              runs: _historyRuns,
-              loading: _loadingHistory,
-              emptyIcon: PhosphorIconsFill.clockCounterClockwise,
-              emptyText: 'История пуста',
-              emptySubtext: 'Завершённые стратегии появятся здесь',
-              repository: widget.repository,
-              scrollable: false,
-            ),
+            TradingSignalsTab(repository: widget.repository),
           if (_tabController.index == 2)
-            _buildObRunsList(scrollable: false),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: PfSpacing.lg, vertical: PfSpacing.sm),
+                  child: Text(
+                    'История по свечам',
+                    style: PfTypography.titleMd.copyWith(
+                        color: pc.mutedForegroundC),
+                  ),
+                ),
+                _buildRunsList(
+                  runs: _historyRuns,
+                  loading: _loadingHistory,
+                  emptyIcon: PhosphorIconsFill.clockCounterClockwise,
+                  emptyText: 'История пуста',
+                  emptySubtext: 'Завершённые стратегии появятся здесь',
+                  repository: widget.repository,
+                  scrollable: false,
+                ),
+                const PfDivider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: PfSpacing.lg, vertical: PfSpacing.sm),
+                  child: Text(
+                    'История по OB',
+                    style: PfTypography.titleMd.copyWith(
+                        color: pc.mutedForegroundC),
+                  ),
+                ),
+                _buildObRunsList(scrollable: false),
+              ],
+            ),
 
           // Bottom padding for scroll
           const SizedBox(height: PfSpacing.lg),
@@ -818,13 +844,13 @@ Widget _skeletonList() {
 // ─── Pill Tab ──────────────────────────────────────────────────────────
 class _PillTab extends StatelessWidget {
   final String label;
-  final int count;
+  final int? count;
   final bool isActive;
   final VoidCallback onTap;
 
   const _PillTab({
     required this.label,
-    required this.count,
+    this.count,
     required this.isActive,
     required this.onTap,
   });
@@ -855,24 +881,25 @@ class _PillTab extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? pc.foregroundC.withValues(alpha: 0.12)
-                    : pc.mutedC,
-                borderRadius: PfRadius.borderRadiusPill,
-              ),
-              child: Text(
-                '$count',
-                style: PfTypography.caption.copyWith(
+            if (count != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
                   color: isActive
-                      ? pc.foregroundC.withValues(alpha: 0.8)
-                      : pc.mutedForegroundC,
-                  fontSize: 11,
+                      ? pc.foregroundC.withValues(alpha: 0.12)
+                      : pc.mutedC,
+                  borderRadius: PfRadius.borderRadiusPill,
+                ),
+                child: Text(
+                  '$count',
+                  style: PfTypography.caption.copyWith(
+                    color: isActive
+                        ? pc.foregroundC.withValues(alpha: 0.7)
+                        : pc.mutedForegroundC,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),

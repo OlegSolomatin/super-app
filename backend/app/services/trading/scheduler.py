@@ -183,6 +183,10 @@ class TradingScheduler:
                         logger.warning("Run %d: failed to resolve notification bot: %s", run_id, e)
 
                 engine = TradingEngine(config)
+                logger.info(
+                    "Run %d: engine created strategy=%s pair=%s min_confidence=%.3f mode=%s",
+                    run_id, config.strategy, config.pair, config.min_confidence, config.mode.value,
+                )
 
                 if config.mode.value == "virtual":
                     # ── Virtual live: no historical data, poll exchange ──

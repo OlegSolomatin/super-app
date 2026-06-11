@@ -1,19 +1,25 @@
 """API endpoints for trading signals.
 
-GET  /trading/signals           — List recent signals
-GET  /trading/signals/{id}      — Signal details
-POST /trading/signals/{id}/start — Start a run from a signal
+GET  /trading/signals              — List recent signals
+GET  /trading/signals/live         — List recent signals from Redis cache
+GET  /trading/signals/live/stream  — SSE stream for real-time signals
+GET  /trading/signals/{id}         — Signal details
+POST /trading/signals/{id}/map     — Map/classify a signal
+POST /trading/signals/{id}/start   — Start a run from a signal
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import get_cache, publish, set_cache
 from app.core.database import get_session
 from app.core.dependencies import get_current_user
 from app.models.trading import OrderBookRun as DBOrderBookRun
@@ -29,6 +35,89 @@ from app.schemas.trading_signal import (
 from app.services.trading.scheduler import scheduler
 
 router = APIRouter(prefix="/trading/signals", tags=["trading"])
+
+
+# ── Live signals from Redis ───────────────────────────────────────────────
+
+
+@router.get("/live")
+async def list_live_signals(
+    limit: int = Query(20, ge=1, le=50),
+) -> list[dict]:
+    """Return the latest signals from Redis cache (signals:latest list)."""
+    from redis.asyncio import Redis
+
+    from app.core.config import settings
+
+    r = Redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+    try:
+        raw = await r.lrange("signals:latest", 0, limit - 1)
+        return [json.loads(item) for item in raw]
+    finally:
+        await r.aclose()
+
+
+@router.get("/live/stream")
+async def stream_live_signals():
+    """SSE endpoint: emits real-time signals as Server-Sent Events.
+
+    Listens to Redis pub/sub channels:
+      - channel:signal:new     — new raw signal
+      - channel:signal:mapped  — signal classified by mapper
+    """
+
+    async def event_generator() -> AsyncIterator[str]:
+        from redis.asyncio import Redis
+
+        from app.core.config import settings
+
+        r = Redis.from_url(
+            settings.REDIS_URL, encoding="utf-8", decode_responses=True
+        )
+        pubsub = r.pubsub()
+        try:
+            await pubsub.subscribe("channel:signal:new", "channel:signal:mapped")
+
+            # Send initial heartbeat
+            yield "event: connected\ndata: {}\n\n"
+
+            while True:
+                try:
+                    message = await pubsub.get_message(
+                        timeout=20.0, ignore_subscribe_messages=True
+                    )
+                    if message is None:
+                        # Keepalive ping every 20s
+                        yield ": heartbeat\n\n"
+                        continue
+
+                    channel = message["channel"]
+                    data = json.loads(message["data"])
+
+                    if channel == "channel:signal:new":
+                        yield f"event: signal:new\ndata: {json.dumps(data)}\n\n"
+                    elif channel == "channel:signal:mapped":
+                        yield f"event: signal:mapped\ndata: {json.dumps(data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+                except Exception:
+                    await asyncio.sleep(1)
+        finally:
+            await pubsub.unsubscribe()
+            await r.aclose()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── Signal list / detail ──────────────────────────────────────────────────
 
 
 @router.get("", response_model=TradingSignalListResponse)
@@ -72,6 +161,9 @@ async def get_signal(
     return TradingSignalResponse.model_validate(signal)
 
 
+# ── Map signal ────────────────────────────────────────────────────────────
+
+
 @router.post("/{signal_id}/map", response_model=TradingSignalResponse)
 async def map_signal(
     signal_id: int,
@@ -107,6 +199,9 @@ async def map_signal(
     signal = result.scalar_one()
 
     return TradingSignalResponse.model_validate(signal)
+
+
+# ── Start run from signal ─────────────────────────────────────────────────
 
 
 @router.post("/{signal_id}/start", status_code=status.HTTP_201_CREATED)

@@ -333,6 +333,25 @@ async def map_and_save_signal(
     signal.mapped_exchange_fallback = fallback
     await session.commit()
 
+    # Publish mapped signal to Redis pub/sub
+    try:
+        from app.core.cache import publish
+        await publish("channel:signal:mapped", {
+            "id": signal.id,
+            "pair": signal.pair,
+            "channel": signal.channel,
+            "exchange": signal.exchange,
+            "signal_type": classification.signal_type,
+            "signal_label": classification.signal_label,
+            "mapped_engine": classification.mapped_engine,
+            "mapped_strategy": classification.mapped_strategy,
+            "mapped_params": classification.params,
+            "fallback_exchange": fallback,
+            "confidence": classification.confidence,
+        })
+    except Exception as e:
+        logger.warning("Redis pub/sub unavailable (skip mapped publish): %s", e)
+
     logger.info(
         "Mapped signal #%d (%s %s): %s → %s/%s (fallback=%s, conf=%.2f)",
         signal_id,

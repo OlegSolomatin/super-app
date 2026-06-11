@@ -8,6 +8,7 @@ import 'package:app/features/trading/data/models/trading_trade.dart';
 import 'package:app/features/trading/data/models/pair_live_data.dart';
 import 'package:app/features/trading/data/models/pair_insight.dart';
 import 'package:app/features/trading/data/models/system_load.dart';
+import 'package:app/features/trading/data/models/trading_signal.dart';
 
 class TradingRepository {
   final Dio _dio;
@@ -193,5 +194,44 @@ class TradingRepository {
     final response = await _dio.get('/orderbook/runs/$runId/trades');
     final data = response.data as Map<String, dynamic>;
     return (data['trades'] as List).map((e) => e as Map<String, dynamic>).toList();
+  }
+
+  // ── Trading Signals ────────────────────────────────────────────────
+
+  /// Fetch the latest N signals from the live Redis cache.
+  Future<List<TradingSignal>> getSignalsLive({int limit = 20}) async {
+    final response = await _dio.get('/trading/signals/live', queryParameters: {
+      'limit': limit,
+    });
+    final data = response.data as List;
+    return data
+        .map((e) => TradingSignal.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Fetch signals from PostgreSQL (historical, with full data).
+  Future<List<TradingSignal>> getSignals({int limit = 20}) async {
+    final response = await _dio.get('/trading/signals', queryParameters: {
+      'limit': limit,
+    });
+    final data = response.data as Map<String, dynamic>;
+    final items = data['items'] as List;
+    return items
+        .map((e) => TradingSignal.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Get signal details by ID.
+  Future<TradingSignal> getSignal(int id) async {
+    final response = await _dio.get('/trading/signals/$id');
+    return TradingSignal.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// Start a run from a signal.
+  Future<Map<String, dynamic>> startSignalRun(int signalId,
+      {String mode = 'virtual'}) async {
+    final response = await _dio.post('/trading/signals/$signalId/start',
+        data: {'mode': mode});
+    return response.data as Map<String, dynamic>;
   }
 }
