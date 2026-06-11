@@ -87,3 +87,18 @@ async def close_redis() -> None:
     if _redis is not None:
         await _redis.aclose()
         _redis = None
+
+
+# ── Pub/Sub ─────────────────────────────────────────────────────────────────
+
+
+async def publish(channel: str, data: dict) -> None:
+    """Publish a message to a Redis pub/sub channel.
+
+    Args:
+        channel: Channel name (e.g. 'channel:signal:new').
+        data: Serializable dict to publish.
+    """
+    client = _get_client()
+    serialized = json.dumps(data, default=str)
+    await client.publish(channel, serialized)
