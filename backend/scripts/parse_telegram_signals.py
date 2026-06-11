@@ -150,6 +150,19 @@ async def main():
 
     new_ids = await save_signals(signals)
 
+    # Map new signals (classify + cross-exchange lookup)
+    if new_ids:
+        from app.services.signals.signal_mapper import map_and_save_signal
+        from app.core.database import async_session_factory
+
+        for sid in new_ids:
+            try:
+                async with async_session_factory() as session:
+                    await map_and_save_signal(session, sid)
+                logger.info("Mapped signal #%d", sid)
+            except Exception as e:
+                logger.warning("Failed to map signal #%d: %s", sid, e)
+
     if new_ids:
         print(f"NEW_SIGNALS:{':'.join(str(i) for i in new_ids)}")
     logger.info("Done — saved %d new signals", len(new_ids))

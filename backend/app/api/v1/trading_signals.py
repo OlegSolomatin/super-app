@@ -72,6 +72,43 @@ async def get_signal(
     return TradingSignalResponse.model_validate(signal)
 
 
+@router.post("/{signal_id}/map", response_model=TradingSignalResponse)
+async def map_signal(
+    signal_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> TradingSignalResponse:
+    """Classify a signal and update its mapped_* fields.
+
+    Runs SignalMapper.classify() + cross-exchange lookup.
+    """
+    from app.services.signals.signal_mapper import map_and_save_signal
+
+    stmt = select(TradingSignal).where(TradingSignal.id == signal_id)
+    result = await session.execute(stmt)
+    signal = result.scalar_one_or_none()
+
+    if signal is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Сигнал не найден.",
+        )
+
+    classification = await map_and_save_signal(session, signal_id)
+
+    if classification is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Ошибка классификации сигнала.",
+        )
+
+    # Re-fetch to get updated data
+    stmt = select(TradingSignal).where(TradingSignal.id == signal_id)
+    result = await session.execute(stmt)
+    signal = result.scalar_one()
+
+    return TradingSignalResponse.model_validate(signal)
+
+
 @router.post("/{signal_id}/start", status_code=status.HTTP_201_CREATED)
 async def start_signal_run(
     signal_id: int,
