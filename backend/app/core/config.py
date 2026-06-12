@@ -6,8 +6,6 @@ Reads from .env file and environment variables.
 
 from __future__ import annotations
 
-from typing import List
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,8 +34,13 @@ class Settings(BaseSettings):
     # --- App ---
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
     DEBUG: bool = True
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS_ORIGINS into a list."""
+        return [s.strip() for s in self.CORS_ORIGINS.split(",") if s.strip()]
 
     # --- API Keys ---
     DEEPSEEK_API_KEY: str = ""
