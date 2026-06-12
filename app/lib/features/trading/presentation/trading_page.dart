@@ -630,6 +630,15 @@ class _TradingPageState extends State<TradingPage>
                 run: run,
                 scanProgress: _scanProgress[run.id],
                 onTap: () => context.go('/trading/run/${run.id}'),
+                onStop: () async {
+                  try {
+                    await widget.repository.stopRun(int.parse(run.id));
+                    if (mounted) {
+                      _loadActiveRuns();
+                      _loadHistoryRuns();
+                    }
+                  } catch (_) {}
+                },
               ),
             )),
             if (hasOb) const SizedBox(height: 12),
@@ -902,11 +911,13 @@ class _TradingRunCard extends StatelessWidget {
   final TradingRun run;
   final Map<String, dynamic>? scanProgress;
   final VoidCallback onTap;
+  final VoidCallback? onStop;
 
   const _TradingRunCard({
     required this.run,
     this.scanProgress,
     required this.onTap,
+    this.onStop,
   });
 
   @override
@@ -931,7 +942,7 @@ class _TradingRunCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row: strategy name + status
+          // Row: strategy name + status (+ stop button for active)
           Row(
             children: [
               Expanded(
@@ -940,6 +951,16 @@ class _TradingRunCard extends StatelessWidget {
                   style: PfTypography.titleMd.copyWith(color: pc.foregroundC),
                 ),
               ),
+              if (isActive && onStop != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: PfButton(
+                    variant: 'outline',
+                    size: 'sm',
+                    label: '⏹',
+                    onPressed: onStop,
+                  ),
+                ),
               statusBadge,
             ],
           ),

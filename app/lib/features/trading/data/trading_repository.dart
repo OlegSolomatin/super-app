@@ -190,6 +190,11 @@ class TradingRepository {
     await _dio.post('/orderbook/stop', queryParameters: {'run_id': runId});
   }
 
+  /// Stop a standard (candle-based) trading run.
+  Future<void> stopRun(int runId) async {
+    await _dio.delete('/trading/runs/$runId');
+  }
+
   Future<List<Map<String, dynamic>>> getOrderBookRunTrades(int runId) async {
     final response = await _dio.get('/orderbook/runs/$runId/trades');
     final data = response.data as Map<String, dynamic>;

@@ -1,3 +1,5 @@
+|||||||- `feat` Кнопка остановки для свечных стратегий на вкладке «Запуски» — _TradingRunCard.stopRun(), repository.stopRun(), ⏹ рядом с бейджем статуса (1.0.1+31) | Hermes
+|||||||- `fix(P0)` OB engine: per-trade exit_after_seconds (ERSh 15с, OFM 30с, Imbalance/Spread 60с вместо хардкода 120с) + stop_per_pair подключён в _on_snapshot (LowProfit + StoplossGuard защиты заработали) — engine.py, models.py | Hermes
 ||||||- `perf` Парсер сигналов: демонизация — непрерывный цикл 30с вместо крона 3мин, крон остановлен — parse_telegram_signals.py (1.0.1+30) | Hermes
 ||||||- `perf` Ускорение классификации сигналов: кеш биржевых проверок (5мин), параллельный маппинг asyncio.gather, параллельные API-вызовы — signal_mapper.py, parse_telegram_signals.py (1.0.1+30) | Hermes
 ||||||- `feat` Уведомления: объединение raw+mapped в одно сообщение, буферизация 5с — notification_bot.py (1.0.1+30) | Hermes
