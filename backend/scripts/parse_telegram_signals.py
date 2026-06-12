@@ -162,6 +162,48 @@ async def save_signals(signals) -> list[int]:
         except Exception as e:
             logger.warning("Redis pub/sub unavailable (skip signal #%d): %s", sid, e)
 
+    # Populate signals:latest list in Redis (for live endpoint)
+    if new_ids:
+        try:
+            from redis.asyncio import Redis as AsyncRedis
+            from app.core.config import settings
+
+            r = AsyncRedis.from_url(
+                settings.REDIS_URL, encoding="utf-8", decode_responses=True
+            )
+            try:
+                for sid in new_ids:
+                    async with async_session_factory() as s:
+                        stmt = select(TradingSignal).where(TradingSignal.id == sid)
+                        result = await s.execute(stmt)
+                        db_signal = result.scalar_one_or_none()
+                        if db_signal:
+                            signal_dict = {
+                                "id": db_signal.id,
+                                "channel": db_signal.channel,
+                                "exchange": db_signal.exchange,
+                                "pair": db_signal.pair,
+                                "price_range": db_signal.price_range,
+                                "vol_60m": db_signal.vol_60m,
+                                "vol_10m": db_signal.vol_10m,
+                                "slope": db_signal.slope,
+                                "top_ratio": db_signal.top_ratio,
+                                "bot_ratio": db_signal.bot_ratio,
+                                "mapped_strategy": db_signal.mapped_strategy,
+                                "mapped_engine": db_signal.mapped_engine,
+                                "mapped_exchange_fallback": db_signal.mapped_exchange_fallback,
+                                "mapped_available_exchanges": db_signal.mapped_available_exchanges,
+                                "created_at": db_signal.created_at.isoformat() if db_signal.created_at else None,
+                            }
+                            await r.lpush("signals:latest", json.dumps(signal_dict))
+                # Keep only latest 50 in the list
+                await r.ltrim("signals:latest", 0, 49)
+                logger.info("Updated signals:latest list (%d new, trimmed to 50)", len(new_ids))
+            finally:
+                await r.aclose()
+        except Exception as e:
+            logger.warning("Failed to update signals:latest: %s", e)
+
     return new_ids
 
 

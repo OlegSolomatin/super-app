@@ -1,3 +1,5 @@
+|||||- `fix` Сигналы: Redis signals:latest теперь заполняется при парсинге — исправлен пустой Signals tab, кнопки "Запустить" появятся на сайте (1.0.1+29) | Hermes
+|||||- `perf` notification_bot: переиспользуемый httpx.AsyncClient (вместо нового на каждый sendMessage) + gc.collect() раз в час — снижение RAM с ~800MB до ~50MB (1.0.1+29) | Hermes
 |||||- `fix` TradingPage: 4-й таб "📗 OB" отдельно от истории по свечам, TabController length 3→4 — trading_page.dart (1.0.1+28) | Hermes
 |||||- `feat` Сигналы: лимит на фронте 50, в БД макс 200 с автоочисткой старых — trading_signals_tab.dart, list_signals API, parse_telegram_signals.py (1.0.1+27) | Hermes
 |||||- `fix` Bybit: добавлен прямой REST-запрос (v5→v3 fallback) при ошибке подписи 10004 — balance_checker.py (1.0.1+25) | Hermes

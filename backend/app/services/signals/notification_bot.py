@@ -11,8 +11,10 @@ Channels listened:
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import logging
+import os
 import signal as signal_module
 from typing import Optional
 
@@ -29,6 +31,7 @@ class SignalNotifier:
         self._running = False
         self._bot_token: Optional[str] = None
         self._chat_id: Optional[str] = None
+        self._http: Optional[httpx.AsyncClient] = None
 
     async def _load_bot_config(self) -> bool:
         """Load the first available Telegram bot config from DB."""
@@ -61,6 +64,13 @@ class SignalNotifier:
         if not self._bot_token or not self._chat_id:
             return False
 
+        # Lazily create shared httpx client (reused across all sends)
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                timeout=httpx.Timeout(15.0, connect=10.0),
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            )
+
         url = f"https://api.telegram.org/bot{self._bot_token}/sendMessage"
         payload = {
             "chat_id": self._chat_id,
@@ -68,18 +78,16 @@ class SignalNotifier:
             "parse_mode": parse_mode,
             "disable_web_page_preview": True,
         }
-
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(url, json=payload)
-                if resp.status_code != 200:
-                    logger.warning(
-                        "Telegram API error: %s %s",
-                        resp.status_code,
-                        resp.text,
-                    )
-                    return False
-                return True
+            resp = await self._http.post(url, json=payload)
+            if resp.status_code != 200:
+                logger.warning(
+                    "Telegram API error: %s %s",
+                    resp.status_code,
+                    resp.text,
+                )
+                return False
+            return True
         except Exception as e:
             logger.warning("Telegram send failed: %s", e)
             return False
@@ -242,10 +250,15 @@ class SignalNotifier:
                     except json.JSONDecodeError:
                         continue
 
-                    # Periodic bot config reload
+                    # Periodic bot config reload + memory cleanup
                     now = asyncio.get_event_loop().time()
                     if now - _last_reload > _reload_interval:
                         await self._load_bot_config()
+                        collected = gc.collect()
+                        logger.info(
+                            "Maintenance: bot config reloaded, gc collected %d objects",
+                            collected,
+                        )
                         _last_reload = now
 
                     if channel == "channel:signal:new":
