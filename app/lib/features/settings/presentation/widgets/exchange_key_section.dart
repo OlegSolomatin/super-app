@@ -46,8 +46,10 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
   @override
   void initState() {
     super.initState();
-    _initRepo();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initRepo();
+      if (mounted) _load();
+    });
   }
 
   Future<void> _initRepo() async {
