@@ -37,6 +37,7 @@ class ExchangeKeyResponse(BaseModel):
     label: str
     is_active: bool
     status: str
+    error_message: Optional[str] = None
     balance: Optional[float] = None
     balance_updated_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None

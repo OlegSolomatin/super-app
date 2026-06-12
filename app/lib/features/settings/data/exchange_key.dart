@@ -5,6 +5,7 @@ class ExchangeKey {
   final String label;
   final bool isActive;
   final String status; // untested, valid, invalid
+  final String? errorMessage;
   final double? balance;
   final String? balanceUpdatedAt;
   final String? lastCheckedAt;
@@ -17,6 +18,7 @@ class ExchangeKey {
     required this.label,
     required this.isActive,
     required this.status,
+    this.errorMessage,
     this.balance,
     this.balanceUpdatedAt,
     this.lastCheckedAt,
@@ -30,6 +32,7 @@ class ExchangeKey {
         label: json['label'] as String? ?? '',
         isActive: json['is_active'] as bool? ?? true,
         status: json['status'] as String? ?? 'untested',
+        errorMessage: json['error_message'] as String?,
         balance: (json['balance'] as num?)?.toDouble(),
         balanceUpdatedAt: json['balance_updated_at'] as String?,
         lastCheckedAt: json['last_checked_at'] as String?,

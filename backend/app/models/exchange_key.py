@@ -40,6 +40,7 @@ class ExchangeKey(Base):
     status = Column(
         String(20), default="untested", nullable=False
     )  # untested, valid, invalid
+    error_message = Column(Text, nullable=True)  # reason for invalid status
 
     # Balance snapshot
     balance = Column(Float, nullable=True)

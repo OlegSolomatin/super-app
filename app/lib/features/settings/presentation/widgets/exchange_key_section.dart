@@ -137,6 +137,9 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
           _testingId = null;
         });
         _success('Ключ проверен: ${updated.statusLabel}');
+        if (updated.status == 'invalid' && updated.errorMessage != null && updated.errorMessage!.isNotEmpty) {
+          _error('❌ ${updated.errorMessage}');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -322,6 +325,44 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
                 PfBadge(label: key.statusLabel, variant: key.status == 'valid' ? 'success' : key.status == 'invalid' ? 'destructive' : 'default'),
               ],
             ),
+            if (key.status == 'invalid' && key.errorMessage != null && key.errorMessage!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(width: 50), // отступ под иконку
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          PhosphorIcon(
+                            PhosphorIconsFill.warningCircle,
+                            size: 14,
+                            color: Colors.red.shade400,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              key.errorMessage!,
+                              style: PfTypography.bodySm.copyWith(
+                                color: Colors.red.shade300,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (key.balance != null) ...[
               const SizedBox(height: 8),
               Row(

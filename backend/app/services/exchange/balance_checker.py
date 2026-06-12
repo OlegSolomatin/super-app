@@ -26,7 +26,7 @@ async def check_key_validity(
     api_secret: str,
     passphrase: Optional[str] = None,
     testnet: bool = False,
-) -> tuple[bool, Optional[float]]:
+) -> tuple[bool, Optional[float], Optional[str]]:
     """Check if exchange API key is valid and fetch balance.
 
     Args:
@@ -37,13 +37,13 @@ async def check_key_validity(
         testnet: Use testnet (Binance testnet).
 
     Returns:
-        Tuple of (is_valid, balance_or_none).
+        Tuple of (is_valid, balance_or_none, error_message_or_none).
     """
     exchange = exchange.lower().strip()
 
     if exchange not in SUPPORTED_EXCHANGES:
         logger.warning("Unsupported exchange: %s", exchange)
-        return False, None
+        return False, None, f"Биржа {exchange} не поддерживается"
 
     try:
         return await _check_ccxt(exchange, api_key, api_secret, passphrase, testnet)
@@ -52,7 +52,7 @@ async def check_key_validity(
         return await _check_rest(exchange, api_key, api_secret, passphrase)
     except Exception as e:
         logger.warning("Key check failed for %s: %s", exchange, e)
-        return False, None
+        return False, None, str(e)
 
 
 async def _check_ccxt(
@@ -61,14 +61,14 @@ async def _check_ccxt(
     api_secret: str,
     passphrase: Optional[str] = None,
     testnet: bool = False,
-) -> tuple[bool, Optional[float]]:
+) -> tuple[bool, Optional[float], Optional[str]]:
     """Check key using ccxt library."""
     import ccxt.async_support as ccxt
 
     exchange_class = getattr(ccxt, exchange, None)
     if exchange_class is None:
         logger.warning("ccxt has no exchange: %s", exchange)
-        return False, None
+        return False, None, f"Биржа {exchange} не найдена в ccxt"
 
     config = {
         "apiKey": api_key,
@@ -88,10 +88,10 @@ async def _check_ccxt(
 
         # Check if key is valid (we got a response)
         is_valid = balance.get("free") is not None or balance.get("total") is not None
-        return is_valid, total_usd
+        return is_valid, total_usd, None
     except Exception as e:
         logger.info("Exchange %s key check: %s", exchange, e)
-        return False, None
+        return False, None, str(e)
     finally:
         await ex.close()
 
@@ -101,7 +101,7 @@ async def _check_rest(
     api_key: str,
     api_secret: str,
     passphrase: Optional[str] = None,
-) -> tuple[bool, Optional[float]]:
+) -> tuple[bool, Optional[float], Optional[str]]:
     """Fallback: check key via direct REST call.
 
     Simpler endpoint — just checks account info.
@@ -126,20 +126,17 @@ async def _check_rest(
             resp = await client.get(url, headers={"X-MBX-APIKEY": api_key})
 
             if resp.status_code == 200:
-                return True, None  # Key is valid
+                return True, None, None
             elif resp.status_code == 401:
-                return False, None
+                return False, None, "Неверный API ключ или секрет (HTTP 401)"
             else:
-                logger.warning(
-                    "Binance status check: HTTP %d %s",
-                    resp.status_code,
-                    resp.text,
-                )
-                return False, None
+                msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                logger.warning("Binance status check: %s", msg)
+                return False, None, msg
 
     # For other exchanges, basic account info endpoint
     logger.info("REST check not implemented for %s", exchange)
-    return False, None
+    return False, None, f"REST проверка не реализована для {exchange}"
 
 
 def _estimate_total_usd(balance: dict) -> Optional[float]:

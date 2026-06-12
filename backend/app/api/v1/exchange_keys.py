@@ -222,7 +222,7 @@ async def check_exchange_key(
     # Check validity
     from datetime import datetime, timezone
 
-    is_valid, balance = await check_key_validity(
+    is_valid, balance, error_msg = await check_key_validity(
         exchange=db_key.exchange,
         api_key=api_key,
         api_secret=api_secret,
@@ -230,6 +230,7 @@ async def check_exchange_key(
     )
 
     db_key.status = "valid" if is_valid else "invalid"
+    db_key.error_message = error_msg if not is_valid else None
     db_key.balance = balance
     db_key.balance_updated_at = datetime.now(timezone.utc)
     db_key.last_checked_at = datetime.now(timezone.utc)
