@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ExchangeKeyCreate(BaseModel):
@@ -44,6 +44,15 @@ class ExchangeKeyResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def coerce_id(cls, v: object) -> str:
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        if isinstance(v, str):
+            return v
+        raise ValueError(f"Cannot coerce {type(v).__name__} to str")
 
 
 class ExchangeKeyListResponse(BaseModel):
