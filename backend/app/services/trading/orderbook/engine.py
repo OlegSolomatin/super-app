@@ -265,6 +265,23 @@ class OrderBookEngine:
             await self.stop()
             return
 
+        # Protection: per-pair stop (LowProfit + StoplossGuard)
+        pair_stop = self.protection.stop_per_pair(snap.pair)
+        if pair_stop and pair_stop.stop:
+            logger.warning(
+                "[OBEngine] Per-pair stop for %s: %s",
+                snap.pair, pair_stop.reason,
+            )
+            self.metrics["pairlock_filtered"] += 1
+            self._record_signal(None, "filtered", f"stop_per_pair: {pair_stop.reason}")
+            if pair_stop.until:
+                self.pairlock.lock(
+                    snap.pair,
+                    until=pair_stop.until,
+                    reason=pair_stop.reason,
+                )
+            return
+
         # PairLock (единственный источник cooldown)
         if self.pairlock.is_locked(snap.pair):
             self.metrics["pairlock_filtered"] += 1
@@ -341,6 +358,7 @@ class OrderBookEngine:
             stake_amount=stake,
             amount=stake / signal.price,
             strategy=signal.strategy_name,
+            exit_after_seconds=signal.exit_after_seconds,
         )
         self.wallets.lock_stake(signal.pair, stake)
         self._trades[signal.pair] = trade
@@ -396,8 +414,8 @@ class OrderBookEngine:
                         )
                         continue
 
-                    # 2. Max hold
-                    if age >= self.config.max_hold_seconds:
+                    # 2. Max hold (use per-trade exit_after_seconds)
+                    if age >= trade.exit_after_seconds:
                         await self._close_trade(
                             trade, snap, ExitType.EMERGENCY_EXIT, "max_hold"
                         )

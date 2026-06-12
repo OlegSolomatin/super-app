@@ -125,6 +125,8 @@ class Trade:
     max_rate: Optional[float] = None
     min_rate: Optional[float] = None
 
+    exit_after_seconds: int = 120  # Custom per-strategy exit timer
+
     def close(self, exit_price: float, exit_time: datetime,
               exit_type: str, exit_reason: str = ""):
         self.exit_price = exit_price
