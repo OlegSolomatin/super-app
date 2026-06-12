@@ -199,6 +199,22 @@ class BybitExchange(AbstractExchange):
             logger.error("Bybit ticker error: %s", e)
         return {}
 
+    def _sign_request(self, timestamp: str, recv_window: str, body: str = "") -> str:
+        """Create Bybit v5 HMAC-SHA256 signature.
+
+        sign_string = timestamp + api_key + recv_window + body
+        """
+        import hashlib
+        import hmac
+
+        sign_string = timestamp + self.api_key + recv_window + body
+        signature = hmac.new(
+            self.api_secret.encode("utf-8"),
+            sign_string.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return signature
+
     async def place_order(
         self,
         pair: str,
@@ -207,21 +223,155 @@ class BybitExchange(AbstractExchange):
         order_type: str = "market",
         price: Optional[float] = None,
     ) -> Dict:
-        """Place order on Bybit (requires API keys — not implemented for public API)."""
-        logger.warning("Bybit place_order requires authenticated API — use real mode with API keys")
-        return {
-            "order_id": "",
-            "symbol": pair,
-            "side": side,
-            "quantity": quantity,
-            "price": price or 0.0,
-            "status": "REJECTED",
-            "error": "Real trading requires API keys configured",
+        """Place REAL order on Bybit via signed API v5.
+
+        Requires api_key and api_secret to be set.
+        Uses HMAC-SHA256 signature in header.
+        """
+        if not self.api_key or not self.api_secret:
+            logger.warning("Bybit place_order: no API keys configured")
+            return {"error": "No API keys configured", "status": "REJECTED"}
+
+        import json
+        import time
+
+        session = await self._get_session()
+
+        ts = str(int(time.time() * 1000))
+        recv_window = "5000"
+
+        body = {
+            "category": "spot",
+            "symbol": pair.upper(),
+            "side": side.capitalize(),
+            "orderType": order_type.capitalize(),
+            "qty": str(quantity),
+            "timeInForce": "IOC",
+        }
+        if order_type.lower() == "limit" and price is not None:
+            body["orderType"] = "Limit"
+            body["price"] = str(price)
+            body["timeInForce"] = "GTC"
+
+        body_json = json.dumps(body, separators=(",", ":"))
+        sign = self._sign_request(ts, recv_window, body_json)
+
+        headers = {
+            "X-BAPI-API-KEY": self.api_key,
+            "X-BAPI-TIMESTAMP": ts,
+            "X-BAPI-SIGN": sign,
+            "X-BAPI-RECV-WINDOW": recv_window,
+            "Content-Type": "application/json",
         }
 
+        try:
+            async with session.post(
+                f"{BYBIT_BASE_URL}/v5/order/create",
+                data=body_json,
+                headers=headers,
+            ) as resp:
+                data = await resp.json()
+                if resp.status == 200 and data.get("retCode") == 0:
+                    result = data.get("result", {})
+                    order_id = result.get("orderId", "")
+                    logger.info(
+                        "Bybit order placed: %s %s %s %s (orderId=%s)",
+                        side, quantity, pair, order_type, order_id,
+                    )
+                    # Parse fills for actual fill price/qty
+                    fills_list = result.get("fills", [])
+                    fill_qty = sum(
+                        float(f.get("qty", 0)) for f in fills_list
+                    ) if fills_list else float(quantity)
+                    fill_price = 0.0
+                    if fills_list:
+                        fill_price = sum(
+                            float(f.get("qty", 0)) * float(f.get("price", 0))
+                            for f in fills_list
+                        ) / fill_qty if fill_qty > 0 else 0.0
+                    return {
+                        "order_id": order_id,
+                        "symbol": result.get("symbol", pair.upper()),
+                        "side": side,
+                        "quantity": fill_qty,
+                        "price": fill_price or float(result.get("price", "0")),
+                        "status": result.get("orderStatus", "FILLED"),
+                        "fills": fills_list,
+                    }
+                else:
+                    logger.error(
+                        "Bybit order error %d: %s", resp.status, data
+                    )
+                    return {
+                        "error": data.get("retMsg", str(data)),
+                        "status": "REJECTED",
+                        "code": resp.status,
+                    }
+        except Exception as e:
+            logger.error("Bybit order exception: %s", e)
+            return {"error": str(e), "status": "REJECTED"}
+
     async def get_balance(self, currency: str = "") -> Dict[str, float]:
-        """Fetch wallet balance (requires API keys — not implemented for public API)."""
-        logger.warning("Bybit get_balance requires authenticated API — use real mode with API keys")
+        """Fetch REAL wallet balance from Bybit via signed API v5.
+
+        Returns dict of {currency: amount, ...}.
+        If currency is specified, only that currency is returned.
+        """
+        if not self.api_key or not self.api_secret:
+            logger.warning("Bybit get_balance: no API keys configured")
+            return {}
+
+        import time
+
+        session = await self._get_session()
+        ts = str(int(time.time() * 1000))
+        recv_window = "5000"
+        sign = self._sign_request(ts, recv_window)
+
+        headers = {
+            "X-BAPI-API-KEY": self.api_key,
+            "X-BAPI-TIMESTAMP": ts,
+            "X-BAPI-SIGN": sign,
+            "X-BAPI-RECV-WINDOW": recv_window,
+        }
+
+        params = {"accountType": "UNIFIED", "coin": currency.upper()} if currency else {"accountType": "UNIFIED"}
+
+        try:
+            async with session.get(
+                f"{BYBIT_BASE_URL}/v5/account/wallet-balance",
+                params=params,
+                headers=headers,
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("retCode") == 0:
+                        coin_list = (
+                            data.get("result", {})
+                            .get("list", [{}])[0]
+                            .get("coin", [])
+                        )
+                        result: Dict[str, float] = {}
+                        for coin in coin_list:
+                            coin_name = coin.get("coin", "")
+                            wallet_balance = float(coin.get("walletBalance", "0"))
+                            if wallet_balance > 0 or (
+                                currency and coin_name.upper() == currency.upper()
+                            ):
+                                result[coin_name.upper()] = wallet_balance
+                        logger.info(
+                            "Bybit balance: %s", result
+                        )
+                        return result
+                    logger.warning(
+                        "Bybit balance error: retCode=%s retMsg=%s",
+                        data.get("retCode"), data.get("retMsg"),
+                    )
+                else:
+                    text = await resp.text()
+                    logger.error("Bybit balance HTTP %d: %s", resp.status, text)
+        except Exception as e:
+            logger.error("Bybit balance exception: %s", e)
         return {}
 
     async def close(self) -> None:

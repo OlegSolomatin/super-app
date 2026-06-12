@@ -41,4 +41,5 @@ class TradingSignalListResponse(BaseModel):
 class TradingSignalStartRequest(BaseModel):
     """Request to start a signal-based run."""
 
+    mode: str = "virtual"  # "virtual" or "real"
     bot_id: Optional[str] = None  # Telegram bot ID for notifications

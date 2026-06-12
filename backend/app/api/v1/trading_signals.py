@@ -240,6 +240,42 @@ async def start_signal_run(
 
     params = signal.mapped_params or {}
 
+    # ── Real mode: auto-detect exchange ─────────────────────────────
+    selected_exchange: str | None = None
+    if body.mode == "real":
+        avail = signal.mapped_available_exchanges or {}
+        ready_exchanges = [ex for ex, ok in avail.items() if ok]
+        if not ready_exchanges:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нет доступных бирж с валидными API-ключами для этой пары. "
+                       "Добавьте ключи в Настройки → API → Биржи.",
+            )
+        selected_exchange = ready_exchanges[0]
+
+        # Check no other active real runs
+        from app.models.trading import TradingRun as DBTradingRun
+        from sqlalchemy import select as sa_select
+
+        active_real = await session.execute(
+            sa_select(DBTradingRun).where(
+                DBTradingRun.mode == "real",
+                DBTradingRun.status == "running",
+            ).limit(1)
+        )
+        if active_real.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Другой реальный запуск уже активен. Максимум 1 real-запуск единовременно. "
+                       "Остановите активный перед запуском нового.",
+            )
+
+    if signal.mapped_engine == "ob" and body.mode == "real":
+        # OB engine doesn't support real mode yet — warn but still proceed virtual
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("OB real mode not yet supported — launching in virtual")
+
     if signal.mapped_engine == "ob":
         # ── OrderBook Engine ──
         from app.schemas.trading import OrderBookStartRequest
@@ -302,10 +338,12 @@ async def start_signal_run(
         db_run = DBTradingRun(
             user_id=current_user.id,
             status="running",
-            mode="virtual",
+            mode=body.mode,
         )
         session.add(db_run)
         await session.flush()
+
+        real_exchange = selected_exchange or "binance"
 
         db_config = DBTradingConfig(
             run_id=db_run.id,
@@ -316,7 +354,7 @@ async def start_signal_run(
             max_trade_amount=params.get("max_trade", 5.0),
             timeframe=params.get("timeframe", "3m"),
             duration_days=params.get("duration", 1),
-            exchange="binance",
+            exchange=real_exchange,
             stop_loss_percent=params.get("stoploss", 2.0),
             take_profit_percent=params.get("takeprofit", 5.0),
             trend_filter_enabled=False,
@@ -324,8 +362,10 @@ async def start_signal_run(
         session.add(db_config)
         await session.commit()
 
+        mode_enum = TradingRunMode.real if body.mode == "real" else TradingRunMode.virtual
+
         domain_config = DomainTradingConfig(
-            mode=TradingRunMode.virtual,
+            mode=mode_enum,
             pair=signal.pair,
             strategy=signal.mapped_strategy,
             leverage=params.get("leverage", 3),
@@ -333,7 +373,7 @@ async def start_signal_run(
             max_trade_amount=params.get("max_trade", 5.0),
             timeframe=params.get("timeframe", "3m"),
             duration_days=params.get("duration", 1),
-            exchange="binance",
+            exchange=real_exchange,
             stop_loss_percent=params.get("stoploss", 2.0),
             take_profit_percent=params.get("takeprofit", 5.0),
             trend_filter_enabled=False,
