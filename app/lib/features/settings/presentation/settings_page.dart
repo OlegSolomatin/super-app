@@ -252,15 +252,16 @@ class _SettingsPageState extends State<SettingsPage> {
     final textColor = isDark ? PfColors.foreground : PfColors.foregroundLight;
     final subColor =
         isDark ? PfColors.mutedForeground : PfColors.mutedForegroundLight;
+    final bgColor = isDark ? PfColors.background : PfColors.backgroundLight;
 
     return Scaffold(
-      backgroundColor: PfColors.background,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text('Настройки', style: PfTypography.titleMd.copyWith(color: PfColors.foreground)),
-        backgroundColor: PfColors.background,
+        title: Text('Настройки', style: PfTypography.titleMd.copyWith(color: textColor)),
+        backgroundColor: bgColor,
         elevation: 0,
         leading: IconButton(
-          icon: const PhosphorIcon(PhosphorIconsFill.caretLeft, color: PfColors.foreground),
+          icon: PhosphorIcon(PhosphorIconsFill.caretLeft, color: textColor),
           onPressed: () => context.go('/'),
         ),
       ),
@@ -527,6 +528,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   Navigator.pop(ctx);
                   setState(() => _selectedSection = SettingsSection.api);
                   _loadBots();
+                },
+              ),
+              _ModalItem(
+                icon: PhosphorIconsFill.currencyCircleDollar,
+                label: 'Биржи',
+                isSelected: _selectedSection == SettingsSection.exchange,
+                isDark: isDark,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => _selectedSection = SettingsSection.exchange);
                 },
               ),
             ],
