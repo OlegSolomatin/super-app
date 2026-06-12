@@ -47,6 +47,7 @@ class TradingSignal(Base):
     mapped_engine = Column(String(20), nullable=True)  # ob / trading
     mapped_params = Column(JSONB, nullable=True)  # Recommended params JSON
     mapped_exchange_fallback = Column(String(50), nullable=True)  # Alternative exchange
+    mapped_available_exchanges = Column(JSONB, nullable=True)  # Dict of {exchange: bool}
 
     is_processed = Column(Boolean, default=False, server_default="false")
     created_at = Column(

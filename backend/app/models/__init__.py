@@ -1,5 +1,6 @@
 """SQLAlchemy models package."""
 
+from app.models.exchange_key import ExchangeKey
 from app.models.notification import Notification
 from app.models.telegram_bot import TelegramBot
 from app.models.trading import TradingConfig, TradingPairLock, TradingResult, TradingRun, TradingTrade, OrderBookRun

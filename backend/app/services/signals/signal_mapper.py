@@ -284,6 +284,67 @@ async def check_cross_exchange(pair: str, source_exchange: str) -> Optional[str]
         return None
 
 
+async def check_available_exchanges(
+    pair: str,
+    session,
+) -> dict[str, bool]:
+    """Check which user-connected exchanges have the trading pair.
+
+    Queries the exchange_keys table for active valid keys,
+    then checks pair availability on each unique exchange.
+
+    Args:
+        pair: Trading pair (WOJAKUSDT)
+        session: SQLAlchemy async session
+
+    Returns:
+        Dict of {exchange_name: bool} — whether pair is available on that exchange.
+    """
+    from sqlalchemy import select
+    from app.models.exchange_key import ExchangeKey
+
+    # Get active valid keys (unique exchanges)
+    stmt = (
+        select(ExchangeKey.exchange)
+        .where(ExchangeKey.status == "valid")
+        .distinct()
+    )
+    result = await session.execute(stmt)
+    exchanges = [row[0] for row in result]
+
+    if not exchanges:
+        logger.info("No active exchange keys found for availability check")
+        return {}
+
+    logger.info("Checking availability for %s on exchanges: %s", pair, exchanges)
+
+    results: dict[str, bool] = {}
+
+    for exchange_name in exchanges:
+        try:
+            if exchange_name == "binance":
+                from app.services.trading.exchange.binance import BinanceExchange
+                ex = BinanceExchange()
+            elif exchange_name == "bybit":
+                from app.services.trading.exchange.bybit import BybitExchange
+                ex = BybitExchange()
+            else:
+                logger.warning("No ticker check implemented for %s", exchange_name)
+                results[exchange_name] = False
+                continue
+
+            ticker = await ex.get_ticker(pair)
+            available = bool(ticker and ticker.get("volume", 0) > 0)
+            results[exchange_name] = available
+            logger.info("Exchange check %s/%s: %s", exchange_name, pair, "✅" if available else "❌")
+
+        except Exception as e:
+            logger.warning("Exchange check failed for %s/%s: %s", exchange_name, pair, e)
+            results[exchange_name] = False
+
+    return results
+
+
 async def map_and_save_signal(
     session,
     signal_id: int,
@@ -326,11 +387,15 @@ async def map_and_save_signal(
     fallback = await check_cross_exchange(signal.pair, signal.exchange)
     classification.fallback_exchange = fallback
 
+    # Check availability on user-connected exchanges
+    available_exchanges = await check_available_exchanges(signal.pair, session)
+
     # Save to DB
     signal.mapped_strategy = classification.mapped_strategy
     signal.mapped_engine = classification.mapped_engine
     signal.mapped_params = classification.params
     signal.mapped_exchange_fallback = fallback
+    signal.mapped_available_exchanges = available_exchanges
     await session.commit()
 
     # Publish mapped signal to Redis pub/sub
@@ -348,6 +413,7 @@ async def map_and_save_signal(
             "mapped_params": classification.params,
             "fallback_exchange": fallback,
             "confidence": classification.confidence,
+            "available_exchanges": available_exchanges,
         })
     except Exception as e:
         logger.warning("Redis pub/sub unavailable (skip mapped publish): %s", e)

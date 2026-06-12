@@ -45,6 +45,10 @@ async def check_key_validity(
         logger.warning("Unsupported exchange: %s", exchange)
         return False, None, f"Биржа {exchange} не поддерживается"
 
+    # Bybit: сразу прямой REST (ccxt неправильно подписывает для классических ключей)
+    if exchange == "bybit":
+        return await _check_bybit_rest(api_key, api_secret)
+
     try:
         return await _check_ccxt(exchange, api_key, api_secret, passphrase, testnet)
     except ImportError:
@@ -53,12 +57,6 @@ async def check_key_validity(
     except Exception as e:
         err_str = str(e)
         logger.warning("Key check failed for %s: %s", exchange, err_str)
-
-        # For Bybit: если ccxt дал ошибку подписи — пробуем прямой REST
-        if exchange == "bybit" and ("10004" in err_str or "signature" in err_str.lower()):
-            logger.info("Bybit ccxt signature error, trying direct REST...")
-            return await _check_rest(exchange, api_key, api_secret, passphrase)
-
         return False, None, err_str
 
 
@@ -84,10 +82,12 @@ async def _check_ccxt(
     if passphrase:
         config["password"] = passphrase
 
-    # Bybit: явно указываем spot API (некоторые ключи — classic v3, а не unified v5)
+    # Bybit: явно отключаем unified account (классические ключи не работают с v5)
     if exchange == "bybit":
         config["options"] = {
-            "defaultType": "spot",  # v3/v5 spot endpoint
+            "defaultType": "spot",
+            "enableUnifiedAccount": False,
+            "enableUnifiedMargin": False,
         }
 
     ex = exchange_class(config)
@@ -159,11 +159,12 @@ async def _check_bybit_rest(
     api_key: str,
     api_secret: str,
 ) -> tuple[bool, Optional[float], Optional[str]]:
-    """Check Bybit API key via direct REST (v5 wallet balance).
+    """Check Bybit API key via direct REST.
 
-    Bybit v5 signing:
-      payload = timestamp + api_key + recv_window + body
-      signature = HMAC-SHA256(payload, secret)
+    Strategy:
+      1. GET /v5/user/query-api — проверка валидности ключа (не требует прав)
+      2. Если ключ валиден → GET /v5/account/wallet-balance — баланс
+      3. Если v5 не работает → v3 spot
     """
     import hashlib
     import hmac
@@ -174,14 +175,16 @@ async def _check_bybit_rest(
     ts = str(int(time.time() * 1000))
     recv_window = "5000"
 
-    # GET /v5/account/wallet-balance?accountType=UNIFIED&coin=USDT
-    body = "accountType=UNIFIED&coin=USDT"
+    # ── 1. Проверка валидности ключа через /v5/user/query-api ──────────────
+    #      (без query-параметров — чистый GET, не требует прав)
+    #      payload: timestamp + api_key + recv_window (body пустой для GET без params)
+    body = ""
     payload = ts + api_key + recv_window + body
     signature = hmac.new(
         api_secret.encode(), payload.encode(), hashlib.sha256
     ).hexdigest()
 
-    url = f"https://api.bybit.com/v5/account/wallet-balance?{body}"
+    url = "https://api.bybit.com/v5/user/query-api"
     headers = {
         "X-BAPI-API-KEY": api_key,
         "X-BAPI-TIMESTAMP": ts,
@@ -190,34 +193,78 @@ async def _check_bybit_rest(
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url, headers=headers)
-        data = resp.json()
+        with open("/tmp/bybit_debug.log", "a") as f:
+            f.write(f"[BYBIT v5/query-api] ts={ts}, api_key={api_key[:8]}..., rw={recv_window}\n")
+            f.write(f"[BYBIT v5/query-api] payload='{payload}', sig={signature[:40]}...\n")
 
-        if resp.status_code == 200 and data.get("retCode") == 0:
-            # Success — extract balance
-            result = data.get("result", {})
+        resp = await client.get(url, headers=headers)
+        resp_text = resp.text[:500]
+        with open("/tmp/bybit_debug.log", "a") as f:
+            f.write(f"[BYBIT v5/query-api] HTTP {resp.status_code}, body={resp_text}\n")
+
+        try:
+            data = resp.json()
+        except Exception:
+            return False, None, f"Bybit query-api: HTTP {resp.status_code}, не-JSON: {resp.text[:300]}"
+
+        ret_code = data.get("retCode")
+        with open("/tmp/bybit_debug.log", "a") as f:
+            f.write(f"[BYBIT v5/query-api] retCode={ret_code}\n")
+        if data.get("retCode") != 0:
+            ret_code = data.get("retCode")
+            ret_msg = data.get("retMsg", "unknown")
+
+            # Если v5 не работает — пробуем v3 как запасной вариант
+            if ret_code == 10004:
+                v3_result = await _check_bybit_rest_v3(api_key, api_secret)
+                # Если v3 тоже дал discontinued — делаем понятную ошибку
+                if not v3_result[0] and "V3 API" in (v3_result[2] or ""):
+                    return False, None, "❌ Bybit V3 API отключён (с 31.08.2024). Ключ несовместим. Создайте новый V5 ключ в Bybit"
+                return v3_result
+
+            return False, None, f"Bybit {ret_code}: {ret_msg}"
+
+        # ── 2. Успех — запрашиваем баланс через /v5/account/wallet-balance ──
+        ts2 = str(int(time.time() * 1000))
+        body2 = "accountType=UNIFIED&coin=USDT"
+        payload2 = ts2 + api_key + recv_window + body2
+        sig2 = hmac.new(
+            api_secret.encode(), payload2.encode(), hashlib.sha256
+        ).hexdigest()
+
+        url2 = f"https://api.bybit.com/v5/account/wallet-balance?{body2}"
+        headers2 = {
+            "X-BAPI-API-KEY": api_key,
+            "X-BAPI-TIMESTAMP": ts2,
+            "X-BAPI-SIGN": sig2,
+            "X-BAPI-RECV-WINDOW": recv_window,
+        }
+
+        resp2 = await client.get(url2, headers=headers2)
+        try:
+            data2 = resp2.json()
+        except Exception:
+            # Key valid, but balance unavailable
+            return True, None, None
+        
+        if data2.get("retCode") == 0:
             total_equity = None
-            for account in result.get("list", []):
+            for account in data2.get("result", {}).get("list", []):
                 equity = account.get("totalEquity")
                 if equity is not None:
                     total_equity = float(equity)
                     break
-            # Also check spot balance via v5 endpoint
             return True, total_equity, None
-
-        ret_code = data.get("retCode")
-        ret_msg = data.get("retMsg", "unknown error")
-        if ret_code == 10004:
-            # Signature error — try v3 endpoint as fallback
-            return await _check_bybit_rest_v3(api_key, api_secret)
-        return False, None, f"Bybit {ret_code}: {ret_msg}"
+        
+        # Key valid, balance endpoint failed
+        return True, None, None
 
 
 async def _check_bybit_rest_v3(
     api_key: str,
     api_secret: str,
 ) -> tuple[bool, Optional[float], Optional[str]]:
-    """Fallback: check Bybit key via v3 spot API."""
+    """Fallback: check Bybit key via v3 spot API (без recv_window в подписи для v3)."""
     import hashlib
     import hmac
     import time
@@ -225,11 +272,10 @@ async def _check_bybit_rest_v3(
     import httpx
 
     ts = str(int(time.time() * 1000))
-    recv_window = "5000"
 
-    # GET /spot/v3/private/account
-    body = ""  # No query params for spot account
-    payload = ts + api_key + recv_window + body
+    # v3 spot: payload = timestamp + api_key + query_string (без recv_window)
+    body = ""  # No query params
+    payload = ts + api_key + body
     signature = hmac.new(
         api_secret.encode(), payload.encode(), hashlib.sha256
     ).hexdigest()
@@ -239,12 +285,25 @@ async def _check_bybit_rest_v3(
         "X-BAPI-API-KEY": api_key,
         "X-BAPI-TIMESTAMP": ts,
         "X-BAPI-SIGN": signature,
-        "X-BAPI-RECV-WINDOW": recv_window,
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
+        with open("/tmp/bybit_debug.log", "a") as f:
+            f.write(f"[BYBIT v3] GET {url} ts={ts} sig={signature[:40]}...\n")
         resp = await client.get(url, headers=headers)
-        data = resp.json()
+        with open("/tmp/bybit_debug.log", "a") as f:
+            f.write(f"[BYBIT v3] response: HTTP {resp.status_code}, body={resp.text[:400]}\n")
+        try:
+            data = resp.json()
+        except Exception:
+            text = resp.text[:300]
+            # Detect "v3 discontinued" message from Bybit
+            if "discontinued" in text.lower() or "v3" in text.lower():
+                return False, None, "❌ Bybit отключил V3 API с 31.08.2024. Создайте новый V5 ключ в Bybit → API Management"
+            return False, None, f"Bybit v3: HTTP {resp.status_code}, не-JSON ответ: {text}"
+
+        with open("/tmp/bybit_debug.log", "a") as f:
+            f.write(f"[BYBIT v3] parsed: retCode={data.get('retCode')}\n")
 
         if resp.status_code == 200 and data.get("retCode") == 0:
             result = data.get("result", {})

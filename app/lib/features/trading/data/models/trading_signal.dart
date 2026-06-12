@@ -17,6 +17,7 @@ class TradingSignal {
   final double? confidence;
   final String? mappedExchangeFallback;
   final Map<String, dynamic>? mappedParams;
+  final Map<String, bool>? mappedAvailableExchanges;
   final bool isProcessed;
   final DateTime? createdAt;
 
@@ -38,6 +39,7 @@ class TradingSignal {
     this.confidence,
     this.mappedExchangeFallback,
     this.mappedParams,
+    this.mappedAvailableExchanges,
     this.isProcessed = false,
     this.createdAt,
   });
@@ -62,6 +64,7 @@ class TradingSignal {
       confidence: _toDouble(json['confidence']),
       mappedExchangeFallback: json['mapped_exchange_fallback'] as String?,
       mappedParams: m is Map<String, dynamic> ? m : null,
+      mappedAvailableExchanges: _parseStringBoolMap(json['mapped_available_exchanges']),
       isProcessed: json['is_processed'] as bool? ?? false,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
@@ -74,6 +77,15 @@ class TradingSignal {
     if (v is double) return v;
     if (v is int) return v.toDouble();
     return double.tryParse(v.toString());
+  }
+
+  static Map<String, bool>? _parseStringBoolMap(dynamic v) {
+    if (v == null) return null;
+    if (v is Map<String, bool>) return v;
+    if (v is Map) {
+      return v.map((k, v) => MapEntry(k.toString(), v == true));
+    }
+    return null;
   }
 
   /// Human-readable time ago string.

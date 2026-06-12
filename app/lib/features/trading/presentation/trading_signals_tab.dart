@@ -211,6 +211,23 @@ class _SignalCard extends StatelessWidget {
                 ],
               ],
             ),
+
+            // ── Available exchanges ──
+            if (signal.mappedAvailableExchanges != null &&
+                signal.mappedAvailableExchanges!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: signal.mappedAvailableExchanges!.entries
+                    .map((e) => Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: PfBadge(
+                            label: '${e.key.toUpperCase()} ${e.value ? "✅" : "❌"}',
+                            variant: e.value ? 'success' : 'destructive',
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
             const SizedBox(height: 8),
 
             // ── Metrics row ──
