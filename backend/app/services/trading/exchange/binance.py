@@ -174,22 +174,146 @@ class BinanceExchange(AbstractExchange):
         order_type: str = "market",
         price: Optional[float] = None,
     ) -> Dict:
-        """Place order on Binance (requires API keys — not implemented for public API)."""
-        logger.warning("Binance place_order requires authenticated API — use real mode with API keys")
-        return {
-            "order_id": "",
-            "symbol": pair,
-            "side": side,
-            "quantity": quantity,
-            "price": price or 0.0,
-            "status": "REJECTED",
-            "error": "Real trading requires API keys configured",
+        """Place a REAL order on Binance via signed API.
+
+        Requires api_key and api_secret to be set.
+        Uses HMAC-SHA256 signature with timestamp + recvWindow.
+        """
+        if not self.api_key or not self.api_secret:
+            logger.warning("Binance place_order: no API keys configured")
+            return {"error": "No API keys configured", "status": "REJECTED"}
+
+        import hmac
+        import hashlib
+        import time
+
+        session = await self._get_session()
+
+        params: Dict[str, str] = {
+            "symbol": pair.upper(),
+            "side": side.upper(),
+            "type": order_type.upper(),
+            "quantity": str(quantity),
+            "timestamp": str(int(time.time() * 1000)),
+            "recvWindow": "5000",
         }
+        if order_type.lower() == "limit" and price is not None:
+            params["price"] = str(price)
+            params["timeInForce"] = "GTC"
+
+        # Generate HMAC-SHA256 signature
+        query_string = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        signature = hmac.new(
+            self.api_secret.encode("utf-8"),
+            query_string.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        params["signature"] = signature
+
+        headers = {"X-MBX-APIKEY": self.api_key}
+
+        try:
+            async with session.post(
+                f"{BINANCE_BASE_URL}/api/v3/order",
+                params=params,
+                headers=headers,
+            ) as resp:
+                data = await resp.json()
+                if resp.status == 200:
+                    logger.info(
+                        "Binance order placed: %s %s %s %s (orderId=%s)",
+                        side, quantity, pair, order_type,
+                        data.get("orderId", "?"),
+                    )
+                    return {
+                        "order_id": str(data.get("orderId", "")),
+                        "symbol": data.get("symbol", pair),
+                        "side": data.get("side", side),
+                        "quantity": float(data.get("executedQty", quantity)),
+                        "price": float(data.get("price", price or 0)),
+                        "status": data.get("status", "FILLED"),
+                        "fills": data.get("fills", []),
+                    }
+                else:
+                    logger.error(
+                        "Binance order error %d: %s", resp.status, data
+                    )
+                    return {
+                        "error": data.get("msg", str(data)),
+                        "status": "REJECTED",
+                        "code": resp.status,
+                    }
+        except Exception as e:
+            logger.error("Binance order exception: %s", e)
+            return {"error": str(e), "status": "REJECTED"}
 
     async def get_balance(self, currency: str = "") -> Dict[str, float]:
-        """Fetch account balance (requires API keys — not implemented for public API)."""
-        logger.warning("Binance get_balance requires authenticated API — use real mode with API keys")
-        return {}
+        """Fetch REAL account balance from Binance via signed API.
+
+        Requires api_key and api_secret to be set.
+        If currency is specified, returns only that asset's data.
+        """
+        if not self.api_key or not self.api_secret:
+            logger.warning("Binance get_balance: no API keys configured")
+            return {}
+
+        import hmac
+        import hashlib
+        import time
+
+        session = await self._get_session()
+
+        params = {
+            "timestamp": str(int(time.time() * 1000)),
+            "recvWindow": "5000",
+        }
+        query_string = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        signature = hmac.new(
+            self.api_secret.encode("utf-8"),
+            query_string.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        params["signature"] = signature
+
+        headers = {"X-MBX-APIKEY": self.api_key}
+
+        try:
+            async with session.get(
+                f"{BINANCE_BASE_URL}/api/v3/account",
+                params=params,
+                headers=headers,
+            ) as resp:
+                data = await resp.json()
+                if resp.status == 200:
+                    balances = {}
+                    for asset in data.get("balances", []):
+                        free = float(asset.get("free", 0))
+                        locked = float(asset.get("locked", 0))
+                        total = free + locked
+                        if total > 0:
+                            if not currency or asset["asset"].upper() == currency.upper():
+                                balances[asset["asset"]] = total
+                                balances[f"{asset['asset']}_free"] = free
+                                balances[f"{asset['asset']}_locked"] = locked
+
+                    if currency:
+                        cur = currency.upper()
+                        logger.info(
+                            "Binance balance: %s = %.2f (free=%.2f, locked=%.2f)",
+                            cur,
+                            balances.get(cur, 0),
+                            balances.get(f"{cur}_free", 0),
+                            balances.get(f"{cur}_locked", 0),
+                        )
+                    return balances
+                else:
+                    logger.error(
+                        "Binance account error %d: %s", resp.status, data
+                    )
+                    return {}
+        except Exception as e:
+            logger.error("Binance get_balance exception: %s", e)
+            return {}
 
     async def close(self) -> None:
         """Close the HTTP session."""

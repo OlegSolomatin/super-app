@@ -209,6 +209,89 @@ class TradingScheduler:
 
                 else:
                     # ── Historical/Real: load candles then run ──
+
+                    # ── Real mode validation ─────────────────────
+                    if config.mode.value == "real":
+                        if not config.exchange:
+                            raise ValueError("Real mode requires an exchange (e.g. 'binance')")
+
+                        from app.models.exchange_key import ExchangeKey
+                        from sqlalchemy import select as sa_select
+
+                        # 1. Find valid API key for this exchange
+                        key_stmt = sa_select(ExchangeKey).where(
+                            ExchangeKey.exchange == config.exchange,
+                            ExchangeKey.is_active == True,
+                        ).limit(1)
+                        key_result = await session.execute(key_stmt)
+                        exchange_key = key_result.scalar_one_or_none()
+
+                        if exchange_key is None:
+                            raise ValueError(
+                                f"No API key configured for {config.exchange}. "
+                                "Add a key in Settings → API → Биржи."
+                            )
+                        if exchange_key.status != "valid":
+                            raise ValueError(
+                                f"API key for {config.exchange} is {exchange_key.status}. "
+                                "Check and re-validate in Settings."
+                            )
+
+                        # 2. Check no other active real runs
+                        from app.models.trading import TradingRun as DBTradingRun
+
+                        active_real = await session.execute(
+                            sa_select(DBTradingRun).where(
+                                DBTradingRun.mode == "real",
+                                DBTradingRun.status == "running",
+                            ).limit(1)
+                        )
+                        if active_real.scalar_one_or_none() is not None:
+                            raise ValueError(
+                                "Another real run is already active. "
+                                "Max 1 real run at a time."
+                            )
+
+                        # 3. Check balance
+                        from app.services.exchange.balance_checker import decrypt_key
+
+                        api_key_plain = decrypt_key(exchange_key.api_key_encrypted)
+                        api_secret_plain = decrypt_key(exchange_key.api_secret_encrypted)
+
+                        exchange_name = config.exchange
+                        if exchange_name == "binance":
+                            real_exchange = BinanceExchange(
+                                api_key=api_key_plain,
+                                api_secret=api_secret_plain,
+                            )
+                        elif exchange_name == "bybit":
+                            from app.services.trading.exchange.bybit import BybitExchange
+                            real_exchange = BybitExchange(
+                                api_key=api_key_plain,
+                                api_secret=api_secret_plain,
+                            )
+                        else:
+                            raise ValueError(f"Real mode not supported for {exchange_name}")
+
+                        real_balance = await real_exchange.get_balance("USDT")
+                        usdt_balance = real_balance.get("USDT", 0) if isinstance(real_balance, dict) else 0
+
+                        needed = config.virtual_balance or config.max_trade_amount or 10
+                        if usdt_balance < needed:
+                            raise ValueError(
+                                f"Insufficient USDT balance: ${usdt_balance:.2f}, need ${needed:.2f}. "
+                                "Deposit funds or reduce trade amount."
+                            )
+
+                        logger.info(
+                            "Run %d: real mode validated — %s balance=%.2f USDT, key=%s",
+                            run_id, config.exchange, usdt_balance,
+                            exchange_key.api_key_encrypted[:12] + "...",
+                        )
+                        # Pass the authenticated exchange to engine
+                        config._real_exchange = real_exchange
+
+                    # ── Candle loading ───────────────────────────
                     now = datetime.now(timezone.utc)
                     period_start = config.period_start or (now - timedelta(days=config.duration_days or 30))
                     period_end = config.period_end or now

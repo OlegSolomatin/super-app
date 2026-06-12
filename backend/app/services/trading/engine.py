@@ -282,8 +282,22 @@ class TradingEngine:
         return await self._execute_virtual_live(exchange, start_time, duration_seconds, on_progress)
 
     async def run_real(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
-        """Run strategy with real data (same logic for now — no exchange orders)."""
-        return await self._execute(candles)
+        """Run strategy with REAL exchange orders via API keys.
+
+        Places real market orders on entry, immediately sets SL limit orders,
+        and closes positions via market orders on exit/TP/SL.
+        """
+        real_exchange = getattr(self.config, "_real_exchange", None)
+        if real_exchange is None:
+            logger.warning("run_real: no real exchange configured, falling back to virtual")
+            return await self._execute(candles)
+
+        logger.info(
+            "run_real: starting with %s, pair=%s, balance will be checked live",
+            real_exchange.name,
+            self.config.pair,
+        )
+        return await self._execute(candles, real_exchange=real_exchange)
 
     @staticmethod
     def _candle_delay(candles: List[Candle], index: int) -> float:
@@ -612,7 +626,7 @@ class TradingEngine:
         )
         return trades, metrics
 
-    async def _execute(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
+    async def _execute(self, candles: List[Candle], real_exchange: Optional["AbstractExchange"] = None) -> Tuple[List[Trade], Metrics]:
         """Core strategy execution loop.
 
         1. Select the strategy
@@ -620,6 +634,9 @@ class TradingEngine:
         3. On each candle: check entry/exit signals, SL, TP
         4. Close all positions at the end
         5. Compute metrics
+
+        If real_exchange is provided, places REAL orders via exchange API
+        instead of simulating trades with virtual balance.
         """
         if not candles:
             return [], Metrics()
@@ -641,6 +658,7 @@ class TradingEngine:
         max_drawdown = 0.0
         max_trade_amount = self.config.max_trade_amount
         leverage = self.config.leverage
+        is_real = real_exchange is not None
 
         # 3. Iterate candles
         for i in range(2, len(candles)):
@@ -723,6 +741,27 @@ class TradingEngine:
 
                     open_trade = None
 
+                    # ── Real mode: close position on exchange ──
+                    if is_real and real_exchange is not None and trades:
+                        last_trade = trades[-1]
+                        try:
+                            close_side = "SELL" if last_trade.side.upper() == "BUY" else "BUY"
+                            close_result = await real_exchange.place_order(
+                                pair=self.config.pair,
+                                side=close_side,
+                                quantity=last_trade.quantity,
+                                order_type="market",
+                            )
+                            if close_result.get("status") in ("FILLED", "NEW"):
+                                last_trade.order_id = close_result.get("order_id", last_trade.order_id or "")
+                                logger.info(
+                                    "REAL ORDER CLOSED: %s %s %.4f (reason=%s, id=%s)",
+                                    self.config.pair, close_side, last_trade.quantity,
+                                    exit_reason, last_trade.order_id,
+                                )
+                        except Exception as e:
+                            logger.error("REAL CLOSE FAILED: %s — %s", self.config.pair, e)
+
                     # Send notification (fire-and-forget)
                     await self._notify_trade_closed(trades[-1], exit_reason)
 
@@ -777,6 +816,58 @@ class TradingEngine:
                             exit_target=exit_target,
                             pair=self.config.pair,
                         )
+
+                        # ── Real mode: place actual market order + SL ──
+                        if is_real and real_exchange is not None:
+                            try:
+                                order_result = await real_exchange.place_order(
+                                    pair=self.config.pair,
+                                    side=sig.side,
+                                    quantity=quantity,
+                                    order_type="market",
+                                )
+                                if order_result.get("status") in ("FILLED", "NEW", "PARTIALLY_FILLED"):
+                                    actual_qty = float(order_result.get("quantity", quantity))
+                                    actual_price = float(order_result.get("price", sig.price))
+                                    open_trade.entry_price = actual_price if actual_price > 0 else sig.price
+                                    open_trade.quantity = actual_qty
+                                    open_trade.order_id = order_result.get("order_id", "")
+                                    logger.info(
+                                        "REAL ORDER PLACED: %s %s %.4f @ %.2f (id=%s)",
+                                        self.config.pair, sig.side, actual_qty, open_trade.entry_price,
+                                        open_trade.order_id,
+                                    )
+
+                                    # Immediately place SL limit order
+                                    sl_price = sig.price * (1 - self.config.stop_loss_percent / 100.0) if self.config.stop_loss_percent else None
+                                    if sl_price and self.config.stop_loss_percent > 0:
+                                        sl_side = "SELL" if sig.side.upper() == "BUY" else "BUY"
+                                        sl_result = await real_exchange.place_order(
+                                            pair=self.config.pair,
+                                            side=sl_side,
+                                            quantity=actual_qty,
+                                            order_type="limit",
+                                            price=round(sl_price, 8),
+                                        )
+                                        if sl_result.get("order_id"):
+                                            open_trade.sl_order_id = sl_result.get("order_id", "")
+                                            logger.info(
+                                                "SL ORDER PLACED: %s %s %.4f @ %.2f (id=%s)",
+                                                self.config.pair, sl_side, actual_qty, sl_price,
+                                                open_trade.sl_order_id,
+                                            )
+                                else:
+                                    logger.error(
+                                        "REAL ORDER REJECTED: %s — %s",
+                                        self.config.pair, order_result.get("error", "unknown"),
+                                    )
+                                    open_trade = None
+                                    break
+                            except Exception as e:
+                                logger.error("REAL ORDER FAILED: %s — %s", self.config.pair, e)
+                                open_trade = None
+                                break
+
                         break  # One entry signal at a time
 
         # 4. Close any remaining open position at last price
@@ -793,6 +884,26 @@ class TradingEngine:
             open_trade.pnl = pnl
             open_trade.exit_reason = "force_close"
             trades.append(open_trade)
+
+            # ── Real mode: close remaining position ──
+            if is_real and real_exchange is not None:
+                try:
+                    close_side = "SELL" if open_trade.side.upper() == "BUY" else "BUY"
+                    close_result = await real_exchange.place_order(
+                        pair=self.config.pair,
+                        side=close_side,
+                        quantity=open_trade.quantity,
+                        order_type="market",
+                    )
+                    if close_result.get("status") in ("FILLED", "NEW"):
+                        open_trade.order_id = close_result.get("order_id", open_trade.order_id or "")
+                        logger.info(
+                            "REAL FORCE CLOSE: %s %s %.4f (id=%s)",
+                            self.config.pair, close_side, open_trade.quantity,
+                            open_trade.order_id,
+                        )
+                except Exception as e:
+                    logger.error("REAL FORCE CLOSE FAILED: %s — %s", self.config.pair, e)
 
             # Send notification (fire-and-forget)
             await self._notify_trade_closed(open_trade, "force_close")

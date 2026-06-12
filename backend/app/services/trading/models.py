@@ -64,6 +64,10 @@ class Trade:
     pair: Optional[str] = None  # Which pair this trade belongs to
     exit_target: Optional[float] = None  # Dynamic TP price from strategy
 
+    # Real mode fields
+    order_id: Optional[str] = None  # Exchange order ID for entry
+    sl_order_id: Optional[str] = None  # Exchange order ID for SL limit
+
 
 @dataclass
 class Metrics:
@@ -103,6 +107,9 @@ class TradingConfig:
     trend_filter_enabled: bool = True
     trend_filter_period: int = 200
     min_confidence: float = 0.3  # override default 0.3 threshold (used by micro-preset)
+
+    # Real mode (set by scheduler, not via API)
+    _real_exchange: Optional["AbstractExchange"] = None
 
 
 @dataclass

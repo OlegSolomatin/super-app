@@ -1,3 +1,4 @@
+|||||- `feat` Фаза 8: Real mode — Binance signed API (place_order, get_balance), scheduler validation (ключ+баланс+лимит), engine.run_real() с реальными ордерами + SL — binance.py, scheduler.py, engine.py, models.py (1.0.1+29) | Hermes
 |||||- `fix` Сигналы: Redis signals:latest теперь заполняется при парсинге — исправлен пустой Signals tab, кнопки "Запустить" появятся на сайте (1.0.1+29) | Hermes
 |||||- `perf` notification_bot: переиспользуемый httpx.AsyncClient (вместо нового на каждый sendMessage) + gc.collect() раз в час — снижение RAM с ~800MB до ~50MB (1.0.1+29) | Hermes
 |||||- `fix` TradingPage: 4-й таб "📗 OB" отдельно от истории по свечам, TabController length 3→4 — trading_page.dart (1.0.1+28) | Hermes
