@@ -129,6 +129,7 @@ class SignalNotifier:
         mapped_engine = data.get("mapped_engine", "?")
         params = data.get("mapped_params", {}) or {}
         fallback = data.get("fallback_exchange")
+        available = data.get("available_exchanges") or {}
         confidence = data.get("confidence", 0)
 
         # Emoji by type
@@ -145,8 +146,18 @@ class SignalNotifier:
         lines = [f"{type_emoji} <b>{pair}</b> — {exchange}"]
         lines.append(f"📊 {signal_label}")
 
-        if fallback:
-            lines.append(f"✅ Доступно на <b>{fallback.upper()}</b>")
+        if available:
+            # Show which exchanges have the pair AND user has API keys
+            avail_parts = []
+            for exch, is_avail in sorted(available.items()):
+                if is_avail:
+                    avail_parts.append(f"<b>{exch.upper()}</b> ✅")
+            if avail_parts:
+                lines.append("💱 " + ", ".join(avail_parts))
+            elif fallback:
+                lines.append(f"💱 Доступно на <b>{fallback.upper()}</b>")
+        elif fallback:
+            lines.append(f"💱 Доступно на <b>{fallback.upper()}</b>")
 
         if confidence:
             bars = "▓" * int(confidence * 10) + "░" * (
