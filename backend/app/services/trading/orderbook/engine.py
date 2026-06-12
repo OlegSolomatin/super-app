@@ -18,9 +18,7 @@ from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from typing import Optional
 
-from app.services.trading.orderbook.exchange.binance_stream import (
-    BinanceOrderBookStream,
-)
+from app.services.trading.orderbook.data import DataProvider, DataProviderFactory
 from app.services.trading.orderbook.models import (
     ExitType,
     OrderBookCache,
@@ -97,7 +95,7 @@ class OrderBookEngine:
     """
 
     def __init__(self, config: OrderBookConfig,
-                 fetcher: Optional[BinanceOrderBookStream] = None):
+                 fetcher: Optional[DataProvider] = None):
         self.config = config
         self.strategy = load_strategy(config)
         self.cache = OrderBookCache()
@@ -119,8 +117,8 @@ class OrderBookEngine:
         self._signal_history: deque[dict] = deque(maxlen=100)
         self._signal_timestamps: deque[datetime] = deque()
 
-        # Внешний fetcher или создаём свой
-        self._fetcher: Optional[BinanceOrderBookStream] = fetcher
+        # Внешний DataProvider или создаём через фабрику
+        self._fetcher: Optional[DataProvider] = fetcher
 
         self.metrics = {
             "signals_generated": 0,
@@ -179,11 +177,16 @@ class OrderBookEngine:
         )
 
         if self._fetcher is None:
-            self._fetcher = BinanceOrderBookStream(
+            source_exchange = getattr(
+                self.config, "source_exchange", "binance"
+            ) or "binance"
+            self._fetcher = DataProviderFactory.create(
+                exchange=source_exchange,
                 pairs=self.config.pairs,
-                on_snapshot=self._on_snapshot,
             )
-        self._fetch_task = asyncio.create_task(self._fetcher.start())
+        self._fetch_task = asyncio.create_task(
+            self._fetcher.start(self._on_snapshot)
+        )
         self._manage_task = asyncio.create_task(self._manage_loop())
 
     async def stop(self):

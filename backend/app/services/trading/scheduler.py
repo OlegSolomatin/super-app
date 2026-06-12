@@ -678,6 +678,8 @@ class TradingScheduler:
             strategy_name=config.get("strategy", "imbalance_scalping"),
             initial_balance=config.get("initial_balance", 1000.0),
             max_open_trades=config.get("max_open_trades", 1),
+            source_exchange=config.get("source_exchange", "binance"),
+            trade_exchange=config.get("trade_exchange", "binance"),
             imbalance_threshold=config.get("imbalance_threshold", 0.65),
             surge_pct=config.get("surge_pct", 20.0),
             confirmation_ticks=config.get("confirmation_ticks", 3),

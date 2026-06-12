@@ -158,6 +158,10 @@ class OrderBookConfig:
     initial_balance: float = 1000.0
     max_open_trades: int = 1
 
+    # Data source & trade exchange (Фаза 1-2: DataProvider + Router)
+    source_exchange: str = "binance"   # откуда берём данные (binance, bybit, ...)
+    trade_exchange: str = "binance"    # где торгуем (binance, bybit, ...)
+
     # Strategy 1: Imbalance Scalping
     imbalance_threshold: float = 0.65
     surge_pct: float = 20.0
