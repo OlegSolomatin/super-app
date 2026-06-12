@@ -161,6 +161,7 @@ class OrderBookConfig:
     # Data source & trade exchange (Фаза 1-2: DataProvider + Router)
     source_exchange: str = "binance"   # откуда берём данные (binance, bybit, ...)
     trade_exchange: str = "binance"    # где торгуем (binance, bybit, ...)
+    mode: str = "virtual"              # virtual | real (Фаза 4)
 
     # Strategy 1: Imbalance Scalping
     imbalance_threshold: float = 0.65

@@ -19,6 +19,12 @@ from logging.handlers import RotatingFileHandler
 from typing import Optional
 
 from app.services.trading.orderbook.data import DataProvider, DataProviderFactory
+from app.services.trading.orderbook.execution.router import (
+    ExchangeExecutor,
+)
+from app.services.trading.orderbook.execution.price_normalizer import (
+    PriceNormalizer,
+)
 from app.services.trading.orderbook.models import (
     ExitType,
     OrderBookCache,
@@ -99,7 +105,8 @@ class OrderBookEngine:
     """
 
     def __init__(self, config: OrderBookConfig,
-                 fetcher: Optional[DataProvider] = None):
+                 fetcher: Optional[DataProvider] = None,
+                 executor: Optional[ExchangeExecutor] = None):
         self.config = config
         self.strategy = load_strategy(config)
         self.cache = OrderBookCache()
@@ -109,6 +116,13 @@ class OrderBookEngine:
         )
         self.protection = ProtectionManager(config)
         self.pairlock = PairLockManager()
+
+        # Real mode: ExchangeExecutor + PriceNormalizer
+        self._executor: Optional[ExchangeExecutor] = executor
+        self._price_normalizer = PriceNormalizer(
+            source_exchange=config.source_exchange,
+            trade_exchange=config.trade_exchange,
+        )
 
         self._trades: dict[str, Trade] = {}
         self._trade_history: list[Trade] = []
@@ -371,6 +385,39 @@ class OrderBookEngine:
         self._trades[signal.pair] = trade
         self.metrics["trades_opened"] += 1
 
+        # Real mode: отправляем рыночный ордер на вход
+        if self._executor:
+            adjusted_price = self._price_normalizer.adjust_entry_price(
+                signal.price, signal.side
+            )
+            try:
+                order_result = await self._executor.place_order(
+                    pair=signal.pair,
+                    side=signal.side,
+                    quantity=trade.amount,
+                    order_type="market",
+                    price=adjusted_price if signal.side == "SELL" else None,
+                )
+                filled_price = order_result.get("price") or order_result.get("average")
+                if filled_price:
+                    trade.entry_price = float(filled_price)
+                    trade.amount = stake / trade.entry_price
+                logger.info(
+                    f"[OBEngine] REAL ENTRY {signal.side} {signal.pair} "
+                    f"qty={trade.amount:.6f} @ ~${adjusted_price:.2f} "
+                    f"order_id={order_result.get('id', '?')}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[OBEngine] REAL ENTRY FAILED {signal.pair}: {e}. "
+                    f"Reverting to virtual."
+                )
+                # Откатываем сделку — вход не состоялся
+                self.wallets.unlock_stake(signal.pair, 0.0)
+                del self._trades[signal.pair]
+                self.metrics["trades_opened"] -= 1
+                return
+
         self.pairlock.lock(
             signal.pair,
             until=now + timedelta(seconds=self.config.min_trade_interval),
@@ -451,6 +498,9 @@ class OrderBookEngine:
         """Закрыть сделку.
 
         freqtrade: FreqtradeBot.execute_trade_exit()
+
+        Если есть _executor (real mode) — отправляет реальный ордер
+        на биржу торговли с коррекцией цены.
         """
         # Защита от double-close
         if trade.pair not in self._trades:
@@ -461,6 +511,35 @@ class OrderBookEngine:
         )
         if not exit_price:
             exit_price = snap.mid_price or trade.entry_price
+
+        # Real mode: отправляем рыночный ордер на закрытие
+        if self._executor:
+            close_side = "SELL" if trade.side == "BUY" else "BUY"
+            adjusted_price = self._price_normalizer.adjust_exit_price(
+                exit_price, trade.side
+            )
+            try:
+                order_result = await self._executor.place_order(
+                    pair=trade.pair,
+                    side=close_side,
+                    quantity=trade.amount,
+                    order_type="market",
+                )
+                # Используем реальную цену исполнения если доступна
+                filled_price = order_result.get("price") or order_result.get("average")
+                if filled_price:
+                    exit_price = float(filled_price)
+                logger.info(
+                    f"[OBEngine] REAL EXIT {close_side} {trade.pair} "
+                    f"qty={trade.amount:.6f} @ ~${adjusted_price:.2f} "
+                    f"order_id={order_result.get('id', '?')}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[OBEngine] REAL EXIT FAILED {trade.pair}: {e}. "
+                    f"Using virtual price."
+                )
+
         now = datetime.now(timezone.utc)
 
         trade.close(

@@ -3118,6 +3118,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         'auto_stop_hours': _autoStopHours,
         'source_exchange': _sourceExchange,
         'trade_exchange': _tradeExchange,
+        'mode': 'virtual',  // OB всегда virtual пока
       };
 
       // Add strategy-specific params

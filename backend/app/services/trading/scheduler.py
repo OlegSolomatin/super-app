@@ -711,7 +711,21 @@ class TradingScheduler:
             min_volume_btc=config.get("min_volume_btc", 0.5),
         )
 
-        engine = OrderBookEngine(ob_config)
+        # Real mode: создаём ExchangeExecutor
+        mode = config.get("mode", "virtual")
+        executor = None
+        if mode == "real":
+            from app.services.trading.orderbook.execution.router import (
+                ExchangeExecutor,
+            )
+            trade_exchange = config.get("trade_exchange", "binance")
+            executor = ExchangeExecutor(trade_exchange=trade_exchange)
+            logger.info(
+                f"[Scheduler] Real mode for run {run_id}: "
+                f"trading on {trade_exchange}"
+            )
+
+        engine = OrderBookEngine(ob_config, executor=executor)
         self._engines[run_id] = engine
 
         task = asyncio.create_task(self._run_orderbook_engine(run_id, engine, ob_config))

@@ -337,6 +337,9 @@ class OrderBookStartRequest(BaseModel):
     trade_exchange: str = Field(
         default="binance", description="Trade execution exchange (binance, bybit)"
     )
+    mode: str = Field(
+        default="virtual", description="Trading mode: virtual | real"
+    )
 
     # Spread Capture params
     min_spread_pct: Optional[float] = Field(default=None, ge=0.01, le=1.0)
