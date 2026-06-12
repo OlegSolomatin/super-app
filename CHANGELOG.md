@@ -1,3 +1,4 @@
+||||||||||||||5|- `feat` **Фаза 6: Backtesting для OB** — DataRecorder (запись снапшотов в JSONL), ReplayDataProvider (воспроизведение с ускорением), CLI `python3 -m ...backtest.cli --snapshots` (1.0.1+34) | Hermes
 |||||||||||||4|- `feat` **Фаза 5: RPC уведомления OB** — engine публикует entry/exit в Redis pub/sub (канал ob:trades), OrderBookConfig.run_id, _publish_notification() для Telegram-уведомлений (1.0.1+34) | Hermes
 ||||||||||||3|- `feat` **Фаза 4: OB Real Mode + PriceNormalizer** — engine.executor для real-ордеров, PriceNormalizer (cross-exchange spread + slippage), mode в OrderBookConfig/API (virtual|real), scheduler создаёт ExchangeExecutor для real (1.0.1+34) | Hermes
 ||||||||||- `feat` **Фаза 3: Iceberg Detection** — 5-я OB-стратегия (обнаружение скрытых ордеров), регистрация в engine + параметры + визард + пресеты (1.0.1+33) | Hermes
