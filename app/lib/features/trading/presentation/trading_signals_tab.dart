@@ -46,7 +46,7 @@ class _TradingSignalsTabState extends State<TradingSignalsTab> {
 
   Future<void> _loadSignals() async {
     try {
-      final signals = await widget.repository.getSignalsLive(limit: 20);
+      final signals = await widget.repository.getSignalsLive(limit: 50);
       if (mounted) {
         setState(() {
           _signals = signals;
@@ -56,7 +56,7 @@ class _TradingSignalsTabState extends State<TradingSignalsTab> {
     } catch (_) {
       // Fallback to DB signals if Redis is empty
       try {
-        final signals = await widget.repository.getSignals(limit: 20);
+        final signals = await widget.repository.getSignals(limit: 50);
         if (mounted) {
           setState(() {
             _signals = signals;

@@ -1,4 +1,5 @@
-||||- `fix` Bybit: добавлен прямой REST-запрос (v5→v3 fallback) при ошибке подписи 10004 — balance_checker.py (1.0.1+25) | Hermes
+|||||- `feat` Сигналы: лимит на фронте 50, в БД макс 200 с автоочисткой старых — trading_signals_tab.dart, list_signals API, parse_telegram_signals.py (1.0.1+27) | Hermes
+|||||- `fix` Bybit: добавлен прямой REST-запрос (v5→v3 fallback) при ошибке подписи 10004 — balance_checker.py (1.0.1+25) | Hermes
 ||||- `fix` Binance REST: починена подпись в URL (было signature=***, стало signature=...) — balance_checker.py (1.0.1+25) | Hermes
 ||||- `feat` Проверка ключей: добавлен error_message — при невалидном ключе показывает причину (неверный ключ, сеть, права доступа и т.д.) — balance_checker.py, exchange_key_section.dart (1.0.1+25) | Hermes
 ||||- `fix` Тема: первый запуск теперь использует системную тему устройства (ThemeMode.system вместо хардкода dark) — theme_provider.dart (1.0.1+24) | Hermes

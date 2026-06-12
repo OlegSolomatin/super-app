@@ -122,7 +122,7 @@ async def stream_live_signals():
 
 @router.get("", response_model=TradingSignalListResponse)
 async def list_signals(
-    limit: int = Query(20, ge=1, le=100, description="Number of signals to return"),
+    limit: int = Query(20, ge=1, le=200, description="Number of signals to return"),
     channel: Optional[str] = Query(None, description="Filter by channel"),
     session: AsyncSession = Depends(get_session),
 ) -> TradingSignalListResponse:

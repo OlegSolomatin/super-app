@@ -80,6 +80,36 @@ async def save_signals(signals) -> list[int]:
             await session.commit()
             logger.info("Saved %d new signals: %s", len(new_ids), new_ids)
 
+        # ── Cleanup: keep max 200 signals ────────────────
+        try:
+            from sqlalchemy import func as sa_func, select as sa_select, delete as sa_delete
+
+            count_stmt = sa_select(sa_func.count(TradingSignal.id))
+            count_result = await session.execute(count_stmt)
+            total = count_result.scalar() or 0
+
+            if total > 200:
+                to_delete = total - 200
+                # Find oldest N signal IDs to delete
+                oldest_stmt = (
+                    sa_select(TradingSignal.id)
+                    .order_by(TradingSignal.created_at.asc())
+                    .limit(to_delete)
+                )
+                oldest_result = await session.execute(oldest_stmt)
+                oldest_ids = [row[0] for row in oldest_result.fetchall()]
+
+                if oldest_ids:
+                    delete_stmt = sa_delete(TradingSignal).where(TradingSignal.id.in_(oldest_ids))
+                    await session.execute(delete_stmt)
+                    await session.commit()
+                    logger.info(
+                        "Cleanup: removed %d old signal(s) (total was %d, max 200): IDs %s",
+                        len(oldest_ids), total, oldest_ids,
+                    )
+        except Exception as e:
+            logger.warning("Signal cleanup failed (non-fatal): %s", e)
+
     # Cache in Redis (optional — falls back gracefully if Redis is down)
     try:
         for sig in signals:
