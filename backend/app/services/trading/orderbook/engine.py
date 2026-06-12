@@ -46,6 +46,9 @@ from app.services.trading.orderbook.strategies.order_flow_momentum import (
 from app.services.trading.orderbook.strategies.ers_scalping import (
     ErsScalpingStrategy,
 )
+from app.services.trading.orderbook.strategies.iceberg_detection import (
+    IcebergDetectionStrategy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +72,7 @@ STRATEGY_REGISTRY = {
     "spread_capture": SpreadCaptureStrategy,
     "order_flow_momentum": OrderFlowMomentumStrategy,
     "ers_scalping": ErsScalpingStrategy,
+    "iceberg_detection": IcebergDetectionStrategy,
 }
 
 MANAGE_LOOP_INTERVAL = 0.5  # проверка позиций каждые 500ms

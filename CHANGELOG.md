@@ -1,4 +1,5 @@
-||||||||||- `feat` OB визард: выбор source_exchange/trade_exchange на Step 0 — дропдауны 📡 Данные / 💱 Торговля (binance ↔ bybit) + поля в OrderBookStartRequest + API (1.0.1+32) | Hermes
+|||||||||||- `feat` **Фаза 3: Iceberg Detection** — 5-я OB-стратегия (обнаружение скрытых ордеров), регистрация в engine + параметры + визард + пресеты (1.0.1+33) | Hermes
+|||||||||- `feat` OB визард: выбор source_exchange/trade_exchange на Step 0 — дропдауны 📡 Данные / 💱 Торговля (binance ↔ bybit) + поля в OrderBookStartRequest + API (1.0.1+32) | Hermes
 ||||||||- `feat(P0)` **Фаза 1+2: DataProvider + DataExchangeRouter** — абстрактный DataProvider, BinanceDataProvider, BybitDataProvider, DataProviderFactory, OrderBookConfig.source_exchange/trade_exchange, ExchangeExecutor, DataExchangeRouter — данные и торговля теперь разделены (куда данные → где торгуем) — data/, execution/router.py, models.py, engine.py, scheduler.py | Hermes
 ||||||||- `feat` Кнопка остановки для свечных стратегий на вкладке «Запуски» — _TradingRunCard.stopRun(), repository.stopRun(), ⏹ рядом с бейджем статуса (1.0.1+31) | Hermes
 |||||||- `fix(P0)` OB engine: per-trade exit_after_seconds (ERSh 15с, OFM 30с, Imbalance/Spread 60с вместо хардкода 120с) + stop_per_pair подключён в _on_snapshot (LowProfit + StoplossGuard защиты заработали) — engine.py, models.py | Hermes

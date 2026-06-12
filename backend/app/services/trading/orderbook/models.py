@@ -202,6 +202,11 @@ class OrderBookConfig:
     ers_max_hold_seconds: int = 15
     ers_min_volume: float = 0.0
 
+    # Strategy 5: Iceberg Detection
+    iceberg_ratio: float = 3.0
+    lookback_ticks: int = 5
+    min_volume_btc: float = 0.5
+
 
 CACHE_MAXLEN = 100
 WARMUP_THRESHOLD = 5

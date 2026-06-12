@@ -77,6 +77,10 @@ const Map<String, String> configKeyRussianNames = {
   'order_size_pct': 'Размер ордера (%)',
   'min_quote_volume': 'Мин. объём котировки',
   'entry_mode': 'Режим входа',
+  // Iceberg Detection
+  'iceberg_ratio': 'Iceberg ratio',
+  'lookback_ticks': 'Lookback тики',
+  'min_volume_btc': 'Мин. объём (BTC)',
   'exit_mode': 'Режим выхода',
   'max_runtime_hours': 'Макс. время (часы)',
   'auto_stop_hours': 'Автостоп (часы)',

@@ -705,6 +705,10 @@ class TradingScheduler:
             ers_exit_on_reversion=config.get("ers_exit_on_reversion", True),
             ers_max_hold_seconds=config.get("ers_max_hold_seconds", 15),
             ers_min_volume=config.get("ers_min_volume", 0.0),
+            # Iceberg Detection params
+            iceberg_ratio=config.get("iceberg_ratio", 3.0),
+            lookback_ticks=config.get("lookback_ticks", 5),
+            min_volume_btc=config.get("min_volume_btc", 0.5),
         )
 
         engine = OrderBookEngine(ob_config)
