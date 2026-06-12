@@ -330,6 +330,14 @@ class OrderBookStartRequest(BaseModel):
         default=0, ge=0, le=72, description="Auto-stop after N hours (0 = unlimited)"
     )
 
+    # Data source & trade exchange
+    source_exchange: str = Field(
+        default="binance", description="Data source exchange (binance, bybit)"
+    )
+    trade_exchange: str = Field(
+        default="binance", description="Trade execution exchange (binance, bybit)"
+    )
+
     # Spread Capture params
     min_spread_pct: Optional[float] = Field(default=None, ge=0.01, le=1.0)
     spread_entry_threshold: Optional[float] = Field(default=None, ge=0.01, le=1.0)

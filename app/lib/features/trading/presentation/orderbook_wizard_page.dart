@@ -469,6 +469,10 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   // Активный режим пресета на шаге стратегии
   String? _activePresetMode;
 
+  // Data source & trade exchange (Фаза 1-2)
+  String _sourceExchange = 'binance';
+  String _tradeExchange = 'binance';
+
   bool _isLoading = false;
 
   // Live-статус запуска
@@ -1339,7 +1343,72 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                       'Поиск и выбор торговой пары для Order Book стратегии',
                       style: PfTypography.bodyMd.copyWith(color: pc.mutedForegroundC),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: PfSpacing.md),
+
+                    // ── Exchange selector: source + trade ──
+                    Container(
+                      padding: const EdgeInsets.all(PfSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: pc.surfaceC,
+                        borderRadius: PfRadius.borderRadiusMd,
+                        border: Border.all(color: pc.borderC),
+                      ),
+                      child: Column(
+                        children: [
+                          // Source exchange
+                          Row(
+                            children: [
+                              PhosphorIcon(PhosphorIconsFill.cloudArrowDown,
+                                size: 16, color: theme.colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Text('📡 Данные',
+                                style: PfTypography.bodySm.copyWith(
+                                  color: pc.mutedForegroundC,
+                                  fontWeight: FontWeight.w500,
+                                )),
+                              const Spacer(),
+                              _buildExchangeDropdown(
+                                value: _sourceExchange,
+                                items: const ['binance', 'bybit'],
+                                onChanged: (v) {
+                                  setState(() => _sourceExchange = v);
+                                  // If source changes and trade was same, keep in sync
+                                  // otherwise leave trade as-is
+                                },
+                                pc: pc,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          // Divider
+                          Container(height: 1, color: pc.borderC),
+                          const SizedBox(height: 6),
+                          // Trade exchange
+                          Row(
+                            children: [
+                              PhosphorIcon(PhosphorIconsFill.coins,
+                                size: 16, color: PfColors.success),
+                              const SizedBox(width: 8),
+                              Text('💱 Торговля',
+                                style: PfTypography.bodySm.copyWith(
+                                  color: pc.mutedForegroundC,
+                                  fontWeight: FontWeight.w500,
+                                )),
+                              const Spacer(),
+                              _buildExchangeDropdown(
+                                value: _tradeExchange,
+                                items: const ['binance', 'bybit'],
+                                onChanged: (v) {
+                                  setState(() => _tradeExchange = v);
+                                },
+                                pc: pc,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: PfSpacing.sm),
                     // Search field
                     Container(
                       decoration: BoxDecoration(
@@ -2972,6 +3041,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         'max_spread': _maxSpread,
         'cooldown_seconds': _cooldownSeconds,
         'auto_stop_hours': _autoStopHours,
+        'source_exchange': _sourceExchange,
+        'trade_exchange': _tradeExchange,
       };
 
       // Add strategy-specific params
@@ -3113,6 +3184,45 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildExchangeDropdown({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String> onChanged,
+    required PfColors pc,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: pc.cardC,
+        borderRadius: PfRadius.borderRadiusMd,
+        border: Border.all(color: pc.borderC),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          dropdownColor: pc.cardC,
+          style: PfTypography.bodySm.copyWith(
+            color: pc.foregroundC,
+            fontWeight: FontWeight.w500,
+          ),
+          items: items.map((e) => DropdownMenuItem(
+            value: e,
+            child: Text(e[0].toUpperCase() + e.substring(1),
+              style: PfTypography.bodySm.copyWith(
+                color: pc.foregroundC,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          )).toList(),
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
     );
   }
 }
