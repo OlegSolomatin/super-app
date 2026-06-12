@@ -162,6 +162,7 @@ class OrderBookConfig:
     source_exchange: str = "binance"   # откуда берём данные (binance, bybit, ...)
     trade_exchange: str = "binance"    # где торгуем (binance, bybit, ...)
     mode: str = "virtual"              # virtual | real (Фаза 4)
+    run_id: int = 0                    # ID запуска в БД (для RPC уведомлений)
 
     # Strategy 1: Imbalance Scalping
     imbalance_threshold: float = 0.65

@@ -1,3 +1,4 @@
+|||||||||||||4|- `feat` **Фаза 5: RPC уведомления OB** — engine публикует entry/exit в Redis pub/sub (канал ob:trades), OrderBookConfig.run_id, _publish_notification() для Telegram-уведомлений (1.0.1+34) | Hermes
 ||||||||||||3|- `feat` **Фаза 4: OB Real Mode + PriceNormalizer** — engine.executor для real-ордеров, PriceNormalizer (cross-exchange spread + slippage), mode в OrderBookConfig/API (virtual|real), scheduler создаёт ExchangeExecutor для real (1.0.1+34) | Hermes
 ||||||||||- `feat` **Фаза 3: Iceberg Detection** — 5-я OB-стратегия (обнаружение скрытых ордеров), регистрация в engine + параметры + визард + пресеты (1.0.1+33) | Hermes
 |||||||||- `feat` OB визард: выбор source_exchange/trade_exchange на Step 0 — дропдауны 📡 Данные / 💱 Торговля (binance ↔ bybit) + поля в OrderBookStartRequest + API (1.0.1+32) | Hermes

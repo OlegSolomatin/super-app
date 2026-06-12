@@ -11,12 +11,13 @@ ccxt: Client.on_message_callback — тики из WS.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
-from typing import Optional
+from typing import Any, Optional
 
 from app.services.trading.orderbook.data import DataProvider, DataProviderFactory
 from app.services.trading.orderbook.execution.router import (
@@ -137,6 +138,9 @@ class OrderBookEngine:
 
         # Внешний DataProvider или создаём через фабрику
         self._fetcher: Optional[DataProvider] = fetcher
+
+        # RPC: Redis pub/sub для уведомлений
+        self._redis: Optional[Any] = None
 
         self.metrics = {
             "signals_generated": 0,
@@ -424,6 +428,22 @@ class OrderBookEngine:
             reason=f"trade:{signal.entry_tag}",
         )
 
+        # RPC: уведомление о входе
+        await self._publish_notification({
+            "type": "entry",
+            "run_id": getattr(self.config, "run_id", 0),
+            "pair": signal.pair,
+            "side": signal.side,
+            "price": signal.price,
+            "amount": trade.amount,
+            "stake": stake,
+            "strategy": signal.strategy_name,
+            "confidence": signal.confidence,
+            "reason": signal.reason,
+            "source_exchange": self.config.source_exchange,
+            "trade_exchange": self.config.trade_exchange,
+        })
+
         # Record accepted signal
         self._record_signal(signal.entry_tag, "accepted",
                             signal.reason, price=signal.price)
@@ -433,6 +453,20 @@ class OrderBookEngine:
             f"@{signal.price:.2f} | "
             f"conf={signal.confidence:.2f} | {signal.reason}"
         )
+
+    async def _publish_notification(self, data: dict):
+        """Опубликовать уведомление в Redis pub/sub.
+
+        RPC: freqtrade-style уведомления о сделках.
+        Канал: ob:trades
+        """
+        try:
+            if self._redis is None:
+                from redis.asyncio import Redis
+                self._redis = Redis(host="localhost", port=6379, db=0)
+            await self._redis.publish("ob:trades", json.dumps(data, default=str))
+        except Exception as e:
+            logger.debug(f"[OBEngine] RPC publish failed: {e}")
 
     async def _manage_loop(self):
         """Фоновый цикл: каждые 500ms проверяет открытые позиции.
@@ -552,6 +586,23 @@ class OrderBookEngine:
 
         self.metrics["trades_closed"] += 1
         self.metrics["total_pnl"] += trade.pnl
+
+        # RPC: уведомление о выходе
+        await self._publish_notification({
+            "type": "exit",
+            "run_id": getattr(self.config, "run_id", 0),
+            "pair": trade.pair,
+            "side": trade.side,
+            "entry_price": trade.entry_price,
+            "exit_price": exit_price,
+            "pnl": trade.pnl,
+            "pnl_pct": trade.pnl_pct,
+            "reason": reason,
+            "exit_type": exit_type.value,
+            "strategy": trade.strategy,
+            "source_exchange": self.config.source_exchange,
+            "trade_exchange": self.config.trade_exchange,
+        })
         if trade.pnl > 0:
             self.metrics["win_count"] += 1
         else:
