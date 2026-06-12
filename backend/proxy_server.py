@@ -170,6 +170,26 @@ class SuperAppProxy(BaseHTTPRequestHandler):
                          "Content-Type, Authorization")
         self.end_headers()
 
+    def do_DELETE(self):
+        if self._redirect_http_to_https():
+            return
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/") or parsed.path.startswith("/auth/"):
+            self._proxy(parsed, API_BASE)
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def do_PUT(self):
+        if self._redirect_http_to_https():
+            return
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/") or parsed.path.startswith("/auth/"):
+            self._proxy(parsed, API_BASE)
+            return
+        self.send_response(404)
+        self.end_headers()
+
     def _proxy(self, parsed, api_base):
         url = f"{api_base}{parsed.path}"
         if parsed.query:
