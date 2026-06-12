@@ -21,7 +21,7 @@
 | 5 | 🟡 | API ключи бирж (бэкенд) | ~40 мин |
 | 6 | 🟢 | API ключи (фронтенд — секция API в SettingsPage) | ~35 мин |
 | 7 | 🟢 | Stair Climber Strategy | ~45 мин |
-| 8 | 🟢 | Real mode | ~30 мин |
+| 8 | 🔴 | Real mode | ~30 мин |
 | | | **Итого:** | **~4.5 ч** |
 
 ---
@@ -347,7 +347,7 @@ StrategyInfo(
 
 ---
 
-## 🟢 Фаза 8 — Real mode
+## 🔴 Фаза 8 — Real mode
 
 **Файлы:**
 - `backend/app/services/trading/engine.py` — `run_real()` доработка
