@@ -1,4 +1,5 @@
-|||- `feat` Фаза 1: Telegram парсеры @brushscreener/@stairscreener — модель TradingSignal, парсер, API /trading/signals, cronjob раз в 3 мин, Redis pub/sub (graceful fallback). 2026-06-11 | Hermes
+||||- `fix` Тема: первый запуск теперь использует системную тему устройства (ThemeMode.system вместо хардкода dark) — theme_provider.dart (1.0.1+24) | Hermes
+||||- `feat` Фаза 1: Telegram парсеры @brushscreener/@stairscreener — модель TradingSignal, парсер, API /trading/signals, cronjob раз в 3 мин, Redis pub/sub (graceful fallback). 2026-06-11 | Hermes
 |||- `feat` OB визард: кнопка «Рекоменд.» динамически рассчитывает параметры стратегии под рынок — vol, volume, spread влияют на balance, confirmationTicks, stoploss, спред-параметры, пороги дисбаланса, flow threshold и др. (1.0.1+14) | Hermes
 |||- `fix` OB визард: кнопка «Рекоменд.» больше не переключает стратегию — подбирает только режим для текущей выбранной стратегии (1.0.1+13) | Hermes
 |||- `fix` OB визард: debugPrint ошибки _fetchPairInsight + сброс _pairInsight при смене пары + SnackBar при ошибке загрузки рекомендаций (1.0.1+12) | Hermes

@@ -11,7 +11,7 @@ enum ThemeModePreference {
 
 class ThemeProvider extends ChangeNotifier {
   final SharedPreferences _prefs;
-  ThemeModePreference _mode = ThemeModePreference.dark;
+  ThemeModePreference _mode = ThemeModePreference.system;
   SectionTheme _section = SectionTheme.home;
 
   ThemeProvider(this._prefs) {
@@ -21,7 +21,15 @@ class ThemeProvider extends ChangeNotifier {
   ThemeModePreference get mode => _mode;
   SectionTheme get section => _section;
 
-  ThemeData get theme => AppTheme.of(mode: themeMode, section: _section);
+  ThemeData get theme {
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    return AppTheme.of(
+      mode: themeMode,
+      section: _section,
+      platformBrightness: brightness,
+    );
+  }
 
   ThemeMode get themeMode => switch (_mode) {
         ThemeModePreference.dark => ThemeMode.dark,
@@ -48,7 +56,7 @@ class ThemeProvider extends ChangeNotifier {
     if (saved != null) {
       _mode = ThemeModePreference.values.firstWhere(
         (e) => e.name == saved,
-        orElse: () => ThemeModePreference.dark,
+        orElse: () => ThemeModePreference.system,
       );
     }
   }
