@@ -146,18 +146,16 @@ class SignalNotifier:
         lines = [f"{type_emoji} <b>{pair}</b> — {exchange}"]
         lines.append(f"📊 {signal_label}")
 
+        # Show only exchanges where user has VALID API keys AND pair is available
         if available:
-            # Show which exchanges have the pair AND user has API keys
             avail_parts = []
             for exch, is_avail in sorted(available.items()):
                 if is_avail:
                     avail_parts.append(f"<b>{exch.upper()}</b> ✅")
+                else:
+                    avail_parts.append(f"<b>{exch.upper()}</b> ❌")
             if avail_parts:
                 lines.append("💱 " + ", ".join(avail_parts))
-            elif fallback:
-                lines.append(f"💱 Доступно на <b>{fallback.upper()}</b>")
-        elif fallback:
-            lines.append(f"💱 Доступно на <b>{fallback.upper()}</b>")
 
         if confidence:
             bars = "▓" * int(confidence * 10) + "░" * (
