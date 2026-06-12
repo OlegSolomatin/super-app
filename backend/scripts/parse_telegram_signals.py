@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Cronjob: parse Telegram screener channels and persist signals.
+"""Telegram screener signal parser.
 
-Runs every 3 minutes. Fetches @brushscreener and @stairscreener,
-parses signals, saves to DB and caches in Redis.
+Usage:
+  python3 scripts/parse_telegram_signals.py          # one-shot (cron mode)
+  python3 scripts/parse_telegram_signals.py --daemon # continuous loop
+
+One-shot: fetches channels, saves + classifies signals, exits.
+Daemon:   loops every 30s, same logic, never exits.
 """
 
 from __future__ import annotations
@@ -269,5 +273,44 @@ async def main():
     logger.info("Done — saved %d new signals (skipped %d duplicates)", len(new_ids), skipped)
 
 
+async def run_daemon():
+    """Run parser in continuous loop — polls every 30 seconds."""
+    import signal as signal_module
+
+    logger.info("Signal parser daemon starting (poll interval=30s)...")
+
+    running = True
+
+    def _stop():
+        nonlocal running
+        running = False
+        logger.info("Shutting down signal parser daemon...")
+
+    for sig in (signal_module.SIGINT, signal_module.SIGTERM):
+        try:
+            loop = asyncio.get_event_loop()
+            loop.add_signal_handler(sig, _stop)
+        except (NotImplementedError, ValueError):
+            pass
+
+    while running:
+        try:
+            await main()
+        except Exception as e:
+            logger.error("Parser cycle failed: %s", e, exc_info=True)
+        # Sleep 30s between cycles (check running flag every second)
+        for _ in range(30):
+            if not running:
+                break
+            await asyncio.sleep(1)
+
+    logger.info("Signal parser daemon stopped")
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+
+    if "--daemon" in sys.argv:
+        asyncio.run(run_daemon())
+    else:
+        asyncio.run(main())
