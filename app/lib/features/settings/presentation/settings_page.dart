@@ -16,9 +16,10 @@ import 'package:app/features/auth/data/auth_repository.dart';
 import 'package:app/features/home/data/user_repository.dart';
 import 'package:app/models/user.dart';
 import 'package:app/features/settings/data/settings_repository.dart';
+import 'package:app/features/settings/presentation/widgets/exchange_key_section.dart';
 
 /// Settings sections available in the sidebar.
-enum SettingsSection { profile, api }
+enum SettingsSection { profile, api, exchange }
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -293,8 +294,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                         const BoxConstraints(maxWidth: 520),
                                     child: _selectedSection == SettingsSection.api
                                         ? _buildApiForm(textColor, subColor, isDark)
-                                        : _buildProfileForm(
-                                            textColor, subColor, isDark),
+                                        : _selectedSection == SettingsSection.exchange
+                                            ? const ExchangeKeySection()
+                                            : _buildProfileForm(
+                                                textColor, subColor, isDark),
                                   ),
                                 ),
                               ),
@@ -377,6 +380,15 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: () {
               setState(() => _selectedSection = SettingsSection.api);
               _loadBots();
+            },
+          ),
+          _SidebarItem(
+            icon: PhosphorIconsFill.currencyCircleDollar,
+            label: 'Биржи',
+            isSelected: _selectedSection == SettingsSection.exchange,
+            isDark: isDark,
+            onTap: () {
+              setState(() => _selectedSection = SettingsSection.exchange);
             },
           ),
           const Spacer(),
@@ -530,6 +542,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return 'Профиль';
       case SettingsSection.api:
         return 'API';
+      case SettingsSection.exchange:
+        return 'Биржи';
     }
   }
 
