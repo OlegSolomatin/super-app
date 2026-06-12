@@ -48,6 +48,7 @@ from app.services.trading.strategies import (
     VWAPStrategy,
     OBVStrategy,
     RSIMACombo,
+    StairClimberStrategy,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ STRATEGY_REGISTRY: dict[str, type[AbstractStrategy]] = {
     "vwap": VWAPStrategy,
     "obv": OBVStrategy,
     "rsi_ma_combo": RSIMACombo,
+    "stair_climber": StairClimberStrategy,
 }
 
 # Strategies that scan ALL available pairs instead of one

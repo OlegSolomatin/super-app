@@ -23,6 +23,7 @@ from app.services.trading.strategies.donchian import Donchian
 from app.services.trading.strategies.vwap import VWAPStrategy
 from app.services.trading.strategies.obv import OBVStrategy
 from app.services.trading.strategies.rsi_ma_combo import RSIMACombo
+from app.services.trading.strategies.stair_climber import StairClimberStrategy
 
 __all__ = [
     "AllPairsHammerStrategy",
@@ -48,4 +49,5 @@ __all__ = [
     "VWAPStrategy",
     "OBVStrategy",
     "RSIMACombo",
+    "StairClimberStrategy",
 ]
