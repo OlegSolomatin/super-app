@@ -56,7 +56,7 @@ class _TradingPageState extends State<TradingPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) setState(() {});
     });
@@ -279,6 +279,13 @@ class _TradingPageState extends State<TradingPage>
                     isActive: _tabController.index == 2,
                     onTap: () => _tabController.animateTo(2),
                   ),
+                  const SizedBox(width: 2),
+                  _PillTab(
+                    label: '📗 OB',
+                    count: _obRuns.length,
+                    isActive: _tabController.index == 3,
+                    onTap: () => _tabController.animateTo(3),
+                  ),
                 ],
               ),
             ),
@@ -291,37 +298,20 @@ class _TradingPageState extends State<TradingPage>
           if (_tabController.index == 1)
             TradingSignalsTab(repository: widget.repository),
           if (_tabController.index == 2)
+            _buildRunsList(
+              runs: _historyRuns,
+              loading: _loadingHistory,
+              emptyIcon: PhosphorIconsFill.clockCounterClockwise,
+              emptyText: 'История пуста',
+              emptySubtext: 'Завершённые стратегии появятся здесь',
+              repository: widget.repository,
+              scrollable: false,
+            ),
+          if (_tabController.index == 3)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: PfSpacing.lg, vertical: PfSpacing.sm),
-                  child: Text(
-                    'История по свечам',
-                    style: PfTypography.titleMd.copyWith(
-                        color: pc.mutedForegroundC),
-                  ),
-                ),
-                _buildRunsList(
-                  runs: _historyRuns,
-                  loading: _loadingHistory,
-                  emptyIcon: PhosphorIconsFill.clockCounterClockwise,
-                  emptyText: 'История пуста',
-                  emptySubtext: 'Завершённые стратегии появятся здесь',
-                  repository: widget.repository,
-                  scrollable: false,
-                ),
-                const PfDivider(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: PfSpacing.lg, vertical: PfSpacing.sm),
-                  child: Text(
-                    'История по OB',
-                    style: PfTypography.titleMd.copyWith(
-                        color: pc.mutedForegroundC),
-                  ),
-                ),
+                const SizedBox(height: PfSpacing.sm),
                 _buildObRunsList(scrollable: false),
               ],
             ),

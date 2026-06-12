@@ -1,3 +1,4 @@
+|||||- `fix` TradingPage: 4-й таб "📗 OB" отдельно от истории по свечам, TabController length 3→4 — trading_page.dart (1.0.1+28) | Hermes
 |||||- `feat` Сигналы: лимит на фронте 50, в БД макс 200 с автоочисткой старых — trading_signals_tab.dart, list_signals API, parse_telegram_signals.py (1.0.1+27) | Hermes
 |||||- `fix` Bybit: добавлен прямой REST-запрос (v5→v3 fallback) при ошибке подписи 10004 — balance_checker.py (1.0.1+25) | Hermes
 ||||- `fix` Binance REST: починена подпись в URL (было signature=***, стало signature=...) — balance_checker.py (1.0.1+25) | Hermes
