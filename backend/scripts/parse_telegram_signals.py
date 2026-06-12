@@ -223,18 +223,21 @@ async def main():
 
     new_ids = await save_signals(signals)
 
-    # Map new signals (classify + cross-exchange lookup)
+    # Map new signals (classify + cross-exchange lookup) — IN PARALLEL
     if new_ids:
         from app.services.signals.signal_mapper import map_and_save_signal
         from app.core.database import async_session_factory
 
-        for sid in new_ids:
+        async def _map_one(sid: int):
             try:
                 async with async_session_factory() as session:
                     await map_and_save_signal(session, sid)
                 logger.info("Mapped signal #%d", sid)
             except Exception as e:
                 logger.warning("Failed to map signal #%d: %s", sid, e)
+
+        await asyncio.gather(*[_map_one(sid) for sid in new_ids])
+        logger.info("All %d signal(s) mapped in parallel", len(new_ids))
 
     # ── User-facing output ────────────────────────────────────────────────
     total = len(signals)

@@ -7,11 +7,34 @@ and performs cross-exchange lookup for signals from unsupported exchanges.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# ── In-memory exchange check cache ────────────────────────────────────────
+_EXCHANGE_CACHE: dict[str, tuple[bool, float]] = {}  # key -> (result, timestamp)
+_EXCHANGE_CACHE_TTL = 300  # 5 minutes
+
+
+def _cache_get(key: str) -> Optional[bool]:
+    """Get cached exchange check result if still fresh."""
+    entry = _EXCHANGE_CACHE.get(key)
+    if entry is None:
+        return None
+    result, ts = entry
+    if time.monotonic() - ts > _EXCHANGE_CACHE_TTL:
+        del _EXCHANGE_CACHE[key]
+        return None
+    return result
+
+
+def _cache_set(key: str, result: bool):
+    """Cache an exchange check result with current timestamp."""
+    _EXCHANGE_CACHE[key] = (result, time.monotonic())
 
 
 @dataclass
@@ -267,13 +290,21 @@ async def check_cross_exchange(pair: str, source_exchange: str) -> Optional[str]
     if "binance" in source_exchange.lower():
         return None
 
+    cache_key = f"cross:{pair.upper()}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return "binance" if cached else None
+
     try:
         from app.services.trading.exchange.binance import BinanceExchange
 
         exchange = BinanceExchange()
         ticker = await exchange.get_ticker(pair)
 
-        if ticker and ticker.get("volume", 0) > 0:
+        available = bool(ticker and ticker.get("volume", 0) > 0)
+        _cache_set(cache_key, available)
+
+        if available:
             logger.info("Cross-exchange: %s found on Binance (vol=$%.0f)", pair, ticker["volume"])
             return "binance"
 
@@ -291,7 +322,7 @@ async def check_available_exchanges(
     """Check which user-connected exchanges have the trading pair.
 
     Queries the exchange_keys table for active valid keys,
-    then checks pair availability on each unique exchange.
+    then checks pair availability on each unique exchange in parallel.
 
     Args:
         pair: Trading pair (WOJAKUSDT)
@@ -318,9 +349,13 @@ async def check_available_exchanges(
 
     logger.info("Checking availability for %s on exchanges: %s", pair, exchanges)
 
-    results: dict[str, bool] = {}
+    async def _check_one(exchange_name: str) -> tuple[str, bool]:
+        """Check a single exchange — cached if recently checked."""
+        cache_key = f"avail:{exchange_name}:{pair.upper()}"
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return exchange_name, cached
 
-    for exchange_name in exchanges:
         try:
             if exchange_name == "binance":
                 from app.services.trading.exchange.binance import BinanceExchange
@@ -330,19 +365,24 @@ async def check_available_exchanges(
                 ex = BybitExchange()
             else:
                 logger.warning("No ticker check implemented for %s", exchange_name)
-                results[exchange_name] = False
-                continue
+                return exchange_name, False
 
             ticker = await ex.get_ticker(pair)
             available = bool(ticker and ticker.get("volume", 0) > 0)
-            results[exchange_name] = available
+            _cache_set(cache_key, available)
             logger.info("Exchange check %s/%s: %s", exchange_name, pair, "✅" if available else "❌")
+            return exchange_name, available
 
         except Exception as e:
             logger.warning("Exchange check failed for %s/%s: %s", exchange_name, pair, e)
-            results[exchange_name] = False
+            return exchange_name, False
 
-    return results
+    # Run all exchange checks in PARALLEL
+    results_list = await asyncio.gather(
+        *[_check_one(ex) for ex in exchanges],
+        return_exceptions=False,
+    )
+    return dict(results_list)
 
 
 async def map_and_save_signal(
@@ -383,12 +423,17 @@ async def map_and_save_signal(
         bot_ratio=signal.bot_ratio,
     )
 
-    # Cross-exchange lookup
-    fallback = await check_cross_exchange(signal.pair, signal.exchange)
+    # Cross-exchange + available exchanges — IN PARALLEL
+    fallback_task = asyncio.create_task(
+        check_cross_exchange(signal.pair, signal.exchange)
+    )
+    avail_task = asyncio.create_task(
+        check_available_exchanges(signal.pair, session)
+    )
+    fallback, available_exchanges = await asyncio.gather(
+        fallback_task, avail_task
+    )
     classification.fallback_exchange = fallback
-
-    # Check availability on user-connected exchanges
-    available_exchanges = await check_available_exchanges(signal.pair, session)
 
     # Save to DB
     signal.mapped_strategy = classification.mapped_strategy
