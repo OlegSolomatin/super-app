@@ -22,9 +22,9 @@ fi
 
 CHANGELOG="$(cd "$(dirname "$0")/.." && pwd)/CHANGELOG.md"
 DATE=$(date '+%Y-%m-%d %H:%M')
-ENTRY="- \`$TYPE\` $MESSAGE | $AUTHOR"
+ENTRY="||||||- \`$TYPE\` $MESSAGE | $AUTHOR"
 
-# Добавляем запись после заголовков
-sed -i "/^---$/a $ENTRY" "$CHANGELOG" 2>/dev/null || echo "$ENTRY" >> "$CHANGELOG"
+# Prepend entry at the top of the file
+sed -i "1i $ENTRY" "$CHANGELOG"
 
 echo "✅ Записано в CHANGELOG: $TYPE — $MESSAGE"

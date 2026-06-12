@@ -1,4 +1,9 @@
-|||||- `feat` Фаза 8: Real mode — Binance signed API (place_order, get_balance), scheduler validation (ключ+баланс+лимит), engine.run_real() с реальными ордерами + SL — binance.py, scheduler.py, engine.py, models.py (1.0.1+29) | Hermes
+||||||- `perf` Парсер сигналов: демонизация — непрерывный цикл 30с вместо крона 3мин, крон остановлен — parse_telegram_signals.py (1.0.1+30) | Hermes
+||||||- `perf` Ускорение классификации сигналов: кеш биржевых проверок (5мин), параллельный маппинг asyncio.gather, параллельные API-вызовы — signal_mapper.py, parse_telegram_signals.py (1.0.1+30) | Hermes
+||||||- `feat` Уведомления: объединение raw+mapped в одно сообщение, буферизация 5с — notification_bot.py (1.0.1+30) | Hermes
+||||||- `feat` One-click real trading из сигналов: Bybit signed API (place_order, get_balance), авто-определение биржи с ✅, подтверждение перед запуском — bybit.py, trading_signals.py, trading_signals_tab.dart (1.0.1+30) | Hermes
+||||||- `fix` Уведомления: убран fallback-показ Binance при отсутствии ключей — notification_bot.py (1.0.1+29) | Hermes
+||||||- `feat` Фаза 8: Real mode — Binance signed API (place_order, get_balance), scheduler validation (ключ+баланс+лимит), engine.run_real() с реальными ордерами + SL — binance.py, scheduler.py, engine.py, models.py (1.0.1+29) | Hermes
 |||||- `fix` Сигналы: Redis signals:latest теперь заполняется при парсинге — исправлен пустой Signals tab, кнопки "Запустить" появятся на сайте (1.0.1+29) | Hermes
 |||||- `perf` notification_bot: переиспользуемый httpx.AsyncClient (вместо нового на каждый sendMessage) + gc.collect() раз в час — снижение RAM с ~800MB до ~50MB (1.0.1+29) | Hermes
 |||||- `fix` TradingPage: 4-й таб "📗 OB" отдельно от истории по свечам, TabController length 3→4 — trading_page.dart (1.0.1+28) | Hermes
