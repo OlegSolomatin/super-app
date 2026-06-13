@@ -139,7 +139,8 @@ class AdaptiveScaffold extends StatelessWidget {
                 _buildTopBar(context, section),
                 // Body
                 Expanded(
-                  child: Center(
+                  child: Align(
+                    alignment: Alignment.topCenter,
                     child: Container(
                       constraints: const BoxConstraints(maxWidth: 1200),
                       child: body,

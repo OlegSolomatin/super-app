@@ -1,3 +1,4 @@
+||||||- `fix` PC layout top-alignment + OB badge update | Hermes
 ||||||- `fix` Step 0 scroll fix + pre-fetch insight on pair select | Hermes
 ||||||- `fix` OB Wizard exchange-aware pairs + recommendations | Hermes
 ||||||- `fix` OB Wizard: биржезависимые пары + рекомендации | Hermes

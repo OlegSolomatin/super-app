@@ -227,7 +227,7 @@ class _TradingPageState extends State<TradingPage>
                     icon: PhosphorIconsFill.stack,
                     title: 'Стратегии\nпо ордербуку',
                     subtitle: 'Дисбаланс стакана,\nспред, моментум',
-                    badge: 'Скоро',
+                    badge: '5 стратегий',
                     badgeColor: Color(0xFF5E6AD2),
                     onTap: () => _showOrderBookModeSelector(),
                   ),
