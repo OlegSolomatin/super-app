@@ -1,3 +1,4 @@
+||||||- `fix` Signal classification: update signals:latest Redis list after mapping so frontend has strategy/engine/exchanges | Hermes
 ||||||- `fix` OB engine: fix analyze() crash - Optional fields as None from model_dump() override dataclass defaults | Hermes
 ||||||- `fix` Wizard: dynamic exchange in status + remove step content top gap | Hermes
 ||||||- `fix` PC layout top-alignment + OB badge update | Hermes

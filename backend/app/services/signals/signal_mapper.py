@@ -8,6 +8,7 @@ and performs cross-exchange lookup for signals from unsupported exchanges.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -462,6 +463,48 @@ async def map_and_save_signal(
         })
     except Exception as e:
         logger.warning("Redis pub/sub unavailable (skip mapped publish): %s", e)
+
+    # Update signals:latest in Redis so frontend has classification
+    try:
+        import json
+        from redis.asyncio import Redis as AsyncRedis
+        from app.core.config import settings
+        r = AsyncRedis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+        try:
+            updated_entry = {
+                "id": signal.id,
+                "channel": signal.channel,
+                "exchange": signal.exchange,
+                "pair": signal.pair,
+                "price_range": signal.price_range,
+                "vol_60m": signal.vol_60m,
+                "vol_10m": signal.vol_10m,
+                "slope": signal.slope,
+                "top_ratio": signal.top_ratio,
+                "bot_ratio": signal.bot_ratio,
+                "mapped_strategy": signal.mapped_strategy,
+                "mapped_engine": signal.mapped_engine,
+                "mapped_exchange_fallback": signal.mapped_exchange_fallback,
+                "mapped_available_exchanges": signal.mapped_available_exchanges,
+                "is_processed": signal.is_processed if hasattr(signal, 'is_processed') else False,
+                "created_at": signal.created_at.isoformat() if signal.created_at else None,
+            }
+            signal_json = json.dumps(updated_entry)
+            # Remove old entry with same ID, then push fresh one to front
+            old_entries = await r.lrange("signals:latest", 0, -1)
+            for entry in old_entries:
+                try:
+                    parsed = json.loads(entry)
+                    if parsed.get("id") == signal.id:
+                        await r.lrem("signals:latest", 1, entry)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            await r.lpush("signals:latest", signal_json)
+            await r.ltrim("signals:latest", 0, 49)
+        finally:
+            await r.aclose()
+    except Exception as e:
+        logger.warning("Failed to update signals:latest in Redis: %s", e)
 
     logger.info(
         "Mapped signal #%d (%s %s): %s → %s/%s (fallback=%s, conf=%.2f)",
