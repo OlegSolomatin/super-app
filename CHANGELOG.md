@@ -1,3 +1,4 @@
+||||||- `feat` OB history cards redesigned to match candle card style (strategy header, divider, info row with Pair/trades/PnL, status badge) | Hermes
 ||||||- `fix` Signal classification: update signals:latest Redis list after mapping so frontend has strategy/engine/exchanges | Hermes
 ||||||- `fix` OB engine: fix analyze() crash - Optional fields as None from model_dump() override dataclass defaults | Hermes
 ||||||- `fix` Wizard: dynamic exchange in status + remove step content top gap | Hermes

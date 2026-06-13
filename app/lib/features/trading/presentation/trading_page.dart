@@ -697,61 +697,113 @@ class _TradingPageState extends State<TradingPage>
   }
 
   /// Build an OB run card widget (used in both active and history tabs).
+  /// Styled like _TradingRunCard for visual consistency.
   Widget _buildObRunCard(Map<String, dynamic> run) {
     final pc = PfColors.of(context);
     final theme = Theme.of(context);
     final status = run['status'] as String? ?? 'unknown';
     final pair = run['pair'] as String? ?? 'N/A';
     final strategy = run['strategy'] as String? ?? 'N/A';
+    final isActive = status == 'running';
+    final isDone = status == 'done';
+    final isError = status == 'error';
+
+    final pnl = (run['total_pnl'] as num?)?.toDouble() ?? 0.0;
     final signalsTotal = (run['signals_total'] as num?)?.toInt() ?? 0;
     final spm = (run['signals_per_minute'] as num?)?.toDouble() ?? 0.0;
-    final isActive = status == 'running';
+    final totalTrades = (run['total_trades'] as num?)?.toInt() ?? 0;
+
+    final statusBadge = isActive
+        ? const PfBadge(variant: 'success', label: 'Активна')
+        : isError
+            ? const PfBadge(variant: 'destructive', label: 'Ошибка')
+            : isDone
+                ? const PfBadge(variant: 'info', label: 'Завершена')
+                : const PfBadge(variant: 'default', label: 'Остановлена');
+
     return PfCard(
-      padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
+      variant: 'trading',
       onTap: () => context.go('/trading/ob-run/${run['id']}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: isActive ? PfColors.success.withValues(alpha: 0.12) : pc.mutedC,
-                borderRadius: PfRadius.borderRadiusMd,
+          // Row: strategy name + status (+ stop button for active)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  translateStrategy(strategy),
+                  style: PfTypography.titleMd.copyWith(color: pc.foregroundC),
+                ),
               ),
-              child: Center(child: PhosphorIcon(
-                isActive ? PhosphorIconsFill.playCircle : PhosphorIconsFill.checkCircle,
-                size: 20,
-                color: isActive ? PfColors.success : pc.mutedForegroundC,
-              )),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(pair, style: PfTypography.titleMd.copyWith(color: pc.foregroundC, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text('$strategy · ${isActive ? '🟢 Активна' : '⏹️ Завершена'}',
-                  style: PfTypography.bodySm.copyWith(color: pc.mutedForegroundC)),
-              ],
-            )),
-            if (isActive)
-              PfButton(variant: 'outline', size: 'sm', label: '⏹',
-                onPressed: () async {
-                  final id = run['id'] as int?;
-                  if (id != null) {
-                    await widget.repository.stopOrderBookRun(id);
-                    _loadOrderBookRuns();
-                    _loadActiveRuns();
-                  }
-                },
-              ),
-          ]),
-          // Live stats row (only for running)
+              if (isActive)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: PfButton(
+                    variant: 'outline',
+                    size: 'sm',
+                    label: '⏹',
+                    onPressed: () async {
+                      final id = run['id'] as int?;
+                      if (id != null) {
+                        await widget.repository.stopOrderBookRun(id);
+                        _loadOrderBookRuns();
+                        _loadActiveRuns();
+                      }
+                    },
+                  ),
+                ),
+              statusBadge,
+            ],
+          ),
+          const SizedBox(height: PfSpacing.sm),
+          const PfDivider(),
+          const SizedBox(height: PfSpacing.sm),
+          // Info row: Pair | Signals info (or trades) | PnL
+          Row(
+            children: [
+              _InfoCell(label: 'Пара', value: pair, mono: true),
+              const SizedBox(width: PfSpacing.lg),
+              if (isActive)
+                _InfoCell(
+                  label: 'Сигналы',
+                  value: spm > 0
+                      ? '${spm.toStringAsFixed(0)}/мин'
+                      : '${signalsTotal} всего',
+                )
+              else
+                _InfoCell(
+                  label: 'Сделок',
+                  value: totalTrades > 0 ? '$totalTrades' : '—',
+                ),
+              const Spacer(),
+              // PnL
+              if (!isActive)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'PnL',
+                      style: PfTypography.caption.copyWith(color: pc.mutedForegroundC),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '\$${pnl.toStringAsFixed(2)}',
+                      style: PfTypography.number.copyWith(
+                        color: pnl >= 0 ? PfColors.success : PfColors.destructive,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          // Live stats for active runs
           if (isActive) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: PfSpacing.sm),
             Row(
               children: [
-                // Balance
+                // Balance pill
                 if (run['current_balance'] != null) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -776,8 +828,8 @@ class _TradingPageState extends State<TradingPage>
                   ),
                   const SizedBox(width: 8),
                 ],
-                // Trade count
-                if (((run['total_trades'] as num?)?.toInt() ?? 0) > 0) ...[
+                // Trade count pill
+                if (totalTrades > 0) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -790,7 +842,7 @@ class _TradingPageState extends State<TradingPage>
                         PhosphorIcon(PhosphorIconsFill.arrowsLeftRight, size: 12, color: PfColors.success),
                         const SizedBox(width: 4),
                         Text(
-                          '${run['total_trades']} сделок',
+                          '$totalTrades сделок',
                           style: PfTypography.caption.copyWith(
                             color: PfColors.success,
                             fontWeight: FontWeight.w600,
@@ -801,7 +853,7 @@ class _TradingPageState extends State<TradingPage>
                   ),
                   const SizedBox(width: 8),
                 ],
-                // Signal activity dot + count
+                // Signal dot
                 Container(
                   width: 6, height: 6,
                   decoration: BoxDecoration(
