@@ -1,3 +1,4 @@
+||||||- `fix` OB engine: fix analyze() crash - Optional fields as None from model_dump() override dataclass defaults | Hermes
 ||||||- `fix` Wizard: dynamic exchange in status + remove step content top gap | Hermes
 ||||||- `fix` PC layout top-alignment + OB badge update | Hermes
 ||||||- `fix` Step 0 scroll fix + pre-fetch insight on pair select | Hermes

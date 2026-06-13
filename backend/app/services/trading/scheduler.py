@@ -673,6 +673,9 @@ class TradingScheduler:
         from app.services.trading.orderbook.engine import OrderBookEngine
         from app.services.trading.orderbook.models import OrderBookConfig
 
+        # Remove None values — they would override dataclass defaults
+        clean_config = {k: v for k, v in config.items() if v is not None}
+
         ob_config = OrderBookConfig(
             pairs=[config.get("pair", "BTCUSDT")],
             strategy_name=config.get("strategy", "imbalance_scalping"),
@@ -682,10 +685,11 @@ class TradingScheduler:
             trade_exchange=config.get("trade_exchange", "binance"),
             mode=config.get("mode", "virtual"),
             run_id=run_id,
-            imbalance_threshold=config.get("imbalance_threshold", 0.65),
-            surge_pct=config.get("surge_pct", 20.0),
+            imbalance_threshold=clean_config.get("imbalance_threshold", 0.65),
+            surge_pct=clean_config.get("surge_pct", 20.0),
             confirmation_ticks=config.get("confirmation_ticks", 3),
             max_spread_pct=config.get("max_spread", 0.05),
+            exit_after_seconds=config.get("exit_after_seconds", 60),
             max_hold_seconds=config.get("max_hold_seconds", 120),
             stoploss=config.get("stoploss", -1.0),
             trailing_stop=True,
@@ -694,23 +698,23 @@ class TradingScheduler:
             cooldown_seconds=config.get("cooldown_seconds", 120),
             max_runtime_hours=config.get("auto_stop_hours", 0),
             # Spread Capture params
-            min_spread_pct=config.get("min_spread_pct", 0.02),
-            spread_entry_threshold=config.get("spread_entry_threshold", 0.03),
-            spread_exit_threshold=config.get("spread_exit_threshold", 0.01),
+            min_spread_pct=clean_config.get("min_spread_pct", 0.02),
+            spread_entry_threshold=clean_config.get("spread_entry_threshold", 0.03),
+            spread_exit_threshold=clean_config.get("spread_exit_threshold", 0.01),
             # Order Flow Momentum params
-            flow_threshold_volume=config.get("flow_threshold_volume", 10000.0),
-            min_flow_signals=config.get("min_flow_signals", 2),
-            flow_exit_seconds=config.get("flow_exit_seconds", 30),
+            flow_threshold_volume=clean_config.get("flow_threshold_volume", 10000.0),
+            min_flow_signals=clean_config.get("min_flow_signals", 2),
+            flow_exit_seconds=clean_config.get("flow_exit_seconds", 30),
             # ЕРШ Scalping params
-            ers_min_imbalance=config.get("ers_min_imbalance", 0.52),
-            ers_min_profit_pct=config.get("ers_min_profit_pct", 0.01),
-            ers_exit_on_reversion=config.get("ers_exit_on_reversion", True),
-            ers_max_hold_seconds=config.get("ers_max_hold_seconds", 15),
-            ers_min_volume=config.get("ers_min_volume", 0.0),
+            ers_min_imbalance=clean_config.get("ers_min_imbalance", 0.52),
+            ers_min_profit_pct=clean_config.get("ers_min_profit_pct", 0.01),
+            ers_exit_on_reversion=clean_config.get("ers_exit_on_reversion", True),
+            ers_max_hold_seconds=clean_config.get("ers_max_hold_seconds", 15),
+            ers_min_volume=clean_config.get("ers_min_volume", 0.0),
             # Iceberg Detection params
-            iceberg_ratio=config.get("iceberg_ratio", 3.0),
-            lookback_ticks=config.get("lookback_ticks", 5),
-            min_volume_btc=config.get("min_volume_btc", 0.5),
+            iceberg_ratio=clean_config.get("iceberg_ratio", 3.0),
+            lookback_ticks=clean_config.get("lookback_ticks", 5),
+            min_volume_btc=clean_config.get("min_volume_btc", 0.5),
         )
 
         # Real mode: создаём ExchangeExecutor

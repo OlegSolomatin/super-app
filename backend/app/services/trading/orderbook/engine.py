@@ -290,7 +290,7 @@ class OrderBookEngine:
             await self.stop()
             return
 
-        # Protection: per-pair stop (LowProfit + StoplossGuard)
+        # Protection: per-pair stop
         pair_stop = self.protection.stop_per_pair(snap.pair)
         if pair_stop and pair_stop.stop:
             logger.warning(
@@ -325,7 +325,15 @@ class OrderBookEngine:
 
         # Strategy
         async with self._lock:
-            signal = self.strategy.analyze(snap, self.cache)
+            try:
+                signal = self.strategy.analyze(snap, self.cache)
+            except Exception as e:
+                logger.error(
+                    "[OBEngine] analyze() CRASHED for %s: %s",
+                    snap.pair, e, exc_info=True,
+                )
+                # Continue processing next snapshot without trading
+                return
 
         if signal is None:
             self.metrics["rejected_no_signal"] += 1

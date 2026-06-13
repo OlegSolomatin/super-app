@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 BYBIT_WS_SPOT = "wss://stream.bybit.com/v5/public/spot"
 BYBIT_WS_LINEAR = "wss://stream.bybit.com/v5/public/linear"
-ORDERBOOK_TOPIC_TEMPLATE = "orderbook.200.100ms.{symbol}"
+ORDERBOOK_TOPIC_TEMPLATE = "orderbook.200.{symbol}"
 
 
 class BybitDataProvider(DataProvider):
@@ -54,6 +54,8 @@ class BybitDataProvider(DataProvider):
         self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
         self._reconnect_delay = 1.0
         self._market_type = market_type  # "spot" или "linear"
+        # Локальный стакан: {pair: {bids: {price: qty}, asks: {price: qty}}}
+        self._orderbooks: dict[str, dict[str, dict[float, float]]] = {}
 
     @property
     def name(self) -> str:
@@ -165,22 +167,13 @@ class BybitDataProvider(DataProvider):
     async def _on_message(self, raw: str):
         """Парсинг сообщения Bybit -> OrderBookSnapshot.
 
-        Bybit v5 orderbook snapshot:
-          {
-            "topic": "orderbook.200.100ms.BTCUSDT",
-            "type": "snapshot",
-            "ts": 1234567890123,
-            "data": {
-              "s": "BTCUSDT",
-              "b": [["price","qty"],...],  // sorted desc
-              "a": [["price","qty"],...],  // sorted asc
-              "u": 123456,
-              "seq": 789012
-            }
-          }
+        Bybit v5 orderbook:
+          Snapshot: {"type":"snapshot","data":{"s":"BTCUSDT","b":[...],"a":[...],"seq":N}}
+          Delta:    {"type":"delta","data":{"s":"BTCUSDT","b":[...],"a":[...],"seq":N}}
 
-        Delta update:
-          {"type": "delta", "data": {"s":"BTCUSDT","b":[["price","qty",...]], ...}}
+        Delta update содержит ТОЛЬКО изменившиеся уровни.
+        Для qty=0 — уровень удаляется, для qty>0 — обновляется/добавляется.
+        Локальный стакан (_orderbooks) мерджит snapshot + delta.
         """
         try:
             msg = json.loads(raw)
@@ -202,28 +195,54 @@ class BybitDataProvider(DataProvider):
 
             pair = data.get("s", "")
             if not pair:
-                # Extract from topic: orderbook.200.100ms.BTCUSDT -> BTCUSDT
+                # Extract from topic: orderbook.200.BTCUSDT -> BTCUSDT
                 parts = topic.split(".")
-                if len(parts) >= 4:
+                if len(parts) >= 3:
                     pair = parts[-1]
 
             bids_raw = data.get("b", [])
             asks_raw = data.get("a", [])
 
-            if not pair or not bids_raw or not asks_raw:
+            if not pair or (not bids_raw and not asks_raw):
                 return
 
-            bids = [(float(p), float(q)) for p, q in bids_raw if float(q) > 0]
-            asks = [(float(p), float(q)) for p, q in asks_raw if float(q) > 0]
+            # ── Мердж стакана ────────────────────────────────
+            if pair not in self._orderbooks:
+                self._orderbooks[pair] = {"bids": {}, "asks": {}}
+            book = self._orderbooks[pair]
 
-            if not bids or not asks:
+            def _merge_side(entries: list, side: str):
+                """Применить изменения к одной стороне стакана.
+                qty=0 → удалить уровень, qty>0 → вставить/обновить.
+                """
+                for p_str, q_str in entries:
+                    price = float(p_str)
+                    qty = float(q_str)
+                    if qty <= 0:
+                        book[side].pop(price, None)
+                    else:
+                        book[side][price] = qty
+
+            if msg_type == "delta":
+                _merge_side(bids_raw, "bids")
+                _merge_side(asks_raw, "asks")
+            else:
+                # snapshot — заменяем целиком
+                book["bids"] = {float(p): float(q) for p, q in bids_raw if float(q) > 0}
+                book["asks"] = {float(p): float(q) for p, q in asks_raw if float(q) > 0}
+
+            # Сортируем и собираем топ-200
+            sorted_bids = sorted(book["bids"].items(), key=lambda x: -x[0])[:200]
+            sorted_asks = sorted(book["asks"].items(), key=lambda x: x[0])[:200]
+
+            if not sorted_bids or not sorted_asks:
                 return
 
             snap = OrderBookSnapshot(
                 pair=pair,
                 timestamp=datetime.now(timezone.utc),
-                bids=bids,
-                asks=asks,
+                bids=[(p, q) for p, q in sorted_bids],
+                asks=[(p, q) for p, q in sorted_asks],
             )
             if self._callback:
                 await self._callback(snap)
