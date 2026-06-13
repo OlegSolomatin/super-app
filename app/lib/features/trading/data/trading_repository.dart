@@ -20,13 +20,16 @@ class TradingRepository {
     String? sort,
     int page = 1,
     int pageSize = 20,
+    String? exchange,
   }) async {
-    final response = await _dio.get('/trading/pairs', queryParameters: {
+    final queryParams = <String, dynamic>{
       if (search != null && search.isNotEmpty) 'search': search,
       if (sort != null && sort.isNotEmpty) 'sort': sort,
       'page': page,
       'page_size': pageSize,
-    });
+      if (exchange != null && exchange.isNotEmpty) 'exchange': exchange,
+    };
+    final response = await _dio.get('/trading/pairs', queryParameters: queryParams);
     final data = response.data as Map<String, dynamic>;
     final items = (data['items'] as List)
         .map((e) => TradingPair.fromJson(e as Map<String, dynamic>))
@@ -35,16 +38,22 @@ class TradingRepository {
     return (items: items, total: total);
   }
 
-  Future<Map<String, PairLiveData>> getPairsLive() async {
-    final response = await _dio.get('/trading/pairs/live');
+  Future<Map<String, PairLiveData>> getPairsLive({String? exchange}) async {
+    final queryParams = <String, dynamic>{
+      if (exchange != null && exchange.isNotEmpty) 'exchange': exchange,
+    };
+    final response = await _dio.get('/trading/pairs/live', queryParameters: queryParams);
     final data = response.data as Map<String, dynamic>;
     final items = data['items'] as Map<String, dynamic>;
     return items.map((symbol, json) =>
         MapEntry(symbol, PairLiveData.fromJson(json as Map<String, dynamic>)));
   }
 
-  Future<PairInsight> getPairInsight(String symbol) async {
-    final response = await _dio.get('/trading/pairs/$symbol/insight');
+  Future<PairInsight> getPairInsight(String symbol, {String? exchange}) async {
+    final queryParams = <String, dynamic>{
+      if (exchange != null && exchange.isNotEmpty) 'exchange': exchange,
+    };
+    final response = await _dio.get('/trading/pairs/$symbol/insight', queryParameters: queryParams);
     return PairInsight.fromJson(response.data as Map<String, dynamic>);
   }
 

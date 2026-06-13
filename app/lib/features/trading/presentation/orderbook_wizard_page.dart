@@ -745,7 +745,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
 
   // ── Animated Step Content ────────────────────────────────────────
 
-  Future<void> _loadPairs({bool refresh = false}) async {
+  Future<void> _loadPairs({bool refresh = false, String? exchange}) async {
     if (_loadingPairs) return;
     if (refresh) {
       _loadedPairs.clear();
@@ -753,7 +753,33 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       _hasMorePairs = true;
     }
     setState(() => _loadingPairs = true);
-    // Локальная фильтрация из hardcoded_pairs.dart — без API-запроса
+
+    final exch = exchange ?? _sourceExchange;
+
+    // If exchange is bybit — fetch from API (different pairs from Binance)
+    // For binance — use hardcoded pairs (faster)
+    if (exch == 'bybit') {
+      try {
+        final result = await _repository.getPairs(
+          search: _searchPairController.text.trim(),
+          page: _pairPage,
+          pageSize: 500,
+          exchange: exch,
+        );
+        if (!mounted) return;
+        setState(() {
+          _loadedPairs.addAll(result.items);
+          _hasMorePairs = result.items.length >= 500;
+          _loadingPairs = false;
+        });
+      } catch (e) {
+        debugPrint('[WIZARD] Failed to load Bybit pairs: $e');
+        if (mounted) setState(() => _loadingPairs = false);
+      }
+      return;
+    }
+
+    // Binance — local filtering from hardcoded_pairs.dart (existing logic)
     final search = _searchPairController.text.trim().toUpperCase();
     var filtered = allTradingPairs.where((p) {
       if (search.isEmpty) return true;
@@ -777,11 +803,11 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     });
   }
 
-  Future<void> _fetchLiveData() async {
+  Future<void> _fetchLiveData({String? exchange}) async {
     if (_loadingLiveData) return;
     setState(() => _loadingLiveData = true);
     try {
-      final liveData = await _repository.getPairsLive();
+      final liveData = await _repository.getPairsLive(exchange: exchange ?? _sourceExchange);
       if (mounted) {
         setState(() {
           _liveData = liveData;
@@ -803,7 +829,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     }
   }
 
-  Future<void> _fetchPairInsight(String symbol) async {
+  Future<void> _fetchPairInsight(String symbol, {String? exchange}) async {
     if (_loadingInsight) {
       // Уже грузится — дожидаемся завершения
       await _insightCompleter?.future;
@@ -812,7 +838,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
     _insightCompleter = Completer<void>();
     setState(() => _loadingInsight = true);
     try {
-      final insight = await _repository.getPairInsight(symbol);
+      final insight = await _repository.getPairInsight(symbol, exchange: exchange ?? _sourceExchange);
       if (mounted) {
         setState(() {
           _pairInsight = insight;
@@ -821,7 +847,17 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       }
     } catch (e) {
       debugPrint('[WIZARD] _fetchPairInsight error for $symbol: $e');
-      if (mounted) setState(() => _loadingInsight = false);
+      if (mounted) {
+        setState(() => _loadingInsight = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка загрузки данных для $symbol: $e'),
+            backgroundColor: PfColors.destructive,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       _insightCompleter?.complete();
       _insightCompleter = null;
@@ -1140,17 +1176,17 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   /// Если стратегия не выбрана — подбирает и стратегию, и режим.
   Future<void> _applyRecommendations() async {
     if (_selectedPairSymbol.isEmpty) return;
-    // Загружаем insight если ещё нет
-    if (_pairInsight == null) {
-      await _fetchPairInsight(_selectedPairSymbol);
-      if (!mounted) return;
-    }
+
+    // Force refetch insight with current source exchange
+    await _fetchPairInsight(_selectedPairSymbol, exchange: _sourceExchange);
+    if (!mounted) return;
+
     final insight = _pairInsight;
     if (insight == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Не удалось загрузить рекомендации. Проверьте соединение.'),
+            content: Text('Не удалось загрузить рекомендации для ${_selectedPairSymbol} на $_sourceExchange. Проверьте соединение или выберите другую биржу.'),
             backgroundColor: PfColors.destructive,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1446,9 +1482,13 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
                                 value: _sourceExchange,
                                 items: const ['binance', 'bybit'],
                                 onChanged: (v) {
-                                  setState(() => _sourceExchange = v);
-                                  // If source changes and trade was same, keep in sync
-                                  // otherwise leave trade as-is
+                                  setState(() {
+                                    _sourceExchange = v;
+                                    _selectedPairSymbol = '';
+                                    _pairInsight = null;
+                                  });
+                                  _loadPairs(refresh: true, exchange: v);
+                                  _fetchLiveData(exchange: v);
                                 },
                                 pc: pc,
                               ),

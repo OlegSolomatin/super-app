@@ -58,7 +58,11 @@ router = APIRouter(prefix="/trading", tags=["trading"])
 # ---------------------------------------------------------------------------
 # Hardcoded pair list
 # ---------------------------------------------------------------------------
-from app.services.trading.pair_list import COIN_ICON_NAMES, get_coin_icon_url, fetch_all_usdt_pairs, fetch_24h_volumes, fetch_24h_tickers
+from app.services.trading.pair_list import (
+    COIN_ICON_NAMES, fetch_all_usdt_pairs, fetch_24h_volumes, fetch_24h_tickers,
+    fetch_bybit_usdt_pairs, fetch_bybit_24h_tickers, fetch_bybit_ticker,
+    get_coin_icon_url,
+)
 
 HARDCODED_PAIRS = [
     PairInfo(symbol="BTCUSDT", base="BTC", quote="USDT", min_qty=0.001, tick_size=0.01),
@@ -113,10 +117,13 @@ HARDCODED_PAIRS = [
     PairInfo(symbol="LSKUSDT", base="LSK", quote="USDT", min_qty=0.1, tick_size=0.001),
 ]
 
-async def _get_pair_list() -> list[PairInfo]:
-    """Build pair list with icon_url populated from Binance."""
+async def _get_pair_list(exchange: str = "binance") -> list[PairInfo]:
+    """Build pair list with icon_url populated from exchange."""
+    if exchange == "bybit":
+        symbols = await fetch_bybit_usdt_pairs()
+    else:
+        symbols = await fetch_all_usdt_pairs()
     hardcoded: dict[str, PairInfo] = {p.symbol: p for p in HARDCODED_PAIRS}
-    symbols = await fetch_all_usdt_pairs()
     items: list[PairInfo] = []
     for symbol in symbols:
         if not symbol.endswith("USDT"):
@@ -564,14 +571,19 @@ async def list_pairs(
     sort: Optional[str] = Query(None, description="Sort order: 'liquidity' (by 24h volume)"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=500, description="Items per page"),
+    exchange: str = Query("binance", description="Exchange: 'binance' or 'bybit'"),
 ) -> PairsListResponse:
     """Return available trading pairs with optional search, sort and pagination."""
-    items = await _get_pair_list()
+    items = await _get_pair_list(exchange)
 
-    # Sort by 24h liquidity (volume from Binance)
+    # Sort by 24h liquidity
     if sort == "liquidity":
-        volumes = await fetch_24h_volumes()
-        items.sort(key=lambda p: volumes.get(p.symbol, 0), reverse=True)
+        if exchange == "bybit":
+            bybit_volumes = await fetch_bybit_24h_tickers()
+            items.sort(key=lambda p: bybit_volumes.get(p.symbol, {}).get("volume", 0), reverse=True)
+        else:
+            volumes = await fetch_24h_volumes()
+            items.sort(key=lambda p: volumes.get(p.symbol, 0), reverse=True)
 
     if search:
         search_upper = search.upper()
@@ -583,9 +595,14 @@ async def list_pairs(
 
 
 @router.get("/pairs/live", response_model=PairsLiveDataResponse)
-async def list_pairs_live() -> PairsLiveDataResponse:
+async def list_pairs_live(
+    exchange: str = Query("binance", description="Exchange: 'binance' or 'bybit'"),
+) -> PairsLiveDataResponse:
     """Return live 24hr data (price, volume, change %) for all USDT pairs."""
-    tickers = await fetch_24h_tickers()
+    if exchange == "bybit":
+        tickers = await fetch_bybit_24h_tickers()
+    else:
+        tickers = await fetch_24h_tickers()
     return PairsLiveDataResponse(items=tickers)
 
 
@@ -675,16 +692,22 @@ def _fmt_volume(v: float) -> str:
 
 
 @router.get("/pairs/{symbol}/insight", response_model=PairInsightResponse)
-async def pair_insight(symbol: str) -> PairInsightResponse:
+async def pair_insight(
+    symbol: str,
+    exchange: str = Query("binance", description="Exchange: 'binance' or 'bybit'"),
+) -> PairInsightResponse:
     """Return market insight + strategy recommendations for a specific pair."""
     symbol = symbol.upper()
     if not symbol.endswith("USDT"):
         symbol = f"{symbol}USDT"
 
-    tickers = await fetch_24h_tickers()
-    data = tickers.get(symbol)
+    if exchange == "bybit":
+        data = await fetch_bybit_ticker(symbol)
+    else:
+        tickers = await fetch_24h_tickers()
+        data = tickers.get(symbol)
     if data is None:
-        raise HTTPException(status_code=404, detail=f"Pair {symbol} not found")
+        raise HTTPException(status_code=404, detail=f"Pair {symbol} not found on {exchange}")
 
     price = data["price"]
     volume = data["volume"]
@@ -999,7 +1022,7 @@ async def get_run_strategy_code(
     }
 
 
-@router.delete("/runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/runs/{run_id}", status_code=status.HTTP_200_OK)
 async def stop_run(
     run_id: int,
     current_user: User = Depends(get_current_user),

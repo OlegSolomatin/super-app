@@ -156,6 +156,142 @@ async def fetch_all_usdt_pairs() -> list[str]:
         return list(ALL_PAIR_SYMBOLS)
 
 
+# ── Cache for Bybit 24h tickers ──
+_bybit_ticker_cache: dict[str, dict] | None = None
+_bybit_ticker_cache_time: float = 0.0
+BYBIT_CACHE_TTL = 60  # 1 minute
+BYBIT_PAIRS_CACHE_TTL = 300  # 5 minutes
+_bybit_pairs_cache: list[str] | None = None
+_bybit_pairs_cache_time: float = 0.0
+
+
+async def fetch_bybit_usdt_pairs() -> list[str]:
+    """Fetch ALL active USDT trading pairs from Bybit spot market.
+
+    Uses GET /v5/market/instruments-info?category=spot.
+    Cached for 5 minutes. Returns sorted list.
+    Falls back to empty list on network error.
+    """
+    global _bybit_pairs_cache, _bybit_pairs_cache_time
+
+    now = time.time()
+    if _bybit_pairs_cache is not None and (now - _bybit_pairs_cache_time) < BYBIT_PAIRS_CACHE_TTL:
+        return _bybit_pairs_cache
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.bybit.com/v5/market/instruments-info?category=spot",
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning("Bybit instruments-info returned %d", resp.status)
+                    return []
+
+                data = await resp.json()
+                if data.get("retCode") != 0:
+                    logger.warning("Bybit API error: %s", data.get("retMsg", "unknown"))
+                    return []
+
+                pairs = [
+                    s["symbol"]
+                    for s in data.get("result", {}).get("list", [])
+                    if s.get("symbol", "").endswith("USDT")
+                    and s.get("status") == "Trading"
+                    and s.get("symbol", "").isascii()
+                ]
+                pairs.sort()
+                _bybit_pairs_cache = pairs
+                _bybit_pairs_cache_time = now
+                logger.info("Fetched %d USDT pairs from Bybit", len(pairs))
+                return pairs
+
+    except Exception as e:
+        logger.warning("Failed to fetch pairs from Bybit: %s", e)
+        return []
+
+
+async def fetch_bybit_24h_tickers() -> dict[str, dict]:
+    """Fetch 24hr ticker data (price, volume, change_24h) for all USDT pairs from Bybit.
+
+    Uses GET /v5/market/tickers?category=spot.
+    Returns dict mapping symbol -> {price, volume, change_24h, high, low}.
+    Cached for 60 seconds.
+    """
+    global _bybit_ticker_cache, _bybit_ticker_cache_time
+
+    now = time.time()
+    if _bybit_ticker_cache is not None and (now - _bybit_ticker_cache_time) < BYBIT_CACHE_TTL:
+        return _bybit_ticker_cache
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.bybit.com/v5/market/tickers?category=spot",
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning("Bybit tickers returned %d", resp.status)
+                    return {}
+
+                data = await resp.json()
+                if data.get("retCode") != 0:
+                    logger.warning("Bybit tickers error: %s", data.get("retMsg", "unknown"))
+                    return {}
+
+                tickers: dict[str, dict] = {}
+                for t in data.get("result", {}).get("list", []):
+                    symbol: str = t.get("symbol", "")
+                    if symbol.endswith("USDT") and symbol.isascii():
+                        tickers[symbol] = {
+                            "price": float(t.get("lastPrice", 0) or 0),
+                            "volume": float(t.get("turnover24h", 0) or 0),  # Bybit uses turnover24h for quote volume
+                            "change_24h": float(t.get("price24hPcnt", 0) or 0) * 100,  # Bybit returns as decimal
+                            "high": float(t.get("highPrice24h", 0) or 0),
+                            "low": float(t.get("lowPrice24h", 0) or 0),
+                        }
+
+                _bybit_ticker_cache = tickers
+                _bybit_ticker_cache_time = now
+                logger.info("Fetched 24hr tickers for %d USDT pairs from Bybit", len(tickers))
+                return tickers
+
+    except Exception as e:
+        logger.warning("Failed to fetch Bybit 24hr tickers: %s", e)
+        return {}
+
+
+async def fetch_bybit_ticker(symbol: str) -> dict | None:
+    """Fetch 24hr ticker data for a SINGLE Bybit pair.
+
+    Uses GET /v5/market/tickers?category=spot&symbol={symbol}.
+    Returns dict {price, volume, high, low, change_24h} or None on failure.
+    """
+    try:
+        url = f"https://api.bybit.com/v5/market/tickers?category=spot&symbol={symbol}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                if data.get("retCode") != 0:
+                    return None
+                items = data.get("result", {}).get("list", [])
+                if not items:
+                    return None
+                t = items[0]
+                return {
+                    "price": float(t.get("lastPrice", 0) or 0),
+                    "volume": float(t.get("turnover24h", 0) or 0),
+                    "change_24h": float(t.get("price24hPcnt", 0) or 0) * 100,
+                    "high": float(t.get("highPrice24h", 0) or 0),
+                    "low": float(t.get("lowPrice24h", 0) or 0),
+                }
+    except Exception as e:
+        logger.warning("Failed to fetch Bybit ticker for %s: %s", symbol, e)
+        return None
+
+
 # ── Coin icon names (for crypto logos CDN) ──
 COIN_ICON_NAMES: dict[str, str] = {
     "BTC": "bitcoin-btc",

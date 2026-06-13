@@ -162,7 +162,7 @@ async def update_exchange_key(
     return ExchangeKeyResponse.model_validate(db_key)
 
 
-@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{key_id}", status_code=status.HTTP_200_OK)
 async def delete_exchange_key(
     key_id: str,
     current_user: User = Depends(get_current_user),
