@@ -1,3 +1,4 @@
+||||||- `fix` Wizard: dynamic exchange in status + remove step content top gap | Hermes
 ||||||- `fix` PC layout top-alignment + OB badge update | Hermes
 ||||||- `fix` Step 0 scroll fix + pre-fetch insight on pair select | Hermes
 ||||||- `fix` OB Wizard exchange-aware pairs + recommendations | Hermes

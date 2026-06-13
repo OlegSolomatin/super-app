@@ -708,7 +708,8 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
   void _startPolling(int runId) {
     _lastRunId = runId;
     _runStarted = true;
-    _runStatusText = '⏳ Подключение к Binance...';
+    final exchangeName = _sourceExchange == 'bybit' ? 'Bybit' : 'Binance';
+    _runStatusText = '⏳ Подключение к $exchangeName...';
     setState(() {});
     _statusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _pollRunStatus();
@@ -1437,7 +1438,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
             children: [
               // ── Fixed header: title + description + search ──
               Padding(
-                padding: const EdgeInsets.fromLTRB(PfSpacing.lg, PfSpacing.lg, PfSpacing.lg, 0),
+                padding: const EdgeInsets.fromLTRB(PfSpacing.lg, 0, PfSpacing.lg, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
