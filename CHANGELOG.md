@@ -1,3 +1,4 @@
+||||||- `fix` OB Wizard exchange-aware pairs + recommendations | Hermes
 ||||||- `fix` OB Wizard: биржезависимые пары + рекомендации | Hermes
 ||||||||||||||5|- `feat` **Фаза 6: Backtesting для OB** — DataRecorder (запись снапшотов в JSONL), ReplayDataProvider (воспроизведение с ускорением), CLI `python3 -m ...backtest.cli --snapshots` (1.0.1+34) | Hermes
 |||||||||||||4|- `feat` **Фаза 5: RPC уведомления OB** — engine публикует entry/exit в Redis pub/sub (канал ob:trades), OrderBookConfig.run_id, _publish_notification() для Telegram-уведомлений (1.0.1+34) | Hermes
