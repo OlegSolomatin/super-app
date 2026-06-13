@@ -1,3 +1,4 @@
+||||||- `fix` Step 0 scroll fix + pre-fetch insight on pair select | Hermes
 ||||||- `fix` OB Wizard exchange-aware pairs + recommendations | Hermes
 ||||||- `fix` OB Wizard: биржезависимые пары + рекомендации | Hermes
 ||||||||||||||5|- `feat` **Фаза 6: Backtesting для OB** — DataRecorder (запись снапшотов в JSONL), ReplayDataProvider (воспроизведение с ускорением), CLI `python3 -m ...backtest.cli --snapshots` (1.0.1+34) | Hermes

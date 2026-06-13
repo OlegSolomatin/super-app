@@ -1432,6 +1432,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
       builder: (context, constraints) {
         return SizedBox(
           width: constraints.maxWidth,
+          height: constraints.maxHeight,
           child: Column(
             children: [
               // ── Fixed header: title + description + search ──
@@ -1672,10 +1673,14 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
           padding: const EdgeInsets.only(bottom: 6),
           child: PfCard(
             variant: _selectedPairSymbol == pair.symbol ? 'trading' : 'default',
-            onTap: () => setState(() {
+            onTap: () {
+            setState(() {
               _selectedPairSymbol = pair.symbol;
               _pairInsight = null;
-            }),
+            });
+            // Pre-fetch insight for the selected pair
+            _fetchPairInsight(pair.symbol);
+          },
             padding: const EdgeInsets.symmetric(horizontal: PfSpacing.md, vertical: PfSpacing.sm),
             child: Row(
               children: [
