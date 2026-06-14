@@ -769,6 +769,24 @@ async def start_run(
             detail="Достигнут лимит одновременных запусков (15). Остановите активный запуск.",
         )
 
+    # ── Real mode: check no other active real runs ─────────────────────
+    if config.mode.value == "real" or config.mode == TradingRunMode.real:
+        from app.models.trading import TradingRun as DBTradingRun
+        from sqlalchemy import select as sa_select
+
+        active_real = await session.execute(
+            sa_select(DBTradingRun).where(
+                DBTradingRun.mode == "real",
+                DBTradingRun.status == "running",
+            ).limit(1)
+        )
+        if active_real.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Другой реальный запуск уже активен. Максимум 1 real-запуск единовременно. "
+                       "Остановите активный перед запуском нового.",
+            )
+
     # Create DB record
     db_run = DBTradingRun(
         user_id=current_user.id,
@@ -839,12 +857,29 @@ async def start_run(
         min_confidence=config.min_confidence or 0.3,
     )
 
-    # Schedule the run (fire-and-forget via async task)
-    # Scheduler creates its own DB session internally
-    await scheduler.start_run(
-        run_id=db_run.id,
-        config=domain_config,
-    )
+    # Schedule the run with error handling
+    try:
+        await scheduler.start_run(
+            run_id=db_run.id,
+            config=domain_config,
+        )
+    except ValueError as e:
+        # Scheduler validation error (e.g., "Another real run is already active")
+        db_run.status = "error"
+        db_run.error = str(e)
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+    except Exception as e:
+        db_run.status = "error"
+        db_run.error = str(e)
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка запуска: {e}",
+        )
 
     return TradingRunResponse.model_validate(db_run)
 
