@@ -244,6 +244,7 @@ class TradingScheduler:
                             sa_select(DBTradingRun).where(
                                 DBTradingRun.mode == "real",
                                 DBTradingRun.status == "running",
+                                DBTradingRun.id != run_id,
                             ).limit(1)
                         )
                         if active_real.scalar_one_or_none() is not None:

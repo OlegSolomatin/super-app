@@ -1,3 +1,4 @@
+|||||||- `fix` scheduler._execute_run: exclude self (DBTradingRun.id != run_id) from real-mode check — больше не блокирует собственный запуск | Oleg
 |||||||- `fix` trading.py start_run: add real-run validation BEFORE creating record — now returns 409 instead of "running"→"error" | Oleg
 |||||||- `fix` trading.py start_run: try/except around scheduler.start_run — updates DB status, returns clear error | Oleg
 |||||||- `fix` parse_telegram_signals: dedup by Telegram post ID (message_id) instead of 30-min window — больше не пересохраняет старые сигналы | Oleg
