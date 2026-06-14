@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import signal as signal_module
+import time
 from typing import Optional
 
 import httpx
@@ -260,20 +261,28 @@ class SignalNotifier:
 
                     if channel == "channel:signal:new":
                         # ── Send raw signal IMMEDIATELY (no buffer) ──
+                        t0 = time.monotonic()
                         text = self._format_raw_signal(data)
                         sent = await self.send_telegram(text)
                         if sent:
-                            logger.info("Sent RAW signal notification for %s", pair)
+                            elapsed = (time.monotonic() - t0) * 1000
+                            logger.info(
+                                "Sent RAW signal #%d (%s): notifier→telegram in %.0fms",
+                                data.get("id"), pair, elapsed,
+                            )
 
                     elif channel == "channel:signal:mapped":
                         # ── Send classified signal as SEPARATE message ──
+                        t0 = time.monotonic()
                         text = self._format_mapped_signal(data)
                         sent = await self.send_telegram(text)
                         if sent:
+                            elapsed = (time.monotonic() - t0) * 1000
                             logger.info(
-                                "Sent MAPPED signal notification for %s → %s",
-                                pair,
+                                "Sent MAPPED signal #%d (%s → %s): notifier→telegram in %.0fms",
+                                data.get("id"), pair,
                                 data.get("mapped_strategy", "?"),
+                                elapsed,
                             )
 
             except asyncio.CancelledError:

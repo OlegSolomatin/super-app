@@ -27,6 +27,8 @@ class TradingSignalResponse(BaseModel):
     mapped_params: Optional[dict[str, Any]] = None
     mapped_exchange_fallback: Optional[str] = None
     mapped_available_exchanges: Optional[dict[str, bool]] = None
+    mapped_confidence: Optional[float] = None
+    mapped_reasoning: Optional[str] = None
     is_processed: bool = False
     created_at: datetime
 

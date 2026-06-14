@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -96,6 +97,8 @@ async def save_signals(signals) -> list[dict]:
 
     if not signals:
         return []
+
+    t_start = time.monotonic()
 
     # ── Group signals by channel, get last_seen IDs from Redis ──────────
     r = await _get_redis()
@@ -244,6 +247,15 @@ async def save_signals(signals) -> list[dict]:
             logger.warning("Redis pub/sub unavailable (skip publish #%d): %s", sd["id"], e)
 
     await r.ltrim("signals:latest", 0, 49)
+
+    # Timing
+    t_end = time.monotonic()
+    for sd in new_signals:
+        logger.info(
+            "Signal #%d (%s): parse→publish in %.0fms",
+            sd["id"], sd["pair"], (t_end - t_start) * 1000,
+        )
+
     logger.info("Redis updated: %d signals pushed, trimmed to 50", len(new_signals))
 
     return new_signals
@@ -288,10 +300,10 @@ async def main():
 
 
 async def run_daemon():
-    """Run parser in continuous loop — polls every 15 seconds."""
+    """Run parser in continuous loop - polls every 5 seconds."""
     import signal as signal_module
 
-    logger.info("Signal parser daemon starting (poll interval=15s)...")
+    logger.info("Signal parser daemon starting (poll interval=5s)...")
 
     running = True
 
@@ -312,7 +324,7 @@ async def run_daemon():
             await main()
         except Exception as e:
             logger.error("Parser cycle failed: %s", e, exc_info=True)
-        for _ in range(15):
+        for _ in range(5):
             if not running:
                 break
             await asyncio.sleep(1)

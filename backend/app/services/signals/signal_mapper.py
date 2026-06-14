@@ -1,10 +1,11 @@
-"""Signal mapper — classifies trading signals and maps them to strategies.
+"""Signal mapper — classifies trading signals via LLM and maps them to strategies.
 
-Determines signal type (ёршик/лесенка/дисбаланс/всплеск объёма),
-maps to the correct engine (OB or Trading) with recommended parameters,
-and performs cross-exchange lookup for signals from unsupported exchanges.
+Architecture:
+  1. Parser finds signal → saves to DB → publishes raw to Redis
+  2. This module classifies via LLM with exactly 2 strategy options per channel
+  3. Checks pair availability on user's exchanges
+  4. Publishes classified signal back to Redis
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -12,17 +13,28 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
+
+import httpx
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# ── LLM config ──────────────────────────────────────────────────────────────
+
+_LLM_API_URL = "https://api.deepseek.com/v1/chat/completions"
+_LLM_MODEL = "deepseek-chat"  # Fast model for signal classification
+_LLM_TIMEOUT = 8  # seconds
+_LLM_TEMPERATURE = 0.1
+
 # ── In-memory exchange check cache ────────────────────────────────────────
-_EXCHANGE_CACHE: dict[str, tuple[bool, float]] = {}  # key -> (result, timestamp)
+
+_EXCHANGE_CACHE: dict[str, tuple[bool, float]] = {}
 _EXCHANGE_CACHE_TTL = 300  # 5 minutes
 
 
 def _cache_get(key: str) -> Optional[bool]:
-    """Get cached exchange check result if still fresh."""
     entry = _EXCHANGE_CACHE.get(key)
     if entry is None:
         return None
@@ -34,26 +46,144 @@ def _cache_get(key: str) -> Optional[bool]:
 
 
 def _cache_set(key: str, result: bool):
-    """Cache an exchange check result with current timestamp."""
     _EXCHANGE_CACHE[key] = (result, time.monotonic())
+
+
+# ── SignalClassification dataclass ─────────────────────────────────────────
 
 
 @dataclass
 class SignalClassification:
     """Result of classifying a trading signal."""
 
-    signal_type: str  # brush / stair / imbalance_top / imbalance_bot / volume_spike
-    signal_label: str  # Ёршик / Лесенка / Дисбаланс ⬆ / Дисбаланс ⬇ / Всплеск объёма
+    signal_type: str  # brush / stair / imbalance_top / imbalance_bot / volume_spike / hybrid / unknown
+    signal_label: str  # Ёршик / Лесенка / Дисбаланс ⬆ / Дисбаланс ⬇ / Всплеск объЪма / Смешанный
 
     mapped_engine: str  # "ob" or "trading"
     mapped_strategy: str
 
     params: dict = field(default_factory=dict)
-    fallback_exchange: Optional[str] = None  # Alternative exchange found
-    confidence: float = 0.0  # How confident (0-1)
+    fallback_exchange: Optional[str] = None
+    confidence: float = 0.0
+    reasoning: str = ""  # LLM reasoning why this choice
 
 
-def classify_signal(
+# ── Core: classify via LLM ─────────────────────────────────────────────────
+
+
+async def _llm_classify(prompt: str) -> Optional[SignalClassification]:
+    """Send classification prompt to LLM and parse response.
+
+    Args:
+        prompt: Built prompt from strategy_config.build_llm_prompt()
+
+    Returns:
+        SignalClassification or None if LLM failed.
+    """
+    if not settings.DEEPSEEK_API_KEY:
+        logger.error("DEEPSEEK_API_KEY not configured")
+        return None
+
+    messages = [
+        {
+            "role": "system",
+            "content": "Ты — классификатор торговых сигналов для крипто-трейдинга. "
+            "Отвечай строго в JSON формате. Выбирай одну из двух предложенных стратегий.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+
+    payload = {
+        "model": _LLM_MODEL,
+        "messages": messages,
+        "temperature": _LLM_TEMPERATURE,
+        "max_tokens": 200,
+        "response_format": {"type": "json_object"},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_LLM_TIMEOUT) as client:
+            resp = await client.post(
+                _LLM_API_URL,
+                headers={
+                    "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+    except httpx.TimeoutException:
+        logger.warning("LLM classify: timeout after %ds", _LLM_TIMEOUT)
+        return None
+    except Exception as e:
+        logger.warning("LLM classify failed: %s", e)
+        return None
+
+    # Parse JSON from LLM response
+    try:
+        result = json.loads(content)
+    except json.JSONDecodeError:
+        logger.warning("LLM classify: invalid JSON response: %s", content[:200])
+        return None
+
+    strategy_id = result.get("strategy", "").strip()
+    confidence = max(0.0, min(1.0, float(result.get("confidence", 0.5))))
+    params = result.get("params", {})
+    reasoning = result.get("reasoning", "")
+
+    # Derive signal_type from strategy + variant
+    variant = result.get("variant", "A")
+    signal_type = _derive_signal_type(strategy_id, variant)
+
+    return SignalClassification(
+        signal_type=signal_type,
+        signal_label=_derive_label(strategy_id, variant),
+        mapped_engine=_derive_engine(strategy_id),
+        mapped_strategy=strategy_id,
+        params=params,
+        confidence=confidence,
+        reasoning=reasoning,
+    )
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _derive_signal_type(strategy_id: str, variant: str) -> str:
+    mapping = {
+        "ers_scalping": "brush",
+        "imbalance_scalping": "imbalance_bot",
+        "stair_climber": "stair",
+        "order_flow_momentum": "volume_spike",
+        "rsi_ma_combo": "hybrid",
+        "supertrend": "hybrid",
+    }
+    return mapping.get(strategy_id, "unknown")
+
+
+def _derive_label(strategy_id: str, variant: str) -> str:
+    mapping = {
+        "ers_scalping": "Ёршик",
+        "imbalance_scalping": "Дисбаланс ⬆",
+        "stair_climber": "Лесенка",
+        "order_flow_momentum": "Всплеск объёма",
+        "rsi_ma_combo": "Смешанный",
+        "supertrend": "Смешанный",
+    }
+    return mapping.get(strategy_id, "Неизвестный")
+
+
+def _derive_engine(strategy_id: str) -> str:
+    ob_strategies = {"ers_scalping", "imbalance_scalping", "order_flow_momentum"}
+    return "ob" if strategy_id in ob_strategies else "trading"
+
+
+# ── Public API ──────────────────────────────────────────────────────────────
+
+
+async def classify_signal(
     channel: str,
     exchange: str,
     pair: str,
@@ -64,230 +194,60 @@ def classify_signal(
     top_ratio: Optional[float] = None,
     bot_ratio: Optional[float] = None,
 ) -> SignalClassification:
-    """Classify a trading signal into a strategy.
+    """Classify a trading signal via LLM with 2 strategy options.
 
-    Args:
-        channel: 'brushscreener' or 'stairscreener'
-        exchange: Exchange name (Mexc, Gate, etc.)
-        pair: Trading pair (WOJAKUSDT)
-        price_range: Price movement range in percent
-        vol_60m: Volume over 60 minutes in USD
-        vol_10m: Volume over 10 minutes in USD
-        slope: Stair slope value (stairscreener only)
-        top_ratio: Top touch ratio (brushscreener only)
-        bot_ratio: Bottom touch ratio (brushscreener only)
-
-    Returns:
-        SignalClassification with type, engine, strategy and params.
+    Falls back to volume spike detection if LLM fails or returns unknown.
+    Falls back to default trading strategy if all else fails.
     """
-    # ── Stairscreener: лесенка ──────────────────────────────────────────
-    if channel == "stairscreener" and slope is not None and slope > 3.0:
-        return _classify_stair(price_range, vol_60m, vol_10m, slope)
+    from app.services.signals.strategy_config import build_llm_prompt
 
-    # ── Brushscreener: ёршик или дисбаланс ──────────────────────────────
-    if channel == "brushscreener" and top_ratio is not None and bot_ratio is not None:
-        return _classify_brush(price_range, vol_60m, vol_10m, top_ratio, bot_ratio)
+    # Try LLM
+    prompt = build_llm_prompt(
+        channel=channel,
+        pair=pair,
+        price_range=price_range,
+        vol_60m=vol_60m,
+        vol_10m=vol_10m,
+        slope=slope,
+        top_ratio=top_ratio,
+        bot_ratio=bot_ratio,
+    )
 
-    # ── Volume spike detection (any channel) ────────────────────────────
+    if prompt:
+        llm_result = await _llm_classify(prompt)
+        if llm_result and llm_result.confidence >= 0.3:
+            if llm_result.mapped_strategy and llm_result.mapped_strategy != "unknown":
+                return llm_result
+
+    # Fallback 1: volume spike detection (any channel)
     if vol_10m and vol_60m and vol_60m > 0 and (vol_10m / vol_60m) > 0.3:
-        return _classify_volume_spike(price_range, vol_60m, vol_10m)
+        return SignalClassification(
+            signal_type="volume_spike",
+            signal_label="Всплеск объёма",
+            mapped_engine="ob",
+            mapped_strategy="order_flow_momentum",
+            params={"balance": 10.0, "max_open": 1, "stoploss": -2.0, "max_hold": 120, "conf_ticks": 3},
+            confidence=0.5,
+            reasoning="LLM не ответил, определён по всплеску объёма vol10m/vol60m",
+        )
 
-    # ── Fallback: unknown ───────────────────────────────────────────────
+    # Fallback 2: unknown — send to default trading
     return SignalClassification(
         signal_type="unknown",
         signal_label="Неизвестный",
         mapped_engine="trading",
         mapped_strategy="rsi_ma_combo",
-        params=_default_trading_params(),
-        confidence=0.1,
+        params={"timeframe": "3m", "balance": 10.0, "stoploss": 2.0, "takeprofit": 5.0},
+        confidence=0.2,
+        reasoning="LLM не ответил, назначена стратегия по умолчанию",
     )
 
 
-def _classify_stair(
-    price_range: Optional[float],
-    vol_60m: Optional[float],
-    vol_10m: Optional[float],
-    slope: float,
-) -> SignalClassification:
-    """Classify a stair signal."""
-    # Higher slope = stronger trend
-    if slope > 8:
-        confidence = 0.9
-        sl = 3.0
-        tp = 6.0
-    elif slope > 5:
-        confidence = 0.7
-        sl = 2.0
-        tp = 5.0
-    else:
-        confidence = 0.5
-        sl = 1.5
-        tp = 4.0
-
-    return SignalClassification(
-        signal_type="stair",
-        signal_label="Лесенка",
-        mapped_engine="trading",
-        mapped_strategy="stair_climber",
-        params={
-            "timeframe": "3m",
-            "leverage": 3,
-            "balance": 10.0,
-            "max_trade": 5.0,
-            "stoploss": sl,
-            "takeprofit": tp,
-            "duration": 1,
-            "slope": slope,
-        },
-        confidence=min(confidence, 0.95),
-    )
-
-
-def _classify_brush(
-    price_range: Optional[float],
-    vol_60m: Optional[float],
-    vol_10m: Optional[float],
-    top_ratio: float,
-    bot_ratio: float,
-) -> SignalClassification:
-    """Classify a brush signal — could be erшик or imbalance."""
-    ratio_diff = abs(top_ratio - bot_ratio)
-    ratio_max = max(top_ratio, bot_ratio)
-
-    # Ёршик: top/bot примерно равны, малый range
-    if ratio_diff < ratio_max * 0.5 and (price_range is None or price_range < 3.0):
-        return SignalClassification(
-            signal_type="brush",
-            signal_label="Ёршик",
-            mapped_engine="ob",
-            mapped_strategy="ers_scalping",
-            params={
-                "balance": 10.0,
-                "max_open": 1,
-                "stoploss": -1.5,
-                "trailing_stop": 0.3,
-                "max_hold": 120,
-                "conf_ticks": 2,
-                "max_spread": 0.1,
-                "cooldown": 120,
-                "auto_stop": 1,
-                "ers_min_imbalance": 0.52,
-                "ers_min_profit_pct": 0.01,
-                "ers_exit_on_reversion": True,
-                "ers_max_hold": 60,
-            },
-            confidence=0.8,
-        )
-
-    # Дисбаланс: одна сторона доминирует
-    if bot_ratio > top_ratio * 1.5:
-        # Bottom touches dominate → накопление → upward breakout
-        return SignalClassification(
-            signal_type="imbalance_bot",
-            signal_label="Дисбаланс ⬆",
-            mapped_engine="ob",
-            mapped_strategy="imbalance_scalping",
-            params={
-                "balance": 10.0,
-                "max_open": 1,
-                "stoploss": -2.0,
-                "max_hold": 120,
-                "imbalance_threshold": 0.7,
-                "surge_pct": 2.0,
-            },
-            confidence=0.75,
-        )
-
-    if top_ratio > bot_ratio * 1.5:
-        # Top touches dominate → распределение → downward breakout
-        return SignalClassification(
-            signal_type="imbalance_top",
-            signal_label="Дисбаланс ⬇",
-            mapped_engine="ob",
-            mapped_strategy="imbalance_scalping",
-            params={
-                "balance": 10.0,
-                "max_open": 1,
-                "stoploss": -2.0,
-                "max_hold": 120,
-                "imbalance_threshold": 0.7,
-                "surge_pct": 2.0,
-            },
-            confidence=0.7,
-        )
-
-    # Fallback: эршик по умолчанию
-    return SignalClassification(
-        signal_type="brush",
-        signal_label="Ёршик",
-        mapped_engine="ob",
-        mapped_strategy="ers_scalping",
-        params=_default_ob_params(),
-        confidence=0.5,
-    )
-
-
-def _classify_volume_spike(
-    price_range: Optional[float],
-    vol_60m: Optional[float],
-    vol_10m: Optional[float],
-) -> SignalClassification:
-    """Classify a volume spike signal."""
-    return SignalClassification(
-        signal_type="volume_spike",
-        signal_label="Всплеск объёма",
-        mapped_engine="ob",
-        mapped_strategy="order_flow_momentum",
-        params={
-            "balance": 10.0,
-            "max_open": 1,
-            "stoploss": -2.0,
-            "max_hold": 120,
-            "conf_ticks": 3,
-            "flow_threshold": 10000,
-            "min_flow_signals": 3,
-        },
-        confidence=0.6,
-    )
-
-
-def _default_trading_params() -> dict:
-    return {
-        "timeframe": "3m",
-        "leverage": 3,
-        "balance": 10.0,
-        "max_trade": 5.0,
-        "stoploss": 2.0,
-        "takeprofit": 5.0,
-        "duration": 1,
-    }
-
-
-def _default_ob_params() -> dict:
-    return {
-        "balance": 10.0,
-        "max_open": 1,
-        "stoploss": -1.5,
-        "trailing_stop": 0.3,
-        "max_hold": 120,
-        "conf_ticks": 2,
-        "max_spread": 0.1,
-        "cooldown": 120,
-        "auto_stop": 1,
-    }
+# ── Cross-exchange & availability checks ───────────────────────────────────
 
 
 async def check_cross_exchange(pair: str, source_exchange: str) -> Optional[str]:
-    """Check if a trading pair exists on Binance (for cross-exchange lookup).
-
-    Args:
-        pair: Trading pair (WOJAKUSDT)
-        source_exchange: Original exchange (Mexc, Gate, etc.)
-
-    Returns:
-        'binance' if pair exists on Binance, None otherwise.
-    """
-    # If already on Binance, no lookup needed
+    """Check if a trading pair exists on Binance (for cross-exchange lookup)."""
     if "binance" in source_exchange.lower():
         return None
 
@@ -322,20 +282,12 @@ async def check_available_exchanges(
 ) -> dict[str, bool]:
     """Check which user-connected exchanges have the trading pair.
 
-    Queries the exchange_keys table for active valid keys,
-    then checks pair availability on each unique exchange in parallel.
-
-    Args:
-        pair: Trading pair (WOJAKUSDT)
-        session: SQLAlchemy async session
-
-    Returns:
-        Dict of {exchange_name: bool} — whether pair is available on that exchange.
+    Reads active valid keys from exchange_keys table,
+    then checks pair availability on each exchange in parallel.
     """
     from sqlalchemy import select
     from app.models.exchange_key import ExchangeKey
 
-    # Get active valid keys (unique exchanges)
     stmt = (
         select(ExchangeKey.exchange)
         .where(ExchangeKey.status == "valid")
@@ -351,7 +303,6 @@ async def check_available_exchanges(
     logger.info("Checking availability for %s on exchanges: %s", pair, exchanges)
 
     async def _check_one(exchange_name: str) -> tuple[str, bool]:
-        """Check a single exchange — cached if recently checked."""
         cache_key = f"avail:{exchange_name}:{pair.upper()}"
         cached = _cache_get(cache_key)
         if cached is not None:
@@ -378,7 +329,6 @@ async def check_available_exchanges(
             logger.warning("Exchange check failed for %s/%s: %s", exchange_name, pair, e)
             return exchange_name, False
 
-    # Run all exchange checks in PARALLEL
     results_list = await asyncio.gather(
         *[_check_one(ex) for ex in exchanges],
         return_exceptions=False,
@@ -386,21 +336,23 @@ async def check_available_exchanges(
     return dict(results_list)
 
 
+# ── Main pipeline: map → save → publish ──────────────────────────────────
+
+
 async def map_and_save_signal(
     session,
     signal_id: int,
 ) -> Optional[SignalClassification]:
-    """Classify a signal and save mapped_* fields to DB.
+    """Classify a signal, save mapped_* fields to DB, publish to Redis.
 
     Args:
         session: SQLAlchemy async session
         signal_id: TradingSignal ID
 
     Returns:
-        SignalClassification or None if signal not found.
+        SignalClassification or None if signal not found or already classified.
     """
     from sqlalchemy import select
-
     from app.models.trading_signal import TradingSignal
 
     stmt = select(TradingSignal).where(TradingSignal.id == signal_id)
@@ -411,8 +363,18 @@ async def map_and_save_signal(
         logger.warning("Signal #%d not found for mapping", signal_id)
         return None
 
-    # Classify
-    classification = classify_signal(
+    # ── Dedup: skip if already classified ────────────────────────────────
+    if signal.mapped_strategy is not None:
+        logger.info(
+            "Signal #%d already classified as %s, skipping",
+            signal_id,
+            signal.mapped_strategy,
+        )
+        return None
+
+    # ── Classify via LLM ────────────────────────────────────────────────
+    t0 = time.monotonic()
+    classification = await classify_signal(
         channel=signal.channel,
         exchange=signal.exchange,
         pair=signal.pair,
@@ -423,8 +385,17 @@ async def map_and_save_signal(
         top_ratio=signal.top_ratio,
         bot_ratio=signal.bot_ratio,
     )
+    t1 = time.monotonic()
+    logger.info(
+        "Signal #%d: LLM classification in %.0fms → %s/%s (conf=%.2f)",
+        signal_id,
+        (t1 - t0) * 1000,
+        classification.mapped_engine,
+        classification.mapped_strategy,
+        classification.confidence,
+    )
 
-    # Cross-exchange + available exchanges — IN PARALLEL
+    # ── Cross-exchange + available exchanges — IN PARALLEL ───────────────
     fallback_task = asyncio.create_task(
         check_cross_exchange(signal.pair, signal.exchange)
     )
@@ -436,17 +407,20 @@ async def map_and_save_signal(
     )
     classification.fallback_exchange = fallback
 
-    # Save to DB
+    # ── Save to DB ──────────────────────────────────────────────────────
     signal.mapped_strategy = classification.mapped_strategy
     signal.mapped_engine = classification.mapped_engine
     signal.mapped_params = classification.params
     signal.mapped_exchange_fallback = fallback
     signal.mapped_available_exchanges = available_exchanges
+    signal.mapped_confidence = classification.confidence
+    signal.mapped_reasoning = classification.reasoning
     await session.commit()
 
-    # Publish mapped signal to Redis pub/sub
+    # ── Publish mapped signal to Redis pub/sub ──────────────────────────
     try:
         from app.core.cache import publish
+
         await publish("channel:signal:mapped", {
             "id": signal.id,
             "pair": signal.pair,
@@ -460,15 +434,15 @@ async def map_and_save_signal(
             "fallback_exchange": fallback,
             "confidence": classification.confidence,
             "available_exchanges": available_exchanges,
+            "reasoning": classification.reasoning,
         })
     except Exception as e:
         logger.warning("Redis pub/sub unavailable (skip mapped publish): %s", e)
 
-    # Update signals:latest in Redis so frontend has classification
+    # ── Update signals:latest in Redis ──────────────────────────────────
     try:
-        import json
         from redis.asyncio import Redis as AsyncRedis
-        from app.core.config import settings
+
         r = AsyncRedis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
         try:
             updated_entry = {
@@ -486,11 +460,10 @@ async def map_and_save_signal(
                 "mapped_engine": signal.mapped_engine,
                 "mapped_exchange_fallback": signal.mapped_exchange_fallback,
                 "mapped_available_exchanges": signal.mapped_available_exchanges,
-                "is_processed": signal.is_processed if hasattr(signal, 'is_processed') else False,
+                "is_processed": signal.is_processed if hasattr(signal, "is_processed") else False,
                 "created_at": signal.created_at.isoformat() if signal.created_at else None,
             }
             signal_json = json.dumps(updated_entry)
-            # Remove old entry with same ID, then push fresh one to front
             old_entries = await r.lrange("signals:latest", 0, -1)
             for entry in old_entries:
                 try:
