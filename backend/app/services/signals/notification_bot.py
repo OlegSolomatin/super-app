@@ -1,11 +1,11 @@
-"""Telegram notification bot for trading signals.
+"""Telegram notification bot for trading signals — instant delivery.
 
 Listens to Redis pub/sub channels and sends notifications
 via configured Telegram bots to specified chat IDs.
 
 Channels listened:
-  - channel:signal:new     — new raw signal from scraper
-  - channel:signal:mapped  — signal classified by mapper
+  - channel:signal:new      — new raw signal → sent IMMEDIATELY
+  - channel:signal:mapped   — classified signal → sent as SEPARATE message
 """
 
 from __future__ import annotations
@@ -24,48 +24,19 @@ logger = logging.getLogger("notification_bot")
 
 
 class SignalNotifier:
-    """Listens to Redis pub/sub and sends Telegram notifications."""
+    """Listens to Redis pub/sub and sends Telegram notifications instantly."""
 
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
         self.redis_url = redis_url
-        self._running = False
+        self._running = True
         self._bot_token: Optional[str] = None
         self._chat_id: Optional[str] = None
-        self._http: Optional[httpx.AsyncClient] = None
-        # Buffer: pair -> {raw_data, created_at}
-        self._pending: dict[str, tuple[dict, float]] = {}
-        self._pending_lock = asyncio.Lock()
-
-    async def _flush_pending(self, pair: str, mapped: Optional[dict] = None):
-        """Send a single combined notification for a pending signal.
-
-        If mapped data is provided, merge raw + mapped into one message.
-        If not (timeout), send raw signal with fallback text.
-        """
-        async with self._pending_lock:
-            entry = self._pending.pop(pair, None)
-            if entry is None:
-                return
-
-        raw = entry[0]
-
-        if mapped:
-            # Merge: raw fields + mapped fields → full message
-            full = {**raw, **mapped}
-            text = self._format_signal_combined(full)
-        else:
-            # Timeout: raw only
-            text = self._format_signal_new(raw)
-
-        await self._send_message(text)
-        logger.info(
-            "Sent %s notification for %s",
-            "combined" if mapped else "raw-only",
-            pair,
-        )
+        self._http = httpx.AsyncClient(timeout=10)
+        self._last_reload = 0.0
+        self._reload_interval = 3600  # Reload bot config every hour
 
     async def _load_bot_config(self) -> bool:
-        """Load the first available Telegram bot config from DB."""
+        """Load the first active Telegram bot from DB."""
         try:
             from app.core.database import async_session_factory
             from app.models.telegram_bot import TelegramBot
@@ -76,84 +47,76 @@ class SignalNotifier:
                 result = await session.execute(stmt)
                 bot = result.scalar_one_or_none()
 
-                if bot is None:
-                    logger.warning("No Telegram bots configured in DB")
+                if bot:
+                    self._bot_token = bot.bot_token
+                    self._chat_id = bot.chat_id
+                    logger.info("Loaded bot config: token=***%s, chat_id=%s",
+                                bot.bot_token[-8:] if len(bot.bot_token) > 8 else "",
+                                bot.chat_id)
+                    return True
+                else:
+                    logger.warning("No active Telegram bot found in DB")
                     return False
-
-                self._bot_token = bot.bot_token
-                self._chat_id = bot.chat_id
-                logger.info(
-                    "Loaded bot '%s' (chat_id=%s)", bot.name, bot.chat_id
-                )
-                return True
         except Exception as e:
-            logger.warning("Failed to load bot config: %s", e)
+            logger.error("Failed to load bot config: %s", e)
             return False
 
-    async def _send_message(self, text: str, parse_mode: str = "HTML") -> bool:
-        """Send a text message via the Telegram Bot API."""
+    async def send_telegram(self, text: str) -> bool:
+        """Send a message via the configured Telegram bot."""
         if not self._bot_token or not self._chat_id:
+            logger.warning("No bot configured, skipping notification")
             return False
-
-        # Lazily create shared httpx client (reused across all sends)
-        if self._http is None:
-            self._http = httpx.AsyncClient(
-                timeout=httpx.Timeout(15.0, connect=10.0),
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-            )
 
         url = f"https://api.telegram.org/bot{self._bot_token}/sendMessage"
-        payload = {
-            "chat_id": self._chat_id,
-            "text": text,
-            "parse_mode": parse_mode,
-            "disable_web_page_preview": True,
-        }
         try:
-            resp = await self._http.post(url, json=payload)
+            resp = await self._http.post(url, json={
+                "chat_id": self._chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            })
             if resp.status_code != 200:
-                logger.warning(
-                    "Telegram API error: %s %s",
-                    resp.status_code,
-                    resp.text,
-                )
+                logger.warning("Telegram API error: %s — %s", resp.status_code, resp.text[:200])
                 return False
             return True
         except Exception as e:
             logger.warning("Telegram send failed: %s", e)
             return False
 
-    def _format_signal_new(self, data: dict) -> str:
-        """Format a new raw signal into a Telegram message (fallback when no mapping)."""
+    def _format_raw_signal(self, data: dict) -> str:
+        """Format a raw signal for immediate notification (no classification yet)."""
         pair = data.get("pair", "???")
         channel = data.get("channel", "?")
         exchange = data.get("exchange", "?")
 
-        lines = [f"🔔 <b>{pair}</b> — {exchange}"]
-        lines.append(f"📡 Канал: @{channel}")
+        type_emoji = "🧹" if channel == "brushscreener" else "🪜"
 
+        lines = [f"{type_emoji} <b>{pair}</b> — {exchange}"]
+        lines.append(f"📡 @{channel}")
+
+        # Raw metrics
+        metrics = []
         if data.get("price_range") is not None:
-            lines.append(f"📊 Range: {data['price_range']}%")
+            metrics.append(f"Range: {data['price_range']}%")
         if data.get("vol_60m") is not None:
-            lines.append(f"📈 Vol 60m: {self._format_vol(data['vol_60m'])}")
+            metrics.append(f"Vol60m: {self._format_vol(data['vol_60m'])}")
         if data.get("vol_10m") is not None:
-            lines.append(f"📈 Vol 10m: {self._format_vol(data['vol_10m'])}")
+            metrics.append(f"Vol10m: {self._format_vol(data['vol_10m'])}")
         if data.get("slope") is not None:
-            lines.append(f"📐 Slope: {data['slope']}")
+            metrics.append(f"Slope: {data['slope']}")
         if data.get("top_ratio") is not None and data.get("bot_ratio") is not None:
-            lines.append(
-                f"🔵 Top: {data['top_ratio']} | 🔴 Bot: {data['bot_ratio']}"
-            )
+            metrics.append(f"T/B: {data['top_ratio']}/{data['bot_ratio']}")
+        if metrics:
+            lines.append("📊 " + " | ".join(metrics))
 
         lines.append("")
-        lines.append("⏳ Нет классификации (таймаут)")
+        lines.append("⏳ Классификация...")
 
         return "\n".join(lines)
 
-    def _format_signal_combined(self, data: dict) -> str:
-        """Format a single combined message with raw + mapped signal data."""
+    def _format_mapped_signal(self, data: dict) -> str:
+        """Format a classified signal into a Telegram message."""
         pair = data.get("pair", "???")
-        channel = data.get("channel", "?")
         exchange = data.get("exchange", "?")
         signal_label = data.get("signal_label", "?")
         signal_type = data.get("signal_type", "?")
@@ -174,24 +137,7 @@ class SignalNotifier:
         engine_label = "OrderBook" if mapped_engine == "ob" else "Trading"
 
         lines = [f"{type_emoji} <b>{pair}</b> — {exchange}"]
-        lines.append(f"📡 @{channel} | 📊 {signal_label}")
-
-        # Raw metrics
-        metrics = []
-        if data.get("price_range") is not None:
-            metrics.append(f"Range: {data['price_range']}%")
-        if data.get("vol_60m") is not None:
-            metrics.append(f"Vol60m: {self._format_vol(data['vol_60m'])}")
-        if data.get("vol_10m") is not None:
-            metrics.append(f"Vol10m: {self._format_vol(data['vol_10m'])}")
-        if data.get("slope") is not None:
-            metrics.append(f"Slope: {data['slope']}")
-        if data.get("top_ratio") is not None and data.get("bot_ratio") is not None:
-            metrics.append(
-                f"T/B: {data['top_ratio']}/{data['bot_ratio']}"
-            )
-        if metrics:
-            lines.append("📊 " + " | ".join(metrics))
+        lines.append(f"📊 {signal_label}")
 
         # Available exchanges
         if available:
@@ -205,9 +151,7 @@ class SignalNotifier:
                 lines.append("💱 " + ", ".join(avail_parts))
 
         if confidence:
-            bars = "▓" * int(confidence * 10) + "░" * (
-                10 - int(confidence * 10)
-            )
+            bars = "▓" * int(confidence * 10) + "░" * (10 - int(confidence * 10))
             lines.append(f"🎯 {bars} {(confidence * 100):.0f}%")
 
         lines.append("")
@@ -245,85 +189,6 @@ class SignalNotifier:
 
         return "\n".join(lines)
 
-    def _format_signal_mapped(self, data: dict) -> str:
-        """Format a classified signal into a Telegram message with actions."""
-        pair = data.get("pair", "???")
-        exchange = data.get("exchange", "?")
-        signal_label = data.get("signal_label", "?")
-        signal_type = data.get("signal_type", "?")
-        mapped_strategy = data.get("mapped_strategy", "?")
-        mapped_engine = data.get("mapped_engine", "?")
-        params = data.get("mapped_params", {}) or {}
-        fallback = data.get("fallback_exchange")
-        available = data.get("available_exchanges") or {}
-        confidence = data.get("confidence", 0)
-
-        # Emoji by type
-        type_emoji = {
-            "brush": "🧹",
-            "stair": "🪜",
-            "imbalance_top": "⬇️",
-            "imbalance_bot": "⬆️",
-            "volume_spike": "🌊",
-        }.get(signal_type, "🔔")
-
-        engine_label = "OrderBook" if mapped_engine == "ob" else "Trading"
-
-        lines = [f"{type_emoji} <b>{pair}</b> — {exchange}"]
-        lines.append(f"📊 {signal_label}")
-
-        # Show only exchanges where user has VALID API keys AND pair is available
-        if available:
-            avail_parts = []
-            for exch, is_avail in sorted(available.items()):
-                if is_avail:
-                    avail_parts.append(f"<b>{exch.upper()}</b> ✅")
-                else:
-                    avail_parts.append(f"<b>{exch.upper()}</b> ❌")
-            if avail_parts:
-                lines.append("💱 " + ", ".join(avail_parts))
-
-        if confidence:
-            bars = "▓" * int(confidence * 10) + "░" * (
-                10 - int(confidence * 10)
-            )
-            lines.append(f"🎯 {bars} {(confidence * 100):.0f}%")
-
-        lines.append("")
-        lines.append(f"⚙️ <b>{mapped_strategy}</b> ({engine_label})")
-
-        # Format key params
-        param_parts = []
-        if params.get("balance"):
-            param_parts.append(f"💰 ${params['balance']}")
-        if params.get("stoploss"):
-            sl = abs(params["stoploss"])
-            param_parts.append(f"🛑 SL: {sl:.1f}%")
-        if params.get("takeprofit"):
-            param_parts.append(f"✅ TP: {params['takeprofit']:.1f}%")
-        if params.get("max_trade"):
-            param_parts.append(f"📦 ${params['max_trade']}")
-        if params.get("timeframe"):
-            param_parts.append(f"⏱ {params['timeframe']}")
-        if params.get("leverage"):
-            param_parts.append(f"🔁 {params['leverage']}x")
-        if params.get("max_hold"):
-            hold_m = params["max_hold"] // 60
-            param_parts.append(f"⏳ {hold_m}м")
-
-        if param_parts:
-            lines.append(" | ".join(param_parts))
-
-        # Signal ID for actions
-        signal_id = data.get("id")
-        if signal_id:
-            lines.append("")
-            lines.append(
-                f"🚀 <a href='https://pfumiko.ru/trading/signals/{signal_id}'>Открыть сигнал</a>"
-            )
-
-        return "\n".join(lines)
-
     def _format_vol(self, vol: float) -> str:
         if vol >= 1_000_000:
             return f"${vol / 1_000_000:.1f}M"
@@ -332,16 +197,12 @@ class SignalNotifier:
         return f"${vol:.0f}"
 
     async def run_forever(self):
-        """Main loop: listen to Redis pub/sub and send notifications."""
-        logger.info("SignalNotifier starting...")
+        """Main loop: listen to Redis pub/sub and send notifications instantly."""
+        logger.info("SignalNotifier starting (instant delivery mode)...")
 
         if not await self._load_bot_config():
             logger.error("No bot configured — exiting")
             return
-
-        # Reload bot config every hour (in case user adds new bot)
-        _last_reload = asyncio.get_event_loop().time()
-        _reload_interval = 3600  # 1 hour
 
         while self._running:
             from redis.asyncio import Redis
@@ -367,12 +228,9 @@ class SignalNotifier:
                             timeout=1.0, ignore_subscribe_messages=True
                         )
                     except asyncio.TimeoutError:
-                        # Normal — no message within 1s, keep polling
                         continue
                     except Exception as e:
-                        logger.warning(
-                            "get_message error: %s", e, exc_info=True
-                        )
+                        logger.warning("get_message error: %s", e, exc_info=True)
                         await asyncio.sleep(1)
                         continue
 
@@ -385,47 +243,38 @@ class SignalNotifier:
                     except json.JSONDecodeError:
                         continue
 
-                    # Periodic bot config reload + memory cleanup
+                    # Periodic maintenance
                     now = asyncio.get_event_loop().time()
-                    if now - _last_reload > _reload_interval:
+                    if now - self._last_reload > self._reload_interval:
                         await self._load_bot_config()
                         collected = gc.collect()
                         logger.info(
                             "Maintenance: bot config reloaded, gc collected %d objects",
                             collected,
                         )
-                        _last_reload = now
+                        self._last_reload = now
+
+                    pair = data.get("pair", "")
+                    if not pair:
+                        continue
 
                     if channel == "channel:signal:new":
-                        pair = data.get("pair", "")
-                        if not pair:
-                            continue
-
-                        # Buffer raw signal, start 5s timeout
-                        now = asyncio.get_event_loop().time()
-                        async with self._pending_lock:
-                            self._pending[pair] = (data, now)
-
-                        # Schedule flush on timeout (if no mapped arrives)
-                        async def _timeout(p=pair):
-                            await asyncio.sleep(5)
-                            await self._flush_pending(p)
-
-                        asyncio.create_task(_timeout())
-                        logger.info("Buffered raw signal for %s (waiting for mapping)", pair)
+                        # ── Send raw signal IMMEDIATELY (no buffer) ──
+                        text = self._format_raw_signal(data)
+                        sent = await self.send_telegram(text)
+                        if sent:
+                            logger.info("Sent RAW signal notification for %s", pair)
 
                     elif channel == "channel:signal:mapped":
-                        pair = data.get("pair", "")
-                        if not pair:
-                            continue
-
-                        # Flush immediately with combined data
-                        await self._flush_pending(pair, mapped=data)
-                        logger.info(
-                            "Mapped signal for %s → %s, sent combined notification",
-                            pair,
-                            data.get("mapped_strategy", "?"),
-                        )
+                        # ── Send classified signal as SEPARATE message ──
+                        text = self._format_mapped_signal(data)
+                        sent = await self.send_telegram(text)
+                        if sent:
+                            logger.info(
+                                "Sent MAPPED signal notification for %s → %s",
+                                pair,
+                                data.get("mapped_strategy", "?"),
+                            )
 
             except asyncio.CancelledError:
                 break
@@ -448,7 +297,6 @@ def run():
     notifier = SignalNotifier()
     notifier._running = True
 
-    # Handle graceful shutdown
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -460,7 +308,7 @@ def run():
         try:
             loop.add_signal_handler(sig, _stop)
         except (NotImplementedError, ValueError):
-            pass  # Windows or test env
+            pass
 
     try:
         loop.run_until_complete(notifier.run_forever())

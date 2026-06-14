@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Telegram screener signal parser.
+"""Telegram screener signal parser — fast, non-blocking.
 
 Usage:
-  python3 scripts/parse_telegram_signals.py          # one-shot (cron mode)
-  python3 scripts/parse_telegram_signals.py --daemon # continuous loop
+  python3 scripts/parse_telegram_signals.py          # one-shot
+  python3 scripts/parse_telegram_signals.py --daemon # continuous loop (recommended)
 
-One-shot: fetches channels, saves + classifies signals, exits.
-Daemon:   loops every 30s, same logic, never exits.
+One-shot: fetches channels, saves + publishes raw signals, exits.
+Daemon:   loops every 15s, same logic, never exits.
+Classification is handled by a separate map_signals_daemon.py.
 """
 
 from __future__ import annotations
@@ -17,6 +18,9 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
+from typing import Optional
+
+import httpx
 
 # Ensure app is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -27,26 +31,61 @@ logging.basicConfig(
 )
 logger = logging.getLogger("parse_telegram_signals")
 
+# ── Reusable connections (module-level, survive across cycles) ────────────
+_redis_client: Optional = None
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+    return _http_client
+
+
+async def _get_redis():
+    """Get or create reusable Redis connection."""
+    global _redis_client
+    if _redis_client is None:
+        from redis.asyncio import Redis as AsyncRedis
+        from app.core.config import settings
+        _redis_client = AsyncRedis.from_url(
+            settings.REDIS_URL, encoding="utf-8", decode_responses=True
+        )
+        logger.info("Created reusable Redis connection")
+    try:
+        await _redis_client.ping()
+    except Exception:
+        from redis.asyncio import Redis as AsyncRedis
+        from app.core.config import settings
+        _redis_client = AsyncRedis.from_url(
+            settings.REDIS_URL, encoding="utf-8", decode_responses=True
+        )
+    return _redis_client
+
+
 # ── Database ────────────────────────────────────────────────────────────────
 
 
-async def save_signals(signals) -> list[int]:
-    """Save parsed signals to database and Redis cache.
+async def save_signals(signals) -> list[dict]:
+    """Save parsed signals to database and Redis.
 
-    Returns list of new signal IDs.
+    Returns list of signal dicts (id, pair, channel, exchange, raw_data, created_at).
+    Uses in-memory data only — no re-fetching from DB.
     """
-    from app.core.cache import publish, set_cache
+    from app.core.cache import publish
     from app.core.database import async_session_factory
     from app.models.trading_signal import TradingSignal
-
-    new_ids: list[int] = []
-    skipped_dedup = 0      # duplicate within 30 min window
-    skipped_duplicate = 0  # older duplicate (will save anyway? no — just count)
+    from sqlalchemy import select, func as sa_func, delete as sa_delete
 
     async with async_session_factory() as session:
-        for sig in signals:
-            from sqlalchemy import select
+        new_signals: list[dict] = []
+        skipped_dedup = 0
 
+        for sig in signals:
             stmt = (
                 select(TradingSignal)
                 .where(
@@ -78,25 +117,35 @@ async def save_signals(signals) -> list[int]:
             )
             session.add(signal)
             await session.flush()
-            new_ids.append(signal.id)
 
-        if new_ids:
+            new_signals.append({
+                "id": signal.id,
+                "channel": signal.channel,
+                "exchange": signal.exchange,
+                "pair": signal.pair,
+                "price_range": signal.price_range,
+                "vol_60m": signal.vol_60m,
+                "vol_10m": signal.vol_10m,
+                "slope": signal.slope,
+                "top_ratio": signal.top_ratio,
+                "bot_ratio": signal.bot_ratio,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+        if new_signals:
             await session.commit()
-            logger.info("Saved %d new signals: %s", len(new_ids), new_ids)
+            logger.info("Saved %d new signals: %s", len(new_signals), [s["id"] for s in new_signals])
 
         # ── Cleanup: keep max 200 signals ────────────────
         try:
-            from sqlalchemy import func as sa_func, select as sa_select, delete as sa_delete
-
-            count_stmt = sa_select(sa_func.count(TradingSignal.id))
+            count_stmt = select(sa_func.count(TradingSignal.id))
             count_result = await session.execute(count_stmt)
             total = count_result.scalar() or 0
 
             if total > 200:
                 to_delete = total - 200
-                # Find oldest N signal IDs to delete
                 oldest_stmt = (
-                    sa_select(TradingSignal.id)
+                    select(TradingSignal.id)
                     .order_by(TradingSignal.created_at.asc())
                     .limit(to_delete)
                 )
@@ -108,113 +157,59 @@ async def save_signals(signals) -> list[int]:
                     await session.execute(delete_stmt)
                     await session.commit()
                     logger.info(
-                        "Cleanup: removed %d old signal(s) (total was %d, max 200): IDs %s",
-                        len(oldest_ids), total, oldest_ids,
+                        "Cleanup: removed %d old signal(s) (total was %d)",
+                        len(oldest_ids), total,
                     )
         except Exception as e:
             logger.warning("Signal cleanup failed (non-fatal): %s", e)
 
-    # Cache in Redis (optional — falls back gracefully if Redis is down)
-    try:
-        for sig in signals:
-            key = f"signal:raw:{sig.channel}:{sig.pair}"
-            await set_cache(
-                key,
-                {
-                    "channel": sig.channel,
-                    "exchange": sig.exchange,
-                    "pair": sig.pair,
-                    "price_range": sig.price_range,
-                    "vol_60m": sig.vol_60m,
-                    "vol_10m": sig.vol_10m,
-                    "slope": sig.slope,
-                    "top_ratio": sig.top_ratio,
-                    "bot_ratio": sig.bot_ratio,
-                },
-                ttl=604800,  # 7 days
-            )
-    except Exception as e:
-        logger.warning("Redis cache unavailable (skip): %s", e)
+    if not new_signals:
+        return []
 
-    # Publish new signals to real-time frontend
-    for sid in new_ids:
+    # ── Redis operations (reuse connection) ──────────────────────────────
+    r = await _get_redis()
+
+    for sd in new_signals:
+        sig_dict = {
+            "id": sd["id"],
+            "channel": sd["channel"],
+            "exchange": sd["exchange"],
+            "pair": sd["pair"],
+            "price_range": sd["price_range"],
+            "vol_60m": sd["vol_60m"],
+            "vol_10m": sd["vol_10m"],
+            "slope": sd["slope"],
+            "top_ratio": sd["top_ratio"],
+            "bot_ratio": sd["bot_ratio"],
+            "created_at": sd["created_at"],
+            "mapped_strategy": None,
+            "mapped_engine": None,
+        }
+
+        # Cache raw signal (7 days TTL)
+        cache_key = f"signal:raw:{sd['channel']}:{sd['pair']}"
+        await r.setex(cache_key, 604800, json.dumps(sig_dict))
+
+        # Push to signals:latest
+        await r.lpush("signals:latest", json.dumps(sig_dict))
+
+        # Publish to Redis pub/sub (for notification bot + mapper daemon)
         try:
-            async with async_session_factory() as s:
-                from sqlalchemy import select
-
-                stmt = select(TradingSignal).where(TradingSignal.id == sid)
-                result = await s.execute(stmt)
-                db_signal = result.scalar_one_or_none()
-                if db_signal:
-                    await publish(
-                        "channel:signal:new",
-                    {
-                        "id": db_signal.id,
-                        "channel": db_signal.channel,
-                        "exchange": db_signal.exchange,
-                        "pair": db_signal.pair,
-                        "price_range": db_signal.price_range,
-                        "vol_60m": db_signal.vol_60m,
-                        "vol_10m": db_signal.vol_10m,
-                        "slope": db_signal.slope,
-                        "top_ratio": db_signal.top_ratio,
-                        "bot_ratio": db_signal.bot_ratio,
-                        "created_at": db_signal.created_at.isoformat() if db_signal.created_at else None,
-                    },
-                )
-                logger.info("Published signal #%d to Redis pub/sub", sid)
+            await publish("channel:signal:new", sig_dict)
         except Exception as e:
-            logger.warning("Redis pub/sub unavailable (skip signal #%d): %s", sid, e)
+            logger.warning("Redis pub/sub unavailable (skip publish #%d): %s", sd["id"], e)
 
-    # Populate signals:latest list in Redis (for live endpoint)
-    if new_ids:
-        try:
-            from redis.asyncio import Redis as AsyncRedis
-            from app.core.config import settings
+    await r.ltrim("signals:latest", 0, 49)
+    logger.info("Redis updated: %d signals pushed, trimmed to 50", len(new_signals))
 
-            r = AsyncRedis.from_url(
-                settings.REDIS_URL, encoding="utf-8", decode_responses=True
-            )
-            try:
-                for sid in new_ids:
-                    async with async_session_factory() as s:
-                        stmt = select(TradingSignal).where(TradingSignal.id == sid)
-                        result = await s.execute(stmt)
-                        db_signal = result.scalar_one_or_none()
-                        if db_signal:
-                            signal_dict = {
-                                "id": db_signal.id,
-                                "channel": db_signal.channel,
-                                "exchange": db_signal.exchange,
-                                "pair": db_signal.pair,
-                                "price_range": db_signal.price_range,
-                                "vol_60m": db_signal.vol_60m,
-                                "vol_10m": db_signal.vol_10m,
-                                "slope": db_signal.slope,
-                                "top_ratio": db_signal.top_ratio,
-                                "bot_ratio": db_signal.bot_ratio,
-                                "mapped_strategy": db_signal.mapped_strategy,
-                                "mapped_engine": db_signal.mapped_engine,
-                                "mapped_exchange_fallback": db_signal.mapped_exchange_fallback,
-                                "mapped_available_exchanges": db_signal.mapped_available_exchanges,
-                                "created_at": db_signal.created_at.isoformat() if db_signal.created_at else None,
-                            }
-                            await r.lpush("signals:latest", json.dumps(signal_dict))
-                # Keep only latest 50 in the list
-                await r.ltrim("signals:latest", 0, 49)
-                logger.info("Updated signals:latest list (%d new, trimmed to 50)", len(new_ids))
-            finally:
-                await r.aclose()
-        except Exception as e:
-            logger.warning("Failed to update signals:latest: %s", e)
-
-    return new_ids
+    return new_signals
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
 
 async def main():
+    """One cycle: fetch channels → save → exit."""
     from app.services.signals.telegram_parser import parse_all_channels
 
     logger.info("Parsing Telegram screener channels...")
@@ -223,61 +218,36 @@ async def main():
 
     if not signals:
         logger.info("No signals found from Telegram channels")
+        print("⏸ Новых сигналов нет")
         return
 
-    new_ids = await save_signals(signals)
+    new_signal_dicts = await save_signals(signals)
 
-    # Map new signals (classify + cross-exchange lookup) — IN PARALLEL
-    if new_ids:
-        from app.services.signals.signal_mapper import map_and_save_signal
-        from app.core.database import async_session_factory
-
-        async def _map_one(sid: int):
-            try:
-                async with async_session_factory() as session:
-                    await map_and_save_signal(session, sid)
-                logger.info("Mapped signal #%d", sid)
-            except Exception as e:
-                logger.warning("Failed to map signal #%d: %s", sid, e)
-
-        await asyncio.gather(*[_map_one(sid) for sid in new_ids])
-        logger.info("All %d signal(s) mapped in parallel", len(new_ids))
-
-    # ── User-facing output ────────────────────────────────────────────────
+    new_ids = [s["id"] for s in new_signal_dicts]
     total = len(signals)
     skipped = total - len(new_ids)
 
     if new_ids:
-        # Fetch details for notification
-        from app.core.database import async_session_factory as asf2
-        from app.models.trading_signal import TradingSignal
-        from sqlalchemy import select
-
         lines = [f"🔥 *Новые сигналы ({len(new_ids)})*"]
-        async with asf2() as session:
-            for sid in new_ids:
-                stmt = select(TradingSignal).where(TradingSignal.id == sid)
-                r = await session.execute(stmt)
-                s = r.scalar_one_or_none()
-                if s:
-                    lines.append(
-                        f"• #{s.id} {s.pair} @ {s.channel} — "
-                        f"range={s.price_range}, vol10m={s.vol_10m}"
-                    )
+        for sd in new_signal_dicts:
+            lines.append(
+                f"• #{sd['id']} {sd['pair']} @ {sd['channel']} — "
+                f"range={sd['price_range']}, vol10m={sd['vol_10m']}"
+            )
         lines.append("")
         lines.append(f"Пропущено (дубликаты <30м): {skipped}")
         print("\n".join(lines))
     else:
-        print(f"⏸ Новых сигналов нет. Найдено {total}, пропущено {skipped} (дубликаты <30 мин)")
+        print(f"⏸ Новых сигналов нет. Найдено {total}, пропущено {skipped}")
 
-    logger.info("Done — saved %d new signals (skipped %d duplicates)", len(new_ids), skipped)
+    logger.info("Done — saved %d new signals (skipped %d)", len(new_ids), skipped)
 
 
 async def run_daemon():
-    """Run parser in continuous loop — polls every 30 seconds."""
+    """Run parser in continuous loop — polls every 15 seconds."""
     import signal as signal_module
 
-    logger.info("Signal parser daemon starting (poll interval=30s)...")
+    logger.info("Signal parser daemon starting (poll interval=15s)...")
 
     running = True
 
@@ -298,18 +268,27 @@ async def run_daemon():
             await main()
         except Exception as e:
             logger.error("Parser cycle failed: %s", e, exc_info=True)
-        # Sleep 30s between cycles (check running flag every second)
-        for _ in range(30):
+        for _ in range(15):
             if not running:
                 break
             await asyncio.sleep(1)
+
+    # Clean up connections
+    global _redis_client, _http_client
+    if _redis_client:
+        try:
+            await _redis_client.aclose()
+        except Exception:
+            pass
+        _redis_client = None
+    if _http_client and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
 
     logger.info("Signal parser daemon stopped")
 
 
 if __name__ == "__main__":
-    import sys
-
     if "--daemon" in sys.argv:
         asyncio.run(run_daemon())
     else:

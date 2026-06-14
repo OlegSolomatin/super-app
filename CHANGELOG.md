@@ -1,4 +1,9 @@
-||||||- `feat` OB history cards redesigned to match candle card style (strategy header, divider, info row with Pair/trades/PnL, status badge) | Hermes
+|||||||- `perf` parse_telegram_signals: poll 30s→15s, reuse Redis/HTTP conns, no DB re-fetch (CPU↓70%) | Oleg
+|||||||- `feat` New map_signals_daemon.py: independent daemon, listens Redis pub/sub, classifies in background (parser no longer blocks) | Oleg
+|||||||- `perf` notification_bot: instant delivery — removed 5s buffer, sends raw signal immediately, classified update as separate msg | Oleg
+|||||||- `fix` notification_bot: removed invalid is_active filter (column doesn't exist in telegram_bots) | Oleg
+|||||||- `fix` Backup crons: confirmed working, previous failures due to server restart race condition | Oleg
+|||||||- `feat` OB history cards redesigned to match candle card style (strategy header, divider, info row with Pair/trades/PnL, status badge) | Hermes
 ||||||- `fix` Signal classification: update signals:latest Redis list after mapping so frontend has strategy/engine/exchanges | Hermes
 ||||||- `fix` OB engine: fix analyze() crash - Optional fields as None from model_dump() override dataclass defaults | Hermes
 ||||||- `fix` Wizard: dynamic exchange in status + remove step content top gap | Hermes
