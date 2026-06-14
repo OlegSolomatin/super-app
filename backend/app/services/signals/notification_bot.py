@@ -25,7 +25,7 @@ logger = logging.getLogger("notification_bot")
 
 
 class SignalNotifier:
-    """Listens to Redis pub/sub and sends Telegram notifications instantly."""
+    """Listens to Redis pub/sub and sends Telegram notifications with buffered ordering."""
 
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
         self.redis_url = redis_url
@@ -35,6 +35,10 @@ class SignalNotifier:
         self._http = httpx.AsyncClient(timeout=10)
         self._last_reload = 0.0
         self._reload_interval = 3600  # Reload bot config every hour
+        # Buffer for ordered delivery
+        self._buffer: dict[int, dict] = {}  # signal_id → data
+        self._flush_task: Optional[asyncio.Task] = None
+        self._flush_delay = 3.0  # seconds to wait for batching
 
     async def _load_bot_config(self) -> bool:
         """Load the first active Telegram bot from DB."""
@@ -202,9 +206,84 @@ class SignalNotifier:
             return f"${vol / 1_000:.1f}K"
         return f"${vol:.0f}"
 
+    async def _add_to_buffer(self, data: dict):
+        """Add a mapped signal to buffer and schedule flush."""
+        signal_id = data.get("id")
+        if not signal_id:
+            return
+
+        self._buffer[signal_id] = data
+
+        # Cancel previous flush timer
+        if self._flush_task and not self._flush_task.done():
+            self._flush_task.cancel()
+
+        # Schedule new flush after delay
+        self._flush_task = asyncio.create_task(self._delayed_flush())
+
+    async def _delayed_flush(self):
+        """Wait for buffer delay, then send all buffered signals in order."""
+        try:
+            await asyncio.sleep(self._flush_delay)
+        except asyncio.CancelledError:
+            return  # A new signal arrived, timer was reset
+
+        if not self._buffer:
+            return
+
+        # Sort by signal ID ascending
+        sorted_ids = sorted(self._buffer.keys())
+        batch = [self._buffer[sid] for sid in sorted_ids]
+        self._buffer.clear()
+
+        logger.info("Flushing %d buffered signals (IDs: %s)", len(batch), sorted_ids)
+
+        for data in batch:
+            try:
+                text = self._format_mapped_signal(data)
+                inline_kb = self._build_inline_keyboard(data)
+                sent = await self.send_telegram(text, reply_markup=inline_kb)
+                if sent:
+                    logger.info(
+                        "Sent mapped signal #%d (%s)",
+                        data.get("id"), data.get("pair"),
+                    )
+            except Exception as e:
+                logger.error("Failed to send buffered signal #%d: %s", data.get("id"), e)
+
+    def _build_inline_keyboard(self, data: dict) -> Optional[dict]:
+        """Build inline keyboard for a mapped signal."""
+        signal_id = data.get("id")
+        available = data.get("available_exchanges") or {}
+
+        # Find first available exchange
+        launch_exch = None
+        for exch, is_avail in sorted(available.items()):
+            if is_avail:
+                launch_exch = exch.upper()
+                break
+
+        buttons = []
+        if signal_id:
+            buttons.append({
+                "text": "🔍 Открыть на сайте",
+                "url": f"https://pfumiko.ru/trading/signals/{signal_id}",
+            })
+        if launch_exch:
+            buttons.append({
+                "text": f"🚀 Запустить на {launch_exch}",
+                "url": f"https://pfumiko.ru/trading/signals/{signal_id}?mode=real&exchange={launch_exch.lower()}",
+            })
+
+        if not buttons:
+            return None
+
+        kb = {"inline_keyboard": [buttons] if len(buttons) <= 2 else [buttons]}
+        return kb
+
     async def run_forever(self):
-        """Main loop: listen to Redis pub/sub and send notifications instantly."""
-        logger.info("SignalNotifier starting (instant delivery mode)...")
+        """Main loop: listen to Redis pub/sub, buffer mapped signals, send in order."""
+        logger.info("SignalNotifier starting (buffered delivery, %ss window)...", self._flush_delay)
 
         if not await self._load_bot_config():
             logger.error("No bot configured — exiting")
@@ -221,12 +300,8 @@ class SignalNotifier:
             pubsub = r.pubsub()
 
             try:
-                await pubsub.subscribe(
-                    "channel:signal:mapped"
-                )
-                logger.info(
-                    "Subscribed to channel:signal:mapped (only classified signals)"
-                )
+                await pubsub.subscribe("channel:signal:mapped")
+                logger.info("Subscribed to channel:signal:mapped (buffered)")
 
                 while self._running:
                     try:
@@ -265,54 +340,8 @@ class SignalNotifier:
                         continue
 
                     if channel == "channel:signal:mapped":
-                        # ── Send classified signal with inline keyboard ──
-                        t0 = time.monotonic()
-
-                        # Build inline keyboard
-                        signal_id = data.get("id")
-                        pair = data.get("pair", "")
-                        direction = data.get("direction", "long")
-                        mapped_strategy = data.get("mapped_strategy", "?")
-                        mapped_engine = data.get("mapped_engine", "?")
-                        params = data.get("mapped_params", {}) or {}
-                        available = data.get("available_exchanges") or {}
-
-                        # Find first available exchange for launch
-                        launch_exch = None
-                        for exch, is_avail in sorted(available.items()):
-                            if is_avail:
-                                launch_exch = exch.upper()
-                                break
-
-                        inline_kb = {"inline_keyboard": [[]]}
-                        buttons = []
-
-                        if signal_id:
-                            buttons.append({
-                                "text": "🔍 Открыть на сайте",
-                                "url": f"https://pfumiko.ru/trading/signals/{signal_id}",
-                            })
-                        if launch_exch:
-                            buttons.append({
-                                "text": f"🚀 Запустить на {launch_exch}",
-                                "url": f"https://pfumiko.ru/trading/signals/{signal_id}?mode=real&exchange={launch_exch.lower()}",
-                            })
-                        if buttons:
-                            if len(buttons) == 1:
-                                inline_kb["inline_keyboard"] = [[buttons[0]]]
-                            else:
-                                inline_kb["inline_keyboard"] = [buttons]
-
-                        text = self._format_mapped_signal(data)
-                        sent = await self.send_telegram(text, reply_markup=inline_kb)
-                        if sent:
-                            elapsed = (time.monotonic() - t0) * 1000
-                            logger.info(
-                                "Sent MAPPED signal #%d (%s → %s): notifier→telegram in %.0fms",
-                                signal_id, pair,
-                                mapped_strategy,
-                                elapsed,
-                            )
+                        # Buffer the mapped signal — will be sent in sorted order
+                        await self._add_to_buffer(data)
 
             except asyncio.CancelledError:
                 break

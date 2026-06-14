@@ -224,8 +224,6 @@ async def parse_channel(channel_name: str) -> list[RawSignal]:
             parsed.message_id = post_id
             signals.append(parsed)
             seen_pairs.add(parsed.pair)
-            if len(signals) >= 10:
-                break
 
     return signals
 
