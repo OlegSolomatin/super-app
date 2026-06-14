@@ -32,6 +32,7 @@ class RawSignal:
     channel: str
     exchange: str
     pair: str
+    message_id: str = ""  # "channelname/NNNNN" — уникальный ID поста в Telegram
     price_range: Optional[float] = None
     vol_60m: Optional[float] = None
     vol_10m: Optional[float] = None
@@ -55,13 +56,10 @@ def _parse_stair_signal(text: str) -> Optional[RawSignal]:
         # Exchange and pair
         exchange_pair = re.search(r"^(.+?)\n", text)
         if not exchange_pair:
-            # Try first line from text
             lines = text.strip().split("\n")
             first = lines[0] if lines else ""
-            # Extract exchange from first meaningful part
             exchange_match = re.match(r"([A-Za-z\s-]+)", first)
             exchange = exchange_match.group(1).strip() if exchange_match else "Mexc"
-            # Extract pair
             pair_match = re.search(r"([A-Z0-9]{2,10})/USD", first) or re.search(
                 r"([A-Z0-9]{2,10})USDT", first
             )
@@ -79,17 +77,14 @@ def _parse_stair_signal(text: str) -> Optional[RawSignal]:
             logger.warning("Could not extract pair from stair signal: %s", text[:50])
             return None
 
-        # Price range
         range_m = re.search(r"Price range:\s*([\d.]+)\s*%", text)
         price_range = float(range_m.group(1)) if range_m else None
 
-        # Volumes
         vol60_m = re.search(r"Last 60 mins vol:\s*([\d.]+)\s*\$", text)
         vol10_m = re.search(r"Last 10 mins vol:\s*([\d.]+)\s*\$", text)
         vol_60m = float(vol60_m.group(1)) if vol60_m else None
         vol_10m = float(vol10_m.group(1)) if vol10_m else None
 
-        # Slope
         slope_m = re.search(r"Slope:\s*([\d.]+)", text)
         slope = float(slope_m.group(1)) if slope_m else None
 
@@ -119,21 +114,17 @@ def _parse_brush_signal(text: str) -> Optional[RawSignal]:
     Top/Bot touch ratio: 0.08 / 0.09
     """
     try:
-        # Exchange and pair from first line
         lines = text.strip().split("\n")
         first = lines[0] if lines else ""
 
-        # Parse exchange and pair from combined first token
         exchange = "Mexc"
         pair = ""
 
-        # Try to find pair/USD or pairUSDT
         pair_match = re.search(r"([A-Z0-9]{2,20})/USD", first) or re.search(
             r"([A-Z0-9]{2,20})USDT", first
         )
         if pair_match:
             pair = pair_match.group(1) + "USDT"
-            # Exchange is everything before the pair token
             before = first[: pair_match.start()]
             if before.strip():
                 exchange = before.strip().rstrip("- ")
@@ -142,17 +133,14 @@ def _parse_brush_signal(text: str) -> Optional[RawSignal]:
             logger.warning("Could not extract pair from brush signal: %s", text[:50])
             return None
 
-        # Price range
         range_m = re.search(r"Price range:\s*([\d.]+)\s*%", text)
         price_range = float(range_m.group(1)) if range_m else None
 
-        # Volumes
         vol60_m = re.search(r"Last 60 mins vol:\s*([\d.]+)\s*\$", text)
         vol10_m = re.search(r"Last 10 mins vol:\s*([\d.]+)\s*\$", text)
         vol_60m = float(vol60_m.group(1)) if vol60_m else None
         vol_10m = float(vol10_m.group(1)) if vol10_m else None
 
-        # Top/Bot ratio
         ratio_m = re.search(r"Top/Bot touch ratio:\s*([\d.]+)\s*/\s*([\d.]+)", text)
         top_ratio = float(ratio_m.group(1)) if ratio_m else None
         bot_ratio = float(ratio_m.group(2)) if ratio_m else None
@@ -173,25 +161,32 @@ def _parse_brush_signal(text: str) -> Optional[RawSignal]:
         return None
 
 
-def _extract_messages(html: str) -> list[str]:
-    """Extract message texts from Telegram Web preview HTML."""
+def _extract_message_data(html: str) -> list[tuple[str, str]]:
+    """Extract (post_id, text) from Telegram preview HTML.
+
+    post_id format: "brushscreener/497075" (channel/sequential_id)
+    """
     import html as html_mod
 
-    # Find all message text blocks
+    # Extract message post IDs from data-post attributes (in DOM order)
+    post_ids = re.findall(r'data-post="([^"]+)"', html)
+
+    # Extract message texts (in DOM order)
     texts = re.findall(
         r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
         html,
         re.DOTALL,
     )
-    result = []
-    for t in texts:
-        # Strip HTML tags
+
+    results: list[tuple[str, str]] = []
+    for i, t in enumerate(texts):
         t = re.sub(r"<[^>]+>", "", t)
         t = html_mod.unescape(t)
         t = t.strip()
         if t:
-            result.append(t)
-    return result
+            pid = post_ids[i] if i < len(post_ids) else ""
+            results.append((pid, t))
+    return results
 
 
 async def parse_channel(channel_name: str) -> list[RawSignal]:
@@ -217,15 +212,16 @@ async def parse_channel(channel_name: str) -> list[RawSignal]:
         logger.error("Failed to fetch %s: %s", url, e)
         return []
 
-    messages = _extract_messages(html)
+    messages = _extract_message_data(html)
     parser = _parse_brush_signal if channel_name == "brushscreener" else _parse_stair_signal
 
     signals: list[RawSignal] = []
     seen_pairs: set[str] = set()
 
-    for msg in messages:
-        parsed = parser(msg)
+    for post_id, msg_text in messages:
+        parsed = parser(msg_text)
         if parsed and parsed.pair not in seen_pairs:
+            parsed.message_id = post_id
             signals.append(parsed)
             seen_pairs.add(parsed.pair)
             if len(signals) >= 10:

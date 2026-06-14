@@ -1,3 +1,6 @@
+|||||||- `fix` parse_telegram_signals: dedup by Telegram post ID (message_id) instead of 30-min window — больше не пересохраняет старые сигналы | Oleg
+|||||||- `fix` redis-py setex→set (ex=) — deprecated warning | Oleg
+|||||||- `feat` telegram_parser: message_id extraction from data-post HTML attr + RawSignal.message_id | Oleg
 |||||||- `perf` parse_telegram_signals: poll 30s→15s, reuse Redis/HTTP conns, no DB re-fetch (CPU↓70%) | Oleg
 |||||||- `feat` New map_signals_daemon.py: independent daemon, listens Redis pub/sub, classifies in background (parser no longer blocks) | Oleg
 |||||||- `perf` notification_bot: instant delivery — removed 5s buffer, sends raw signal immediately, classified update as separate msg | Oleg

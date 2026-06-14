@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Telegram screener signal parser — fast, non-blocking.
+"""Telegram screener signal parser — fast, non-blocking, message_id dedup.
 
 Usage:
   python3 scripts/parse_telegram_signals.py          # one-shot
@@ -8,6 +8,9 @@ Usage:
 One-shot: fetches channels, saves + publishes raw signals, exits.
 Daemon:   loops every 15s, same logic, never exits.
 Classification is handled by a separate map_signals_daemon.py.
+
+Dedup: uses Telegram post IDs (data-post="channel/12345") stored in Redis.
+Only processes messages with IDs higher than the last seen one per channel.
 """
 
 from __future__ import annotations
@@ -67,43 +70,81 @@ async def _get_redis():
     return _redis_client
 
 
+def _parse_numeric_id(post_id: str) -> int:
+    """Extract numeric ID from 'brushscreener/497075' → 497075."""
+    try:
+        return int(post_id.split("/")[-1])
+    except (ValueError, IndexError):
+        return 0
+
+
 # ── Database ────────────────────────────────────────────────────────────────
 
 
 async def save_signals(signals) -> list[dict]:
     """Save parsed signals to database and Redis.
 
-    Returns list of signal dicts (id, pair, channel, exchange, raw_data, created_at).
-    Uses in-memory data only — no re-fetching from DB.
+    Dedup by message_id (Telegram post ID) via Redis.
+    Only saves signals with ID > last_seen for their channel.
+
+    Returns list of new signal dicts.
     """
     from app.core.cache import publish
     from app.core.database import async_session_factory
     from app.models.trading_signal import TradingSignal
     from sqlalchemy import select, func as sa_func, delete as sa_delete
 
+    if not signals:
+        return []
+
+    # ── Group signals by channel, get last_seen IDs from Redis ──────────
+    r = await _get_redis()
+
+    by_channel: dict[str, list] = {}
+    for sig in signals:
+        by_channel.setdefault(sig.channel, []).append(sig)
+
+    filtered_signals = []
+    channel_max_ids: dict[str, int] = {}  # channel -> max numeric ID in this batch
+
+    for channel, chan_signals in by_channel.items():
+        # Get last seen post ID from Redis
+        redis_key = f"signal:channel:last_id:{channel}"
+        last_post_id = await r.get(redis_key)
+        last_numeric = _parse_numeric_id(last_post_id) if last_post_id else 0
+
+        logger.info(
+            "Channel %s: last_seen_id=%s (%d), checking %d signals",
+            channel, last_post_id or "none", last_numeric, len(chan_signals),
+        )
+
+        for sig in chan_signals:
+            sig_numeric = _parse_numeric_id(sig.message_id)
+            if sig_numeric == 0:
+                logger.warning("Signal has invalid message_id='%s', skipping", sig.message_id)
+                continue
+            if sig_numeric <= last_numeric:
+                continue
+            filtered_signals.append(sig)
+            # Track max per channel
+            if channel not in channel_max_ids or sig_numeric > channel_max_ids[channel]:
+                channel_max_ids[channel] = sig_numeric
+
+    if not filtered_signals:
+        logger.info("No new signals after message_id dedup")
+        return []
+
+    logger.info(
+        "After message_id dedup: %d new signal(s) from %s",
+        len(filtered_signals),
+        ", ".join(f"{ch}:{channel_max_ids[ch]}" for ch in channel_max_ids),
+    )
+
+    # ── Save to DB ──────────────────────────────────────────────────────
+    new_signals: list[dict] = []
+
     async with async_session_factory() as session:
-        new_signals: list[dict] = []
-        skipped_dedup = 0
-
-        for sig in signals:
-            stmt = (
-                select(TradingSignal)
-                .where(
-                    TradingSignal.pair == sig.pair,
-                    TradingSignal.channel == sig.channel,
-                )
-                .order_by(TradingSignal.created_at.desc())
-                .limit(1)
-            )
-            result = await session.execute(stmt)
-            existing = result.scalar_one_or_none()
-
-            if existing and existing.created_at:
-                age_sec = (datetime.now(timezone.utc) - existing.created_at).total_seconds()
-                if age_sec < 1800:
-                    skipped_dedup += 1
-                    continue
-
+        for sig in filtered_signals:
             signal = TradingSignal(
                 channel=sig.channel,
                 exchange=sig.exchange,
@@ -163,12 +204,15 @@ async def save_signals(signals) -> list[dict]:
         except Exception as e:
             logger.warning("Signal cleanup failed (non-fatal): %s", e)
 
-    if not new_signals:
-        return []
+    # ── Update last_seen IDs in Redis ───────────────────────────────────
+    for channel, max_id in channel_max_ids.items():
+        post_key = f"signal:channel:last_id:{channel}"
+        # Build the post ID string: "channelname/507075"
+        post_id_str = f"{channel}/{max_id}"
+        await r.set(post_key, post_id_str)
+        logger.info("Updated last_seed_id for %s → %s", channel, post_id_str)
 
-    # ── Redis operations (reuse connection) ──────────────────────────────
-    r = await _get_redis()
-
+    # ── Push to Redis lists + pub/sub ────────────────────────────────────
     for sd in new_signals:
         sig_dict = {
             "id": sd["id"],
@@ -188,7 +232,7 @@ async def save_signals(signals) -> list[dict]:
 
         # Cache raw signal (7 days TTL)
         cache_key = f"signal:raw:{sd['channel']}:{sd['pair']}"
-        await r.setex(cache_key, 604800, json.dumps(sig_dict))
+        await r.set(cache_key, json.dumps(sig_dict), ex=604800)
 
         # Push to signals:latest
         await r.lpush("signals:latest", json.dumps(sig_dict))
@@ -235,7 +279,7 @@ async def main():
                 f"range={sd['price_range']}, vol10m={sd['vol_10m']}"
             )
         lines.append("")
-        lines.append(f"Пропущено (дубликаты <30м): {skipped}")
+        lines.append(f"Пропущено (дубликаты): {skipped}")
         print("\n".join(lines))
     else:
         print(f"⏸ Новых сигналов нет. Найдено {total}, пропущено {skipped}")
