@@ -1,3 +1,4 @@
+||||||- `feat` Graphify: knowledge graph of the project + web tile with visualizer | Hermes
 ||||||- `feat` signal pipeline: no raw notifications, direction+price in mapped, first-run guard, inline keyboard | Hermes
 ||||||- `feat` signal pipeline v2 — LLM classification (2 options per channel), 5s poll, timing logs, dedup guard | Hermes
 |||||||- `fix` scheduler._execute_run: exclude self (DBTradingRun.id != run_id) from real-mode check — больше не блокирует собственный запуск | Oleg

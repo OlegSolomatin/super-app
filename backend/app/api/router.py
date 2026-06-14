@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.exchange_keys import router as exchange_keys_router
+from app.api.v1.graph import router as graph_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.orderbook import router as orderbook_router
 from app.api.v1.settings import router as settings_router
@@ -18,6 +19,7 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router, tags=["auth"])
 api_router.include_router(users_router, tags=["users"])
 api_router.include_router(exchange_keys_router, tags=["exchange"])
+api_router.include_router(graph_router, tags=["graph"])
 api_router.include_router(notifications_router, tags=["notifications"])
 api_router.include_router(orderbook_router, tags=["orderbook"])
 api_router.include_router(settings_router, tags=["settings"])

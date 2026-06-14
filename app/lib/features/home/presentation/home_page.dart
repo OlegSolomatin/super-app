@@ -1,3 +1,4 @@
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -35,6 +36,7 @@ class _HomePageState extends State<HomePage> {
     'deepseek': Color(0xFF4FC3F7),
     'brain': Color(0xFFD2A8FF),
     'trading': Color(0xFFFCD535),
+    'graph': Color(0xFF00C853),
   };
 
   @override
@@ -395,6 +397,15 @@ class _HomePageState extends State<HomePage> {
         onTap: () {
           context.read<ThemeProvider>().setSection(SectionTheme.posts);
           context.go('/posts');
+        },
+      ),
+      DashboardTileData(
+        icon: PhosphorIconsFill.shareNetwork,
+        title: 'Граф проекта',
+        subtitle: 'Knowledge graph всего кода',
+        color: _tileColors['graph']!,
+        onTap: () {
+          html.window.open('https://pfumiko.ru/api/v1/graph', '_blank');
         },
       ),
       DashboardTileData(
