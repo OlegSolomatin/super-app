@@ -65,7 +65,9 @@ class SignalClassification:
     params: dict = field(default_factory=dict)
     fallback_exchange: Optional[str] = None
     confidence: float = 0.0
-    reasoning: str = ""  # LLM reasoning why this choice
+    reasoning: str = ""
+    direction: str = "long"  # long / short
+    current_price: Optional[float] = None  # LLM reasoning why this choice
 
 
 # ── Core: classify via LLM ─────────────────────────────────────────────────
@@ -395,17 +397,51 @@ async def map_and_save_signal(
         classification.confidence,
     )
 
-    # ── Cross-exchange + available exchanges — IN PARALLEL ───────────────
+    # ── Cross-exchange + available exchanges + price — IN PARALLEL ──────
     fallback_task = asyncio.create_task(
         check_cross_exchange(signal.pair, signal.exchange)
     )
     avail_task = asyncio.create_task(
         check_available_exchanges(signal.pair, session)
     )
-    fallback, available_exchanges = await asyncio.gather(
-        fallback_task, avail_task
+
+    # Fetch current price from the first available exchange
+    async def _fetch_price():
+        for exch_name in ["binance", "bybit"]:
+            try:
+                if exch_name == "binance":
+                    from app.services.trading.exchange.binance import BinanceExchange
+                    ex = BinanceExchange()
+                elif exch_name == "bybit":
+                    from app.services.trading.exchange.bybit import BybitExchange
+                    ex = BybitExchange()
+                else:
+                    continue
+                ticker = await ex.get_ticker(signal.pair)
+                if ticker and ticker.get("lastPrice"):
+                    return float(ticker["lastPrice"])
+            except Exception:
+                continue
+        return None
+
+    price_task = asyncio.create_task(_fetch_price())
+    fallback, available_exchanges, current_price = await asyncio.gather(
+        fallback_task, avail_task, price_task
     )
     classification.fallback_exchange = fallback
+    classification.current_price = current_price
+
+    # Derive direction from signal_type
+    if classification.signal_type == "imbalance_top":
+        classification.direction = "short"
+    elif classification.signal_type == "imbalance_bot":
+        classification.direction = "long"
+    elif classification.signal_type == "stair":
+        classification.direction = "long"
+    elif classification.signal_type == "brush":
+        classification.direction = "long"
+    elif classification.signal_type == "volume_spike":
+        classification.direction = "long"
 
     # ── Save to DB ──────────────────────────────────────────────────────
     signal.mapped_strategy = classification.mapped_strategy
@@ -435,6 +471,8 @@ async def map_and_save_signal(
             "confidence": classification.confidence,
             "available_exchanges": available_exchanges,
             "reasoning": classification.reasoning,
+            "direction": classification.direction,
+            "current_price": classification.current_price,
         })
     except Exception as e:
         logger.warning("Redis pub/sub unavailable (skip mapped publish): %s", e)

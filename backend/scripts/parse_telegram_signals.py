@@ -109,12 +109,16 @@ async def save_signals(signals) -> list[dict]:
 
     filtered_signals = []
     channel_max_ids: dict[str, int] = {}  # channel -> max numeric ID in this batch
+    had_any_missing = False  # True if any channel had no Redis last_id
 
     for channel, chan_signals in by_channel.items():
         # Get last seen post ID from Redis
         redis_key = f"signal:channel:last_id:{channel}"
         last_post_id = await r.get(redis_key)
         last_numeric = _parse_numeric_id(last_post_id) if last_post_id else 0
+
+        if last_numeric == 0:
+            had_any_missing = True
 
         logger.info(
             "Channel %s: last_seen_id=%s (%d), checking %d signals",
@@ -135,6 +139,20 @@ async def save_signals(signals) -> list[dict]:
 
     if not filtered_signals:
         logger.info("No new signals after message_id dedup")
+        return []
+
+    # ── Guard: first run (no last_id in Redis) — only remember max_id, don't save ──
+    if had_any_missing:
+        logger.info(
+            "First run or Redis reset: saving %d max_id(s) but skipping %d signal(s) — will start fresh next cycle",
+            len(channel_max_ids), len(filtered_signals),
+        )
+        # Still update last_seen IDs in Redis
+        for channel, max_id in channel_max_ids.items():
+            post_key = f"signal:channel:last_id:{channel}"
+            post_id_str = f"{channel}/{max_id}"
+            await r.set(post_key, post_id_str)
+            logger.info("Updated last_seen_id for %s → %s (first run, no save)", channel, post_id_str)
         return []
 
     logger.info(

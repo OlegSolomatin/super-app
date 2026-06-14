@@ -62,20 +62,23 @@ class SignalNotifier:
             logger.error("Failed to load bot config: %s", e)
             return False
 
-    async def send_telegram(self, text: str) -> bool:
+    async def send_telegram(self, text: str, reply_markup: Optional[dict] = None) -> bool:
         """Send a message via the configured Telegram bot."""
         if not self._bot_token or not self._chat_id:
             logger.warning("No bot configured, skipping notification")
             return False
 
         url = f"https://api.telegram.org/bot{self._bot_token}/sendMessage"
+        payload = {
+            "chat_id": self._chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         try:
-            resp = await self._http.post(url, json={
-                "chat_id": self._chat_id,
-                "text": text,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": True,
-            })
+            resp = await self._http.post(url, json=payload)
             if resp.status_code != 200:
                 logger.warning("Telegram API error: %s — %s", resp.status_code, resp.text[:200])
                 return False
@@ -126,6 +129,8 @@ class SignalNotifier:
         params = data.get("mapped_params", {}) or {}
         available = data.get("available_exchanges") or {}
         confidence = data.get("confidence", 0)
+        direction = data.get("direction", "long")
+        current_price = data.get("current_price")
 
         type_emoji = {
             "brush": "🧹",
@@ -135,10 +140,18 @@ class SignalNotifier:
             "volume_spike": "🌊",
         }.get(signal_type, "🔔")
 
+        # Direction
+        dir_emoji = "🟢" if direction == "long" else "🔴"
+        dir_label = "Long" if direction == "long" else "Short"
+
         engine_label = "OrderBook" if mapped_engine == "ob" else "Trading"
 
         lines = [f"{type_emoji} <b>{pair}</b> — {exchange}"]
-        lines.append(f"📊 {signal_label}")
+        lines.append(f"{dir_emoji} <b>{dir_label}</b> | {signal_label}")
+
+        # Current price
+        if current_price is not None:
+            lines.append(f"💵 ${current_price:.8f}" if current_price < 1 else f"💵 ${current_price:.4f}")
 
         # Available exchanges
         if available:
@@ -180,14 +193,6 @@ class SignalNotifier:
         if param_parts:
             lines.append(" | ".join(param_parts))
 
-        # Signal link
-        signal_id = data.get("id")
-        if signal_id:
-            lines.append("")
-            lines.append(
-                f"🚀 <a href='https://pfumiko.ru/trading/signals/{signal_id}'>Открыть сигнал</a>"
-            )
-
         return "\n".join(lines)
 
     def _format_vol(self, vol: float) -> str:
@@ -217,10 +222,10 @@ class SignalNotifier:
 
             try:
                 await pubsub.subscribe(
-                    "channel:signal:new", "channel:signal:mapped"
+                    "channel:signal:mapped"
                 )
                 logger.info(
-                    "Subscribed to channel:signal:new and channel:signal:mapped"
+                    "Subscribed to channel:signal:mapped (only classified signals)"
                 )
 
                 while self._running:
@@ -259,29 +264,53 @@ class SignalNotifier:
                     if not pair:
                         continue
 
-                    if channel == "channel:signal:new":
-                        # ── Send raw signal IMMEDIATELY (no buffer) ──
+                    if channel == "channel:signal:mapped":
+                        # ── Send classified signal with inline keyboard ──
                         t0 = time.monotonic()
-                        text = self._format_raw_signal(data)
-                        sent = await self.send_telegram(text)
-                        if sent:
-                            elapsed = (time.monotonic() - t0) * 1000
-                            logger.info(
-                                "Sent RAW signal #%d (%s): notifier→telegram in %.0fms",
-                                data.get("id"), pair, elapsed,
-                            )
 
-                    elif channel == "channel:signal:mapped":
-                        # ── Send classified signal as SEPARATE message ──
-                        t0 = time.monotonic()
+                        # Build inline keyboard
+                        signal_id = data.get("id")
+                        pair = data.get("pair", "")
+                        direction = data.get("direction", "long")
+                        mapped_strategy = data.get("mapped_strategy", "?")
+                        mapped_engine = data.get("mapped_engine", "?")
+                        params = data.get("mapped_params", {}) or {}
+                        available = data.get("available_exchanges") or {}
+
+                        # Find first available exchange for launch
+                        launch_exch = None
+                        for exch, is_avail in sorted(available.items()):
+                            if is_avail:
+                                launch_exch = exch.upper()
+                                break
+
+                        inline_kb = {"inline_keyboard": [[]]}
+                        buttons = []
+
+                        if signal_id:
+                            buttons.append({
+                                "text": "🔍 Открыть на сайте",
+                                "url": f"https://pfumiko.ru/trading/signals/{signal_id}",
+                            })
+                        if launch_exch:
+                            buttons.append({
+                                "text": f"🚀 Запустить на {launch_exch}",
+                                "url": f"https://pfumiko.ru/trading/signals/{signal_id}?mode=real&exchange={launch_exch.lower()}",
+                            })
+                        if buttons:
+                            if len(buttons) == 1:
+                                inline_kb["inline_keyboard"] = [[buttons[0]]]
+                            else:
+                                inline_kb["inline_keyboard"] = [buttons]
+
                         text = self._format_mapped_signal(data)
-                        sent = await self.send_telegram(text)
+                        sent = await self.send_telegram(text, reply_markup=inline_kb)
                         if sent:
                             elapsed = (time.monotonic() - t0) * 1000
                             logger.info(
                                 "Sent MAPPED signal #%d (%s → %s): notifier→telegram in %.0fms",
-                                data.get("id"), pair,
-                                data.get("mapped_strategy", "?"),
+                                signal_id, pair,
+                                mapped_strategy,
                                 elapsed,
                             )
 

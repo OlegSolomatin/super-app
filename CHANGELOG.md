@@ -1,3 +1,4 @@
+||||||- `feat` signal pipeline: no raw notifications, direction+price in mapped, first-run guard, inline keyboard | Hermes
 ||||||- `feat` signal pipeline v2 — LLM classification (2 options per channel), 5s poll, timing logs, dedup guard | Hermes
 |||||||- `fix` scheduler._execute_run: exclude self (DBTradingRun.id != run_id) from real-mode check — больше не блокирует собственный запуск | Oleg
 |||||||- `fix` trading.py start_run: add real-run validation BEFORE creating record — now returns 409 instead of "running"→"error" | Oleg
