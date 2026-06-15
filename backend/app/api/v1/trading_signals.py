@@ -307,9 +307,44 @@ async def start_signal_run(
     # OrderBook Engine
     # ═══════════════════════════════════════════════════════════════════
     if signal.mapped_engine == "ob":
+        # ── Validate pair exists on a supported exchange for WS data ──
         from app.schemas.trading import OrderBookStartRequest
 
-        ob_req = OrderBookStartRequest(
+        async def _check_ob_exchange(pair: str) -> str | None:
+            import httpx
+            for exchange_name in ("binance", "bybit"):
+                try:
+                    if exchange_name == "binance":
+                        async with httpx.AsyncClient(timeout=5) as client:
+                            resp = await client.get(
+                                f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
+                            )
+                            if resp.status_code == 200:
+                                return "binance"
+                    elif exchange_name == "bybit":
+                        async with httpx.AsyncClient(timeout=5) as client:
+                            resp = await client.get(
+                                f"https://api.bybit.com/v5/market/tickers?category=spot&symbol={pair}"
+                            )
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                if data.get("retCode") == 0:
+                                    return "bybit"
+                except Exception:
+                    continue
+            return None
+
+        ob_source_exchange = await _check_ob_exchange(signal.pair)
+        if not ob_source_exchange:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Пара {signal.pair} не найдена на Binance и Bybit. "
+                       f"OB стратегии ({signal.mapped_strategy}) требуют стакан с этих бирж. "
+                       f"Попробуйте запустить как свечную стратегию.",
+            )
+
+        # Build OrderBookStartRequest with common params + strategy-specific
+        ob_kwargs = dict(
             pair=signal.pair,
             strategy=signal.mapped_strategy,
             initial_balance=params.get("balance", 10.0),
@@ -322,6 +357,21 @@ async def start_signal_run(
             cooldown_seconds=params.get("cooldown", 120),
             auto_stop_hours=params.get("auto_stop", 1),
         )
+        # Pass through strategy-specific params if present in mapped_params
+        for ob_field in (
+            "ers_min_imbalance", "ers_min_profit_pct", "ers_exit_on_reversion",
+            "ers_max_hold_seconds", "ers_min_volume",
+            "imbalance_threshold", "surge_pct",
+            "min_spread_pct", "spread_entry_threshold", "spread_exit_threshold",
+            "flow_threshold_volume", "min_flow_signals", "flow_exit_seconds",
+        ):
+            if ob_field in params:
+                ob_kwargs[ob_field] = params[ob_field]
+
+        ob_req = OrderBookStartRequest(**ob_kwargs)
+
+        # Set source_exchange to the exchange that has this pair for WS data
+        ob_req.source_exchange = ob_source_exchange
 
         # Create DB record
         db_run = DBOrderBookRun(

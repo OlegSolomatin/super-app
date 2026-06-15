@@ -1,3 +1,5 @@
+||||||- `fix` OB signal launch fixes: pass through ERS-specific params (ers_min_imbalance etc.), validate pair exists on Binance/Bybit before starting OB engine, show clear error for MEXC-only pairs | Hermes
+||||||- `fix` UnboundLocalError in signal start endpoint - removed duplicate import inside if block, caused 500 when mode=virtual | Hermes
 ||||||- `feat` launch signal with LLM params - virtual mode, exchange from request, mapped params to engine. Commit 3bbc58c | Hermes
 ||||||- `fix` notification_bot dup guard - Redis lock, systemd disabled | Hermes
 ||||||- `feat` fix signal pipeline - lift 10-pair limit, dedup DB, buffered notifier | Hermes
