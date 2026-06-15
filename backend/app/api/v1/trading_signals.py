@@ -277,7 +277,6 @@ async def start_signal_run(
 
     # ── Real mode checks ──────────────────────────────────────────────
     if body.mode == "real":
-        from app.models.trading import TradingRun as DBTradingRun
         from sqlalchemy import select as sa_select
 
         active_real = await session.execute(
