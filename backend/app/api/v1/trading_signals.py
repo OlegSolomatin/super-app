@@ -239,21 +239,44 @@ async def start_signal_run(
         )
 
     params = signal.mapped_params or {}
+    logger = __import__("logging").getLogger(__name__)
 
-    # ── Real mode: auto-detect exchange ─────────────────────────────
+    # ── Determine exchange for data/trading ───────────────────────────
+    # Для virtual mode: используем Binance (открытое API, ключ не нужен для данных)
+    # Для real mode: используем биржу с валидным API-ключом
     selected_exchange: str | None = None
-    if body.mode == "real":
-        avail = signal.mapped_available_exchanges or {}
-        ready_exchanges = [ex for ex, ok in avail.items() if ok]
-        if not ready_exchanges:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Нет доступных бирж с валидными API-ключами для этой пары. "
-                       "Добавьте ключи в Настройки → API → Биржи.",
-            )
-        selected_exchange = ready_exchanges[0]
 
-        # Check no other active real runs
+    # 1. Из запроса (если передан)
+    if body.exchange:
+        selected_exchange = body.exchange.lower()
+
+    # 2. Для virtual mode — Binance по умолчанию
+    elif body.mode != "real":
+        selected_exchange = "binance"
+
+    # 3. Для real mode — проверяем ключи в БД
+    else:
+        from app.models.exchange_key import ExchangeKey
+        from sqlalchemy import select as sa_select
+
+        key_stmt = sa_select(ExchangeKey.exchange).where(
+            ExchangeKey.status == "valid",
+        ).distinct()
+        key_result = await session.execute(key_stmt)
+        exchanges_with_keys = [row[0] for row in key_result]
+
+        if exchanges_with_keys:
+            selected_exchange = exchanges_with_keys[0]
+            logger.info("Real mode: using exchange '%s' with valid API key", selected_exchange)
+        else:
+            logger.warning("Real mode requested but no API keys found — falling back to binance (virtual)")
+            body.mode = "virtual"
+            selected_exchange = "binance"
+
+    logger.info("Selected exchange for signal #%d: %s (mode=%s)", signal_id, selected_exchange, body.mode)
+
+    # ── Real mode checks ──────────────────────────────────────────────
+    if body.mode == "real":
         from app.models.trading import TradingRun as DBTradingRun
         from sqlalchemy import select as sa_select
 
@@ -270,14 +293,21 @@ async def start_signal_run(
                        "Остановите активный перед запуском нового.",
             )
 
-    if signal.mapped_engine == "ob" and body.mode == "real":
-        # OB engine doesn't support real mode yet — warn but still proceed virtual
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning("OB real mode not yet supported — launching in virtual")
+        # OB engine не поддерживает real — форсируем virtual
+        if signal.mapped_engine == "ob":
+            logger.info("OB engine does not support real mode — launching in virtual")
+            body.mode = "virtual"
 
+    # Force virtual mode for safety (real mode is opt-in via body.mode="real")
+    is_virtual = body.mode != "real"
+
+    # ── Direction ─────────────────────────────────────────────────────
+    direction = body.direction or (signal.mapped_params or {}).get("direction", "long")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # OrderBook Engine
+    # ═══════════════════════════════════════════════════════════════════
     if signal.mapped_engine == "ob":
-        # ── OrderBook Engine ──
         from app.schemas.trading import OrderBookStartRequest
 
         ob_req = OrderBookStartRequest(
@@ -327,10 +357,15 @@ async def start_signal_run(
             "run_id": db_run.id,
             "pair": signal.pair,
             "strategy": signal.mapped_strategy,
+            "mode": "virtual",
+            "exchange": selected_exchange,
+            "direction": direction,
         }
 
+    # ═══════════════════════════════════════════════════════════════════
+    # Trading Engine (Candle)
+    # ═══════════════════════════════════════════════════════════════════
     elif signal.mapped_engine == "trading":
-        # ── Trading Engine ──
         from app.services.trading.models import TradingConfig as DomainTradingConfig
         from app.services.trading.models import TradingRunMode
 
@@ -338,12 +373,10 @@ async def start_signal_run(
         db_run = DBTradingRun(
             user_id=current_user.id,
             status="running",
-            mode=body.mode,
+            mode="virtual" if is_virtual else "real",
         )
         session.add(db_run)
         await session.flush()
-
-        real_exchange = selected_exchange or "binance"
 
         db_config = DBTradingConfig(
             run_id=db_run.id,
@@ -354,7 +387,7 @@ async def start_signal_run(
             max_trade_amount=params.get("max_trade", 5.0),
             timeframe=params.get("timeframe", "3m"),
             duration_days=params.get("duration", 1),
-            exchange=real_exchange,
+            exchange=selected_exchange,
             stop_loss_percent=params.get("stoploss", 2.0),
             take_profit_percent=params.get("takeprofit", 5.0),
             trend_filter_enabled=False,
@@ -373,7 +406,7 @@ async def start_signal_run(
             max_trade_amount=params.get("max_trade", 5.0),
             timeframe=params.get("timeframe", "3m"),
             duration_days=params.get("duration", 1),
-            exchange=real_exchange,
+            exchange=selected_exchange,
             stop_loss_percent=params.get("stoploss", 2.0),
             take_profit_percent=params.get("takeprofit", 5.0),
             trend_filter_enabled=False,
@@ -395,6 +428,9 @@ async def start_signal_run(
             "run_id": db_run.id,
             "pair": signal.pair,
             "strategy": signal.mapped_strategy,
+            "mode": "virtual" if is_virtual else "real",
+            "exchange": selected_exchange,
+            "direction": direction,
         }
 
     else:

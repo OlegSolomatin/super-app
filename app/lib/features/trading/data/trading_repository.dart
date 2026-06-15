@@ -243,9 +243,9 @@ class TradingRepository {
 
   /// Start a run from a signal.
   Future<Map<String, dynamic>> startSignalRun(int signalId,
-      {String mode = 'virtual'}) async {
+      {String mode = 'virtual', String? exchange, String? direction}) async {
     final response = await _dio.post('/trading/signals/$signalId/start',
-        data: {'mode': mode});
+        data: {'mode': mode, 'exchange': exchange, 'direction': direction});
     return response.data as Map<String, dynamic>;
   }
 }

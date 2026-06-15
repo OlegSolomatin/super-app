@@ -43,5 +43,7 @@ class TradingSignalListResponse(BaseModel):
 class TradingSignalStartRequest(BaseModel):
     """Request to start a signal-based run."""
 
-    mode: str = "virtual"  # "virtual" or "real"
+    mode: str = "virtual"  # "virtual" (реальные данные, виртуальный баланс) or "real"
+    exchange: Optional[str] = None  # Биржа для запуска (например "bybit"). Если не указана — берётся из mapped_available_exchanges
+    direction: Optional[str] = None  # "long" or "short" — из сигнала
     bot_id: Optional[str] = None  # Telegram bot ID for notifications

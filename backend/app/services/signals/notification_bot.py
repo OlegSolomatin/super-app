@@ -254,6 +254,8 @@ class SignalNotifier:
     def _build_inline_keyboard(self, data: dict) -> Optional[dict]:
         """Build inline keyboard for a mapped signal."""
         signal_id = data.get("id")
+        pair = data.get("pair", "")
+        direction = data.get("direction", "long")
         available = data.get("available_exchanges") or {}
 
         # Find first available exchange
@@ -271,8 +273,8 @@ class SignalNotifier:
             })
         if launch_exch:
             buttons.append({
-                "text": f"🚀 Запустить на {launch_exch}",
-                "url": f"https://pfumiko.ru/trading/signals/{signal_id}?mode=real&exchange={launch_exch.lower()}",
+                "text": f"🚀 Запустить виртуально на {launch_exch}",
+                "url": f"https://pfumiko.ru/trading/signals/{signal_id}?mode=virtual&exchange={launch_exch.lower()}&pair={pair}&direction={direction}",
             })
 
         if not buttons:

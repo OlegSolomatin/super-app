@@ -347,33 +347,15 @@ class _SignalCard extends StatelessWidget {
       return;
     }
 
-    // Check available exchanges
-    final avail = signal.mappedAvailableExchanges;
-    final readyExchanges = <String>[];
-    if (avail != null) {
-      for (final entry in avail.entries) {
-        if (entry.value) readyExchanges.add(entry.key);
-      }
-    }
-
-    if (readyExchanges.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Нет доступных бирж с API-ключами для этой пары'),
-        ),
-      );
-      return;
-    }
-
     // Confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('🚀 Запуск сигнала'),
         content: Text(
-          'Запустить ${signal.pair} на ${readyExchanges[0].toUpperCase()}?\n'
+          'Запустить ${signal.pair} на Binance?\n'
           'Стратегия: ${signal.mappedStrategy} (${signal.engineLabel})\n'
-          'Режим: РЕАЛЬНАЯ ТОРГОВЛЯ 💰',
+          'Режим: Виртуальный (реальные данные + виртуальный баланс) 🧪',
         ),
         actions: [
           TextButton(
@@ -393,12 +375,12 @@ class _SignalCard extends StatelessWidget {
 
     try {
       final result = await repository.startSignalRun(signal.id,
-          mode: 'real');
+          mode: 'virtual');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                '🚀 ${signal.pair} запущен на ${readyExchanges[0].toUpperCase()} '
+                '🚀 ${signal.pair} запущен на Binance '
                 '(${signal.engineLabel}, run #${result['run_id']})'),
           ),
         );
