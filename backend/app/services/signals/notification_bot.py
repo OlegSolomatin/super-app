@@ -286,8 +286,23 @@ class SignalNotifier:
         logger.info("SignalNotifier starting (buffered delivery, %ss window)...", self._flush_delay)
 
         if not await self._load_bot_config():
-            logger.error("No bot configured — exiting")
+            logger.error("No bot configured - exiting")
             return
+
+        # Heartbeat: refresh Redis lock every 10s
+        LOCK_KEY = "service:lock:notification_bot"
+
+        async def _heartbeat():
+            while self._running:
+                try:
+                    r = Redis.from_url(self.redis_url, encoding="utf-8", decode_responses=True)
+                    r.expire(LOCK_KEY, 30)
+                    await r.aclose()
+                except Exception:
+                    pass
+                await asyncio.sleep(10)
+
+        hb_task = asyncio.create_task(_heartbeat())
 
         while self._running:
             from redis.asyncio import Redis
@@ -358,9 +373,32 @@ class SignalNotifier:
 
         logger.info("SignalNotifier stopped")
 
+    # Cleanup Redis lock on exit
+    try:
+        import redis as sync_redis
+        r = sync_redis.Redis.from_url("redis://localhost:6379/0", decode_responses=True)
+        r.delete("service:lock:notification_bot")
+        r.close()
+    except Exception:
+        pass
+
 
 def run():
     """Convenience entry point: create notifier and run forever."""
+    import redis as sync_redis
+
+    # Dup guard: check Redis lock
+    LOCK_KEY = "service:lock:notification_bot"
+    try:
+        r = sync_redis.Redis.from_url("redis://localhost:6379/0", decode_responses=True)
+        existing = r.get(LOCK_KEY)
+        if existing:
+            logger.warning("Another notification_bot is already running (lock=%s) - exiting", existing)
+            return
+        r.set(LOCK_KEY, "pid=%d" % os.getpid(), ex=30)
+        r.close()
+    except Exception as e:
+        logger.warning("Dup guard Redis unavailable, continuing anyway: %s", e)
     notifier = SignalNotifier()
     notifier._running = True
 

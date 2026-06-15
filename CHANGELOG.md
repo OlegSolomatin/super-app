@@ -1,3 +1,4 @@
+||||||- `fix` notification_bot dup guard - Redis lock, systemd disabled | Hermes
 ||||||- `feat` fix signal pipeline - lift 10-pair limit, dedup DB, buffered notifier | Hermes
 ||||||- `feat` Graphify: knowledge graph of the project + web tile with visualizer | Hermes
 ||||||- `feat` signal pipeline: no raw notifications, direction+price in mapped, first-run guard, inline keyboard | Hermes
