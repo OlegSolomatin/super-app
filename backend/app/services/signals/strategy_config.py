@@ -21,6 +21,7 @@ CHANNEL_STRATEGIES: dict[str, dict[str, Any]] = {
                 "wizard_params": {
                     "stoploss": {"min": -3.0, "max": -0.5, "default": -1.5},
                     "trailing_stop": {"min": 0.1, "max": 1.0, "default": 0.3},
+                    "max_open": {"min": 1, "max": 5, "default": 3},
                     "conf_ticks": {"min": 1, "max": 5, "default": 1},
                     "max_spread": {"min": 0.05, "max": 0.5, "default": 0.1},
                     "max_hold": {"min": 30, "max": 300, "default": 120},
@@ -73,6 +74,7 @@ CHANNEL_STRATEGIES: dict[str, dict[str, Any]] = {
                 "wizard_params": {
                     "stoploss": {"min": -3.0, "max": -0.5, "default": -1.5},
                     "trailing_stop": {"min": 0.1, "max": 1.0, "default": 0.3},
+                    "max_open": {"min": 1, "max": 5, "default": 3},
                     "conf_ticks": {"min": 1, "max": 5, "default": 1},
                     "max_spread": {"min": 0.05, "max": 0.5, "default": 0.1},
                     "max_hold": {"min": 30, "max": 300, "default": 120},
