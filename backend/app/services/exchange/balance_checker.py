@@ -10,6 +10,7 @@ Falls back to ccxt if available, otherwise uses direct REST calls.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -50,10 +51,20 @@ async def check_key_validity(
         return await _check_bybit_rest(api_key, api_secret)
 
     try:
-        return await _check_ccxt(exchange, api_key, api_secret, passphrase, testnet)
+        # Wrap in a timeout to prevent long hangs
+        return await asyncio.wait_for(
+            _check_ccxt(exchange, api_key, api_secret, passphrase, testnet),
+            timeout=20.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Key check timed out for %s (>20s)", exchange)
+        return False, None, "Таймаут соединения с биржей (>20 секунд). Попробуйте позже."
     except ImportError:
         logger.warning("ccxt not installed, falling back to REST")
-        return await _check_rest(exchange, api_key, api_secret, passphrase)
+        return await asyncio.wait_for(
+            _check_rest(exchange, api_key, api_secret, passphrase),
+            timeout=15.0,
+        )
     except Exception as e:
         err_str = str(e)
         logger.warning("Key check failed for %s: %s", exchange, err_str)

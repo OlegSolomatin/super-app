@@ -1,3 +1,4 @@
+||||||- `Fix exchange key check timeout: Dio 10s->30s, server-side 20s timeout` fix | Hermes
 ||||||- `ERS scalping defaults: conf_ticks=1, cooldown=30s for faster signal response` fix | Hermes
 ||||||- `CCXT WS Provider + fix exchange field in response` feat,fix | Hermes
 ||||||- `feat` virtual mode preload — загрузка 200 последних свечей при старте virtual режима для подогрева индикаторов стратегий (ATR, EMA, stair-паттерны). Исправлено: engine.run_virtual_live() принимает preload_candles, scheduler.py загружает их через exchange.get_klines(). Больше не ждём 14+ свечей в реальном времени. | Oleg
