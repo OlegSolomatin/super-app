@@ -190,13 +190,8 @@ class TradingScheduler:
 
                 if config.mode.value == "virtual":
                     # ── Virtual live: no historical data, poll exchange ──
-                    exchange_name = config.exchange or "binance"
-                    if exchange_name == "binance":
-                        exchange = BinanceExchange()
-                    elif exchange_name == "bybit":
-                        exchange = BybitExchange()
-                    else:
-                        exchange = MockExchange()
+                    from app.services.trading.exchange.ccxt_exchange import create_exchange
+                    exchange = create_exchange(config.exchange or "binance")
 
                     run_start = datetime.now(timezone.utc)
                     dur_sec = (config.duration_days or 30) * 86400.0
@@ -260,19 +255,12 @@ class TradingScheduler:
                         api_secret_plain = decrypt_key(exchange_key.api_secret_encrypted)
 
                         exchange_name = config.exchange
-                        if exchange_name == "binance":
-                            real_exchange = BinanceExchange(
-                                api_key=api_key_plain,
-                                api_secret=api_secret_plain,
-                            )
-                        elif exchange_name == "bybit":
-                            from app.services.trading.exchange.bybit import BybitExchange
-                            real_exchange = BybitExchange(
-                                api_key=api_key_plain,
-                                api_secret=api_secret_plain,
-                            )
-                        else:
-                            raise ValueError(f"Real mode not supported for {exchange_name}")
+                        from app.services.trading.exchange.ccxt_exchange import create_exchange
+                        real_exchange = create_exchange(
+                            exchange_name,
+                            api_key=api_key_plain,
+                            api_secret=api_secret_plain,
+                        )
 
                         real_balance = await real_exchange.get_balance("USDT")
                         usdt_balance = real_balance.get("USDT", 0) if isinstance(real_balance, dict) else 0

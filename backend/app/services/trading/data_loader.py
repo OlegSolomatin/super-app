@@ -13,9 +13,7 @@ from typing import AsyncGenerator, List, Optional
 
 logger = logging.getLogger(__name__)
 
-from app.services.trading.exchange.binance import BinanceExchange
-from app.services.trading.exchange.bybit import BybitExchange
-from app.services.trading.exchange.mock import MockExchange
+from app.services.trading.exchange.ccxt_exchange import create_exchange
 from app.services.trading.models import Candle
 
 
@@ -28,17 +26,8 @@ class DataLoader:
         self.exchange_name = exchange_name
 
     def _create_exchange(self):
-        """Create exchange connector by name."""
-        name = self.exchange_name.lower()
-        if name == "binance":
-            return BinanceExchange()
-        elif name == "bybit":
-            return BybitExchange()
-        elif name == "mock":
-            return MockExchange()
-        else:
-            logger.warning("Unknown exchange '%s', falling back to mock", name)
-            return MockExchange()
+        """Create exchange connector by name — supports 100+ exchanges via CCXT."""
+        return create_exchange(self.exchange_name)
 
     async def load_history(
         self,
