@@ -335,22 +335,23 @@ async def _check_bybit_rest_v3(
 def _estimate_total_usd(balance: dict) -> Optional[float]:
     """Estimate total USD value from a ccxt balance response.
 
-    This is a rough estimate. A full implementation would use
-    ticker prices. For now, returns the USDT balance if available.
+    Only counts USDT and USD-pegged stablecoins (USDC, BUSD, DAI, TUSD, FDUSD).
+    Non-stable assets (BTC, ETH, etc.) are NOT converted — their raw amounts
+    would give a wrong USD estimate without ticker prices.
     """
+    STABLECOINS = {"USDT", "USDC", "BUSD", "DAI", "TUSD", "FDUSD", "USDD"}
     try:
         total = balance.get("total", {})
-        free = balance.get("free", {})
+        if not isinstance(total, dict):
+            return None
 
-        # Count USDT directly
-        usdt = float(total.get("USDT", 0)) if isinstance(total, dict) else 0
+        usd_value = 0.0
+        for currency, amount in total.items():
+            if not isinstance(amount, (int, float)) or amount <= 0:
+                continue
+            if currency.upper() in STABLECOINS:
+                usd_value += float(amount)
 
-        # Sum all non-zero balances as a rough estimate (will be refined)
-        all_total = usdt
-        for currency, amount in (total or {}).items():
-            if isinstance(amount, (int, float)) and amount > 0 and currency != "USDT":
-                all_total += float(amount)  # This is wrong for non-USDT assets
-
-        return round(all_total, 2) if all_total > 0 else None
+        return round(usd_value, 2) if usd_value > 0 else None
     except Exception:
         return None
