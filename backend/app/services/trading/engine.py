@@ -261,25 +261,20 @@ class TradingEngine:
         start_time: Optional[datetime] = None,
         duration_seconds: Optional[float] = None,
         on_progress: Optional[Callable[[List[Trade], Metrics], None]] = None,
+        preload_candles: Optional[List[Candle]] = None,
     ) -> Tuple[List[Trade], Metrics]:
         """Virtual live trading — polls exchange for new candles in real time.
 
-        Does NOT load historical candles. Instead:
-        1. Every N seconds, fetches the latest candle from exchange
-        2. When a new completed candle arrives — analyses it
-        3. Enters/exits trades based on strategy signals
-        4. Runs until duration_seconds elapses or cancelled
+        Optionally accepts preload_candles (historical candles) to warm up
+        strategy indicators (ATR, EMA, etc.) before live polling starts.
 
-        Args:
-            exchange: Exchange connector to poll for live data.
-            start_time: When the run started (for timeout + progress).
-            duration_seconds: Max run duration in seconds (from duration_days).
-            on_progress: Optional callback to save intermediate state.
-
-        Returns:
-            (trades, metrics) when finished or cancelled.
+        Does NOT trade on preload candles — they are only used for indicator
+        warmup. Trading starts on the first new completed candle from exchange.
         """
-        return await self._execute_virtual_live(exchange, start_time, duration_seconds, on_progress)
+        return await self._execute_virtual_live(
+            exchange, start_time, duration_seconds, on_progress,
+            preload_candles=preload_candles,
+        )
 
     async def run_real(self, candles: List[Candle]) -> Tuple[List[Trade], Metrics]:
         """Run strategy with REAL exchange orders via API keys.
@@ -320,11 +315,13 @@ class TradingEngine:
         start_time: Optional[datetime] = None,
         duration_seconds: Optional[float] = None,
         on_progress: Optional[Callable[[List[Trade], Metrics], None]] = None,
+        preload_candles: Optional[List[Candle]] = None,
     ) -> Tuple[List[Trade], Metrics]:
         """Live paper trading core — polls exchange for new completed candles.
 
         Architecture:
         - Tracks last processed candle close time
+        - Accepts preload_candles for indicator warmup (no trades on them)
         - Every N seconds, fetches latest kline from exchange
         - When a new completed candle is detected (its close time < now):
           - Analyzes it via strategy
@@ -334,7 +331,24 @@ class TradingEngine:
         - Calls on_progress periodically with progress % and state
         - On completion/cancellation, returns all accumulated trades and metrics
         """
-        # 1. Select strategy
+        # 0. Preload historical candles for indicator warmup (no trading)
+        preloaded_count = 0
+        if preload_candles:
+            preload_sorted = sorted(preload_candles, key=lambda c: c.timestamp)
+            warmup_candles = list(preload_sorted)
+            preloaded_count = len(warmup_candles)
+            last_processed = preload_sorted[-1].timestamp
+            logger.info(
+                "Virtual live: preloaded %d candles for indicator warmup "
+                "(last=%s, close=%.4f, strategy=%s)",
+                preloaded_count,
+                last_processed.isoformat(),
+                preload_sorted[-1].close,
+                self.config.strategy,
+            )
+        else:
+            warmup_candles = []
+            last_processed = None
         strategy_cls = STRATEGY_REGISTRY.get(self.config.strategy)
         if strategy_cls is None:
             raise ValueError(f"Unknown strategy: {self.config.strategy}")
@@ -353,8 +367,9 @@ class TradingEngine:
         leverage = self.config.leverage
 
         poll_interval = self._poll_interval(self.config.timeframe)
-        last_processed: Optional[datetime] = None
-        warmup_candles: List[Candle] = []
+        # last_processed and warmup_candles may already be set by preload
+        if last_processed is None:
+            last_processed = None  # no preload — starts from scratch
         run_start = start_time or datetime.now(timezone.utc)
         last_progress_call: float = 0.0
 

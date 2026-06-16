@@ -189,9 +189,41 @@ class TradingScheduler:
                 )
 
                 if config.mode.value == "virtual":
-                    # ── Virtual live: no historical data, poll exchange ──
+                    # ── Virtual live: poll exchange with historical preload ──
                     from app.services.trading.exchange.ccxt_exchange import create_exchange
                     exchange = create_exchange(config.exchange or "binance")
+
+                    # Preload historical candles for indicator warmup
+                    preload_candles = []
+                    try:
+                        preload_limit = 200
+                        from app.services.trading.models import Candle
+                        raw_candles = await exchange.get_klines(
+                            config.pair,
+                            config.timeframe or "5m",
+                            limit=preload_limit,
+                        )
+                        if raw_candles:
+                            preload_candles = [
+                                Candle(
+                                    timestamp=c["timestamp"] if isinstance(c, dict) else c.timestamp,
+                                    open=c["open"] if isinstance(c, dict) else c.open,
+                                    high=c["high"] if isinstance(c, dict) else c.high,
+                                    low=c["low"] if isinstance(c, dict) else c.low,
+                                    close=c["close"] if isinstance(c, dict) else c.close,
+                                    volume=c["volume"] if isinstance(c, dict) else c.volume,
+                                )
+                                for c in raw_candles
+                            ]
+                            logger.info(
+                                "Run %d: preloaded %d candles for %s/%s",
+                                run_id, len(preload_candles), config.exchange, config.pair,
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            "Run %d: preload failed for %s/%s (non-fatal): %s",
+                            run_id, config.exchange, config.pair, e,
+                        )
 
                     run_start = datetime.now(timezone.utc)
                     dur_sec = (config.duration_days or 30) * 86400.0
@@ -199,7 +231,8 @@ class TradingScheduler:
                         exchange,
                         start_time=run_start,
                         duration_seconds=dur_sec,
-                        on_progress=lambda tr, m: None,  # progress saved via scheduler polling
+                        on_progress=lambda tr, m: None,
+                        preload_candles=preload_candles or None,
                     )
 
                 else:
