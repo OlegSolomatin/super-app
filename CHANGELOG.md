@@ -1,3 +1,4 @@
+||||||- `ERS scalping defaults: conf_ticks=1, cooldown=30s for faster signal response` fix | Hermes
 ||||||- `CCXT WS Provider + fix exchange field in response` feat,fix | Hermes
 ||||||- `feat` virtual mode preload — загрузка 200 последних свечей при старте virtual режима для подогрева индикаторов стратегий (ATR, EMA, stair-паттерны). Исправлено: engine.run_virtual_live() принимает preload_candles, scheduler.py загружает их через exchange.get_klines(). Больше не ждём 14+ свечей в реальном времени. | Oleg
 |||||||- `feat` OB signal launch fix — расширена проверка бирж для мем-монет (TWLOSTOCKUSDT на MEXC Futures): CCXTExchange поддерживает market_type (spot/swap/future), create_exchange() парсит "Mexc - Futures", _convert_symbol() ищет swap-форматы (TWLOSTOCK/USDT:USDT), _check_ob_exchange() проверяет биржу из сигнала первой, а не только Binance/Bybit | Oleg
