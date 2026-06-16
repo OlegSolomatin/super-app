@@ -1,3 +1,4 @@
+||||||- `feat` multi-exchange routing + REST orderbook provider: CCXTExchange covers 100+ exchanges, RestOrderBookProvider polls any exchange, DataProviderFactory auto-selects WS or REST, signal launcher routes by API keys or signal exchange | Hermes
 ||||||- `fix` OB signal launch fixes: pass through ERS-specific params (ers_min_imbalance etc.), validate pair exists on Binance/Bybit before starting OB engine, show clear error for MEXC-only pairs | Hermes
 ||||||- `fix` UnboundLocalError in signal start endpoint - removed duplicate import inside if block, caused 500 when mode=virtual | Hermes
 ||||||- `feat` launch signal with LLM params - virtual mode, exchange from request, mapped params to engine. Commit 3bbc58c | Hermes

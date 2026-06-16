@@ -242,23 +242,25 @@ async def start_signal_run(
     logger = __import__("logging").getLogger(__name__)
 
     # ── Determine exchange for data/trading ───────────────────────────
-    # Для virtual mode: используем Binance (открытое API, ключ не нужен для данных)
-    # Для real mode: используем биржу с валидным API-ключом
+    # Priority:
+    #   1. Explicit body.exchange (from UI)
+    #   2. Any exchange where user has API key AND pair exists
+    #   3. Signal's original exchange (e.g., Gate, MEXC)
+    #   4. Binance (default fallback)
     selected_exchange: str | None = None
 
     # 1. Из запроса (если передан)
     if body.exchange:
         selected_exchange = body.exchange.lower()
+        logger.info("Signal #%d: exchange forced by request: %s", signal_id, selected_exchange)
 
-    # 2. Для virtual mode — Binance по умолчанию
-    elif body.mode != "real":
-        selected_exchange = "binance"
-
-    # 3. Для real mode — проверяем ключи в БД
+    # 2. Smart routing: check user keys + pair availability
     else:
         from app.models.exchange_key import ExchangeKey
+        from app.services.trading.exchange.ccxt_exchange import create_exchange
         from sqlalchemy import select as sa_select
 
+        # Get all exchanges with valid keys
         key_stmt = sa_select(ExchangeKey.exchange).where(
             ExchangeKey.status == "valid",
         ).distinct()
@@ -266,12 +268,54 @@ async def start_signal_run(
         exchanges_with_keys = [row[0] for row in key_result]
 
         if exchanges_with_keys:
-            selected_exchange = exchanges_with_keys[0]
-            logger.info("Real mode: using exchange '%s' with valid API key", selected_exchange)
-        else:
-            logger.warning("Real mode requested but no API keys found — falling back to binance (virtual)")
-            body.mode = "virtual"
+            logger.info(
+                "Signal #%d: checking pair %s on %d exchange(s) with keys: %s",
+                signal_id, signal.pair, len(exchanges_with_keys),
+                exchanges_with_keys,
+            )
+
+            # Check pair availability on all exchanges with keys (in parallel)
+            async def _check_pair(exch: str) -> tuple[str, bool]:
+                try:
+                    ex = create_exchange(exch)
+                    ticker = await ex.get_ticker(signal.pair)
+                    if ticker and ticker.get("volume", 0) > 0:
+                        return exch, True
+                except Exception:
+                    pass
+                return exch, False
+
+            results = await asyncio.gather(
+                *[_check_pair(exch) for exch in exchanges_with_keys],
+                return_exceptions=True,
+            )
+
+            matched_exchanges = []
+            for res in results:
+                if not isinstance(res, Exception) and len(res) == 2 and res[1]:
+                    matched_exchanges.append(res[0])
+
+            if matched_exchanges:
+                selected_exchange = matched_exchanges[0]
+                logger.info(
+                    "Signal #%d: using exchange with valid key '%s' (pair %s found)",
+                    signal_id, selected_exchange, signal.pair,
+                )
+
+        # 3. Fall back to signal's exchange (from parser)
+        if not selected_exchange:
+            signal_exchange = (signal.exchange or "").split(" - ")[0].split(" ")[0].strip().lower()
+            if signal_exchange and signal_exchange not in ("", "none", "unknown"):
+                selected_exchange = signal_exchange
+                logger.info(
+                    "Signal #%d: no key match, using signal exchange: %s",
+                    signal_id, selected_exchange,
+                )
+
+        # 4. Ultimate fallback
+        if not selected_exchange:
             selected_exchange = "binance"
+            logger.info("Signal #%d: no exchange found, defaulting to binance", signal_id)
 
     logger.info("Selected exchange for signal #%d: %s (mode=%s)", signal_id, selected_exchange, body.mode)
 

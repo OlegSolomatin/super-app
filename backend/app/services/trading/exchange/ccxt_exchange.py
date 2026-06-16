@@ -62,6 +62,27 @@ class CCXTExchange(AbstractExchange):
         self._exchange_name = exchange_name.lower()
         self._exchange: Optional[ccxt_pro.Exchange] = None
 
+    def _convert_symbol(self, pair: str) -> str:
+        """Convert internal pair format to exchange-specific format.
+
+        Tries multiple formats because different exchanges use different
+        conventions:
+          - Binance/MEXC/Bitget: BTCUSDT (direct)
+          - Gate/Kraken: BTC/USDT (slash)
+          - KuCoin/OKX: BTC-USDT (dash)
+
+        Uses ccxt market data when available for accurate conversion.
+        """
+        if self._exchange and self._exchange.markets:
+            # Try direct market lookup by symbol
+            for fmt in (pair.upper(), f"{pair[:3]}/{pair[3:]}", f"{pair[:3]}-{pair[3:]}"):
+                if fmt in self._exchange.markets:
+                    return fmt
+                if fmt.upper() in self._exchange.markets:
+                    return fmt.upper()
+        # Fall back to trying formats in order
+        return pair.upper()
+
     async def _get_exchange(self) -> ccxt_pro.Exchange:
         """Get or create the ccxt exchange instance."""
         if self._exchange is not None:
@@ -113,7 +134,7 @@ class CCXTExchange(AbstractExchange):
 
         try:
             raw = await ex.fetch_ohlcv(
-                pair.upper(),
+                self._convert_symbol(pair),
                 timeframe=timeframe,
                 since=since_ms,
                 limit=fetch_limit,
@@ -149,7 +170,7 @@ class CCXTExchange(AbstractExchange):
         """Fetch current ticker from the exchange."""
         ex = await self._get_exchange()
         try:
-            ticker = await ex.fetch_ticker(pair.upper())
+            ticker = await ex.fetch_ticker(self._convert_symbol(pair))
             return {
                 "last": float(ticker.get("last", 0)),
                 "volume": float(ticker.get("baseVolume", 0)),
@@ -171,10 +192,22 @@ class CCXTExchange(AbstractExchange):
         """Fetch current order book from the exchange."""
         ex = await self._get_exchange()
         try:
-            ob = await ex.fetch_order_book(pair.upper(), limit=limit)
+            ob = await ex.fetch_order_book(self._convert_symbol(pair), limit=limit)
+            bids = []
+            for item in ob.get("bids", []):
+                try:
+                    bids.append([float(item[0]), float(item[1])])
+                except (IndexError, ValueError, TypeError):
+                    continue
+            asks = []
+            for item in ob.get("asks", []):
+                try:
+                    asks.append([float(item[0]), float(item[1])])
+                except (IndexError, ValueError, TypeError):
+                    continue
             return {
-                "bids": [[p, q] for p, q in ob.get("bids", [])],
-                "asks": [[p, q] for p, q in ob.get("asks", [])],
+                "bids": bids,
+                "asks": asks,
                 "timestamp": ob.get("timestamp", 0) or 0,
             }
         except Exception as e:
@@ -202,7 +235,7 @@ class CCXTExchange(AbstractExchange):
         params: Dict = {}
         try:
             order = await ex.create_order(
-                symbol=pair.upper(),
+                symbol=self._convert_symbol(pair),
                 type=order_type,
                 side=side.lower(),
                 amount=quantity,

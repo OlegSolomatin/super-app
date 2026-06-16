@@ -1,17 +1,15 @@
-"""Фабрика провайдеров данных стакана.
+"""Data provider factory — creates DataProvider by exchange name.
 
-Создаёт DataProvider по имени биржи.
-При добавлении новой биржи:
-  1. Создать XXXDataProvider(DataProvider)
-  2. Добавить в PROVIDER_REGISTRY
-
-ccxt: ccxt.Exchange().watch_order_book() — единый интерфейс для всех бирж,
-но мы используем прямые WS для лучшего контроля.
+Supports:
+  - binance → BinanceDataProvider (WS depth stream)
+  - bybit → BybitDataProvider (WS depth stream)
+  - any other → RestOrderBookProvider (REST polling via CCXTExchange)
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from app.services.trading.orderbook.data.base import DataProvider
 from app.services.trading.orderbook.data.binance_provider import (
@@ -20,28 +18,26 @@ from app.services.trading.orderbook.data.binance_provider import (
 from app.services.trading.orderbook.data.bybit_provider import (
     BybitDataProvider,
 )
+from app.services.trading.orderbook.data.rest_provider import (
+    RestOrderBookProvider,
+)
+
+if TYPE_CHECKING:
+    from app.services.trading.exchange.base import AbstractExchange
 
 logger = logging.getLogger(__name__)
 
-# Registry: name -> (class, kwargs)
-PROVIDER_REGISTRY: dict[str, tuple[type[DataProvider], dict]] = {
-    "binance": (BinanceDataProvider, {}),
-    "bybit": (BybitDataProvider, {"market_type": "spot"}),
-    "bybit_linear": (BybitDataProvider, {"market_type": "linear"}),
-}
-
 
 def list_providers() -> list[str]:
-    """Список доступных провайдеров."""
-    return sorted(PROVIDER_REGISTRY.keys())
+    """List available data provider types."""
+    return ["binance", "bybit", "rest"]
 
 
 class DataProviderFactory:
-    """Фабрика: создаёт DataProvider по имени биржи.
+    """Creates a DataProvider for any exchange.
 
-    Использование:
-        provider = DataProviderFactory.create("binance", pairs=["BTCUSDT"])
-        provider = DataProviderFactory.create("bybit", pairs=["BTCUSDT"])
+    Returns WS-based providers for Binance and Bybit, and a REST-polling
+    provider for all other exchanges (via CCXTExchange).
     """
 
     @staticmethod
@@ -49,33 +45,43 @@ class DataProviderFactory:
         exchange: str,
         pairs: list[str],
     ) -> DataProvider:
-        """Создать DataProvider.
+        """Create a DataProvider for the given exchange.
 
         Args:
-            exchange: Имя биржи (binance, bybit, bybit_linear).
-            pairs: Список пар в формате BTCUSDT.
+            exchange: Exchange name (binance, bybit, mexc, gate, etc.)
+            pairs: List of trading pairs to subscribe to.
 
         Returns:
-            DataProvider для указанной биржи.
+            DataProvider ready to start().
 
         Raises:
-            ValueError: Если биржа не поддерживается.
+            ValueError: If exchange is empty or unsupported.
         """
-        exchange = exchange.lower().strip()
+        name = exchange.lower()
 
-        entry = PROVIDER_REGISTRY.get(exchange)
-        if entry is None:
-            raise ValueError(
-                f"Unsupported data provider: '{exchange}'. "
-                f"Available: {list_providers()}"
+        if name == "binance":
+            from app.services.trading.orderbook.data.binance_provider import (
+                BinanceDataProvider,
             )
+            logger.info("[DataFactory] Using WS provider for %s", name)
+            return BinanceDataProvider(pairs=pairs)
 
-        provider_cls, extra_kwargs = entry
+        if name == "bybit":
+            from app.services.trading.orderbook.data.bybit_provider import (
+                BybitDataProvider,
+            )
+            logger.info("[DataFactory] Using WS provider for %s", name)
+            return BybitDataProvider(pairs=pairs)
 
-        instance = provider_cls(pairs, **extra_kwargs)
-
+        # All other exchanges → REST polling via CCXT
+        from app.services.trading.exchange.ccxt_exchange import CCXTExchange
+        exchange_instance = CCXTExchange(exchange_name=name)
         logger.info(
-            f"[DataProviderFactory] Created {instance.name} "
-            f"provider for {len(pairs)} pair(s)"
+            "[DataFactory] Using REST provider for %s (%d pairs, interval=%.1fs)",
+            name, len(pairs), 1.5,
         )
-        return instance
+        return RestOrderBookProvider(
+            pairs=pairs,
+            exchange=exchange_instance,
+            poll_interval=1.5,
+        )
