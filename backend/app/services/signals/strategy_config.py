@@ -26,6 +26,8 @@ CHANNEL_STRATEGIES: dict[str, dict[str, Any]] = {
                     "max_hold": {"min": 30, "max": 300, "default": 120},
                     "cooldown": {"min": 30, "max": 300, "default": 120},
                     "ers_min_imbalance": {"min": 0.50, "max": 0.80, "default": 0.52},
+                    "balance": {"min": 5, "max": 100, "default": 10},
+                    "auto_stop": {"options": [1, 2, 4, 6], "default": 1},
                 },
             },
             {
@@ -39,6 +41,8 @@ CHANNEL_STRATEGIES: dict[str, dict[str, Any]] = {
                     "imbalance_threshold": {"min": 0.55, "max": 0.80, "default": 0.70},
                     "surge_pct": {"min": 1.0, "max": 5.0, "default": 2.0},
                     "conf_ticks": {"min": 2, "max": 5, "default": 3},
+                    "balance": {"min": 5, "max": 100, "default": 10},
+                    "auto_stop": {"options": [1, 2, 4, 6], "default": 1},
                 },
             },
         ],
