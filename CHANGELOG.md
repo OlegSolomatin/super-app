@@ -19,6 +19,7 @@
 |||||||- `fix` notification_bot: removed invalid is_active filter (column doesn't exist in telegram_bots) | Oleg
 |||||||- `fix` Backup crons: confirmed working, previous failures due to server restart race condition | Oleg
 |||||||- `feat` OB history cards redesigned to match candle card style (strategy header, divider, info row with Pair/trades/PnL, status badge) | Hermes
+ `feat` bot guide + start_bots.sh: docs/bot_guide.md с архитектурой ботов и start_bots.sh с поднятием parser→mapper→notifier по очереди. Добавлен Coder_PRO (@coder_pro_phumiko_bot) токен 8995... | Oleg
 ||||||- `fix` Signal classification: update signals:latest Redis list after mapping so frontend has strategy/engine/exchanges | Hermes
 ||||||- `fix` OB engine: fix analyze() crash - Optional fields as None from model_dump() override dataclass defaults | Hermes
 ||||||- `fix` Wizard: dynamic exchange in status + remove step content top gap | Hermes
