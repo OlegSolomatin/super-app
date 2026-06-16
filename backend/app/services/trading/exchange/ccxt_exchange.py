@@ -53,6 +53,7 @@ class CCXTExchange(AbstractExchange):
         exchange_name: str,
         api_key: str = "",
         api_secret: str = "",
+        market_type: str = "spot",
     ) -> None:
         super().__init__(
             name=exchange_name,
@@ -60,6 +61,7 @@ class CCXTExchange(AbstractExchange):
             api_secret=api_secret,
         )
         self._exchange_name = exchange_name.lower()
+        self._market_type = market_type
         self._exchange: Optional[ccxt_pro.Exchange] = None
 
     def _convert_symbol(self, pair: str) -> str:
@@ -70,18 +72,48 @@ class CCXTExchange(AbstractExchange):
           - Binance/MEXC/Bitget: BTCUSDT (direct)
           - Gate/Kraken: BTC/USDT (slash)
           - KuCoin/OKX: BTC-USDT (dash)
+          - Swap/futures: BTC/USDT:USDT (with settlement currency)
 
         Uses ccxt market data when available for accurate conversion.
         """
+        pair = pair.upper()
         if self._exchange and self._exchange.markets:
-            # Try direct market lookup by symbol
-            for fmt in (pair.upper(), f"{pair[:3]}/{pair[3:]}", f"{pair[:3]}-{pair[3:]}"):
+            # Try direct market lookup by symbol — all formats
+            for fmt in self._gen_symbol_formats(pair):
                 if fmt in self._exchange.markets:
                     return fmt
-                if fmt.upper() in self._exchange.markets:
-                    return fmt.upper()
         # Fall back to trying formats in order
-        return pair.upper()
+        return pair
+
+    def _gen_symbol_formats(self, pair: str) -> list[str]:
+        """Generate possible symbol formats for a given pair."""
+        formats = [pair]
+        # Slash format
+        if "/" not in pair:
+            for sep in ("/", "-"):
+                if len(pair) > 5:
+                    # Try split at common base/quote boundaries
+                    base_end = len(pair) - 4  # USDT, USDC, BUSD
+                    for be in range(base_end, len(pair) - 2):
+                        base = pair[:be]
+                        quote = pair[be:]
+                        formats.append(f"{base}{sep}{quote}")
+        # Swap format
+        if self._market_type in ("swap", "future"):
+            # Try BTC/USDT:USDT format
+            for fmt in list(formats):
+                if ":" not in fmt:
+                    if "/" in fmt:
+                        base, quote = fmt.split("/")[0], fmt.split("/")[1] if "/" in fmt else ("", "")
+                        formats.append(f"{fmt}:{quote}")
+                    else:
+                        # From pair like TWLOSTOCKUSDT, try split + swap format
+                        if len(pair) > 5:
+                            for be in range(len(pair) - 4, len(pair) - 2):
+                                base = pair[:be]
+                                quote = pair[be:]
+                                formats.append(f"{base}/{quote}:{quote}")
+        return formats
 
     async def _get_exchange(self) -> ccxt_pro.Exchange:
         """Get or create the ccxt exchange instance."""
@@ -96,6 +128,7 @@ class CCXTExchange(AbstractExchange):
             )
 
         config = dict(PUBLIC_CONFIG)
+        config["options"] = {"defaultType": self._market_type}
         if self.api_key:
             config["apiKey"] = self.api_key
         if self.api_secret:
@@ -297,16 +330,25 @@ def create_exchange(
     exchange_name: str,
     api_key: str = "",
     api_secret: str = "",
+    market_type: str = "spot",
 ) -> AbstractExchange:
     """Create the appropriate exchange connector for the given name.
 
     Returns the native implementation for well-known exchanges (Binance, Bybit),
     and the CCXT adapter for all others.
 
-    This allows us to use optimized native implementations where they exist,
-    while still supporting any exchange via CCXT.
+    'market_type' can be 'spot', 'swap' (futures perpetual), 'future' (dated futures).
+    For CCXT-based exchanges, the market_type is passed to the exchange options.
     """
-    name = exchange_name.lower()
+    name = exchange_name.lower().strip()
+
+    # Detect market type from exchange name if not explicitly set ("mexc - futures")
+    pieces = name.split(" - ")
+    if len(pieces) > 1:
+        type_hint = pieces[1].strip()
+        name = pieces[0].strip()
+        if market_type == "spot" and type_hint in ("futures", "swap"):
+            market_type = "swap"
 
     if name == "binance":
         from app.services.trading.exchange.binance import BinanceExchange
@@ -322,4 +364,5 @@ def create_exchange(
             exchange_name=name,
             api_key=api_key,
             api_secret=api_secret,
+            market_type=market_type,
         )

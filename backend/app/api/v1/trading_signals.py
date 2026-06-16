@@ -351,11 +351,26 @@ async def start_signal_run(
     # OrderBook Engine
     # ═══════════════════════════════════════════════════════════════════
     if signal.mapped_engine == "ob":
-        # ── Validate pair exists on a supported exchange for WS data ──
+        # ── Validate pair exists on selected or signal exchange ──
         from app.schemas.trading import OrderBookStartRequest
+        from app.services.trading.exchange.ccxt_exchange import create_exchange
 
-        async def _check_ob_exchange(pair: str) -> str | None:
+        async def _check_ob_exchange(pair: str, preferred: str | None = None) -> str | None:
+            """Check if pair exists on exchange, trying preferred first, then binance/bybit."""
             import httpx
+
+            # 1. Проверяем предпочтительную биржу (selected_exchange или биржу из сигнала)
+            if preferred and preferred not in ("binance", "bybit"):
+                try:
+                    ex = create_exchange(preferred)
+                    ticker = await ex.get_ticker(pair)
+                    if ticker and ticker.get("volume", 0) > 0:
+                        logger.info("OB pair %s found on signal exchange: %s", pair, preferred)
+                        return preferred
+                except Exception:
+                    pass
+
+            # 2. Проверяем Binance и Bybit (WS-биржи)
             for exchange_name in ("binance", "bybit"):
                 try:
                     if exchange_name == "binance":
@@ -376,15 +391,31 @@ async def start_signal_run(
                                     return "bybit"
                 except Exception:
                     continue
+
+            # 3. Если preferred не Binance/Bybit и не прошёл проверку выше — пробуем всё равно
+            # (могла быть ошибка тикера, но пара реально существует)
+            if preferred:
+                logger.warning("OB pair %s check on %s failed with ticker, but using it anyway", pair, preferred)
+                return preferred
+
             return None
 
-        ob_source_exchange = await _check_ob_exchange(signal.pair)
+        # Определяем предпочтительную биржу для OB: selected_exchange (если определён) или биржа из сигнала
+        ob_preferred = selected_exchange
+        if not ob_preferred:
+            ob_exchange_raw = (signal.exchange or "").strip()
+            if ob_exchange_raw and ob_exchange_raw.lower() not in ("", "none", "unknown"):
+                ob_preferred = ob_exchange_raw  # полное имя "Mexc - Futures"
+        if ob_preferred and ob_preferred.lower() in ("", "none", "unknown"):
+            ob_preferred = None
+
+        ob_source_exchange = await _check_ob_exchange(signal.pair, preferred=ob_preferred)
         if not ob_source_exchange:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Пара {signal.pair} не найдена на Binance и Bybit. "
-                       f"OB стратегии ({signal.mapped_strategy}) требуют стакан с этих бирж. "
-                       f"Попробуйте запустить как свечную стратегию.",
+                detail=f"Пара {signal.pair} не найдена. "
+                       f"OB стратегии ({signal.mapped_strategy}) требуют стакан. "
+                       f"Проверьте что пара существует на выбранной бирже.",
             )
 
         # Build OrderBookStartRequest with common params + strategy-specific
