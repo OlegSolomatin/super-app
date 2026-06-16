@@ -41,6 +41,7 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
   final _labelCtrl = TextEditingController();
   final _apiKeyCtrl = TextEditingController();
   final _apiSecretCtrl = TextEditingController();
+  final _passphraseCtrl = TextEditingController();
 
   late SettingsRepository _repo;
 
@@ -65,6 +66,7 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
     _labelCtrl.dispose();
     _apiKeyCtrl.dispose();
     _apiSecretCtrl.dispose();
+    _passphraseCtrl.dispose();
     super.dispose();
   }
 
@@ -90,12 +92,14 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
         label: _labelCtrl.text.trim(),
         apiKey: _apiKeyCtrl.text.trim(),
         apiSecret: _apiSecretCtrl.text.trim(),
+        passphrase: _passphraseCtrl.text.trim(),
         expiresAt: _expiryDate,
       );
       _exchangeCtrl.clear();
       _labelCtrl.clear();
       _apiKeyCtrl.clear();
       _apiSecretCtrl.clear();
+      _passphraseCtrl.clear();
       if (mounted) setState(() => _expiryDate = null);
       await _load();
       if (mounted) _success('Ключ добавлен');
@@ -252,6 +256,13 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
               ),
               const SizedBox(height: 12),
               _buildSecretField(pc),
+              const SizedBox(height: 12),
+              _buildTextField(
+                controller: _passphraseCtrl,
+                label: 'Passphrase (для OKX, KuCoin и др.)',
+                hint: 'Парольная фраза от API ключа',
+                pc: pc,
+              ),
               const SizedBox(height: 12),
               // ── Expiration date picker ──
               _buildDatePicker(pc),
