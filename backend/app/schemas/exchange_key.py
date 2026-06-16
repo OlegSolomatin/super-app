@@ -17,6 +17,7 @@ class ExchangeKeyCreate(BaseModel):
     api_key: str = Field(..., description="API key (plain text, encrypted at rest)")
     api_secret: str = Field(..., description="API secret (plain text, encrypted at rest)")
     passphrase: Optional[str] = Field(None, description="Passphrase for OKX etc.")
+    expires_at: Optional[datetime] = Field(None, description="Key expiration date/time")
 
 
 class ExchangeKeyUpdate(BaseModel):
@@ -27,6 +28,7 @@ class ExchangeKeyUpdate(BaseModel):
     api_secret: Optional[str] = None
     passphrase: Optional[str] = None
     is_active: Optional[bool] = None
+    expires_at: Optional[datetime] = None
 
 
 class ExchangeKeyResponse(BaseModel):
@@ -41,6 +43,7 @@ class ExchangeKeyResponse(BaseModel):
     balance: Optional[float] = None
     balance_updated_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

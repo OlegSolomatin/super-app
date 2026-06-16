@@ -58,6 +58,9 @@ class ExchangeKey(Base):
     )
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Expiration (optional)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+
     # Relationships
     user = relationship("User", backref="exchange_keys")
 

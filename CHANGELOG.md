@@ -1,3 +1,4 @@
+||||||- `Exchange key expiration: DB field, date picker, timer in card, daily TG notification` feat | Hermes
 ||||||- `Fix balance checker: only count USDT/stablecoins, skip non-USD assets` fix | Hermes
 ||||||- `Fix exchange key check timeout: Dio 10s->30s, server-side 20s timeout` fix | Hermes
 ||||||- `ERS scalping defaults: conf_ticks=1, cooldown=30s for faster signal response` fix | Hermes

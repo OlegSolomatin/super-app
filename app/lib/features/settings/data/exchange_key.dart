@@ -9,6 +9,7 @@ class ExchangeKey {
   final double? balance;
   final String? balanceUpdatedAt;
   final String? lastCheckedAt;
+  final String? expiresAt;
   final String createdAt;
   final String updatedAt;
 
@@ -22,6 +23,7 @@ class ExchangeKey {
     this.balance,
     this.balanceUpdatedAt,
     this.lastCheckedAt,
+    this.expiresAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -36,6 +38,7 @@ class ExchangeKey {
         balance: (json['balance'] as num?)?.toDouble(),
         balanceUpdatedAt: json['balance_updated_at'] as String?,
         lastCheckedAt: json['last_checked_at'] as String?,
+        expiresAt: json['expires_at'] as String?,
         createdAt: json['created_at'] as String,
         updatedAt: json['updated_at'] as String,
       );
@@ -50,5 +53,23 @@ class ExchangeKey {
       default:
         return '⏳ Не проверен';
     }
+  }
+
+  /// Days until expiration (null if no expiration set).
+  int? get daysUntilExpiry {
+    if (expiresAt == null) return null;
+    final expires = DateTime.tryParse(expiresAt!);
+    if (expires == null) return null;
+    return expires.difference(DateTime.now()).inDays;
+  }
+
+  /// Human-readable expiration label.
+  String? get expiryLabel {
+    final days = daysUntilExpiry;
+    if (days == null) return null;
+    if (days < 0) return '⚠️ Истёк';
+    if (days == 0) return '⚠️ Истекает сегодня';
+    if (days <= 5) return '⏰ Осталось $days дн.';
+    return '✅ $days дн.';
   }
 }

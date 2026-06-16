@@ -69,6 +69,7 @@ class SettingsRepository {
     required String apiKey,
     required String apiSecret,
     String? passphrase,
+    DateTime? expiresAt,
   }) async {
     final resp = await _dio.post('/exchange-keys', data: {
       'exchange': exchange,
@@ -76,6 +77,7 @@ class SettingsRepository {
       'api_key': apiKey,
       'api_secret': apiSecret,
       if (passphrase != null && passphrase.isNotEmpty) 'passphrase': passphrase,
+      if (expiresAt != null) 'expires_at': expiresAt.toIso8601String(),
     });
     return ExchangeKey.fromJson(resp.data as Map<String, dynamic>);
   }

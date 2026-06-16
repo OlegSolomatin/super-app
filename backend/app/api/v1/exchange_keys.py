@@ -107,6 +107,7 @@ async def create_exchange_key(
         api_secret_encrypted=encrypted_secret,
         passphrase=encrypted_passphrase,
         status="untested",
+        expires_at=body.expires_at,
     )
     session.add(db_key)
     await session.commit()

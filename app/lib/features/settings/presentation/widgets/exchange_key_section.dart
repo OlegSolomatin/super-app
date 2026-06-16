@@ -34,6 +34,7 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
   bool _saving = false;
   String? _testingId;
   bool _obscureSecret = true;
+  DateTime? _expiryDate;
 
   final _formKey = GlobalKey<FormState>();
   final _exchangeCtrl = TextEditingController();
@@ -89,11 +90,13 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
         label: _labelCtrl.text.trim(),
         apiKey: _apiKeyCtrl.text.trim(),
         apiSecret: _apiSecretCtrl.text.trim(),
+        expiresAt: _expiryDate,
       );
       _exchangeCtrl.clear();
       _labelCtrl.clear();
       _apiKeyCtrl.clear();
       _apiSecretCtrl.clear();
+      if (mounted) setState(() => _expiryDate = null);
       await _load();
       if (mounted) _success('Ключ добавлен');
     } catch (e) {
@@ -253,6 +256,9 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
               ),
               const SizedBox(height: 12),
               _buildSecretField(pc),
+              const SizedBox(height: 12),
+              // ── Expiration date picker ──
+              _buildDatePicker(pc),
               const SizedBox(height: 20),
               PfButton(
                 label: _saving ? 'Добавление...' : 'Добавить ключ',
@@ -376,6 +382,23 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
                 ],
               ),
             ],
+            if (key.expiresAt != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  PhosphorIcon(PhosphorIconsFill.clock, size: 14, color: _expiryColor(key, pc)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _expiryText(key),
+                      style: PfTypography.bodySm.copyWith(
+                        color: _expiryColor(key, pc),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 10),
             Row(
               children: [
@@ -485,5 +508,74 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
             color: Theme.of(context).colorScheme.primary),
       ),
     );
+  }
+
+  // ── Expiry date picker ──
+
+  Widget _buildDatePicker(PfColors pc) {
+    final dateStr = _expiryDate != null
+        ? '${_expiryDate!.day.toString().padLeft(2, '0')}.${_expiryDate!.month.toString().padLeft(2, '0')}.${_expiryDate!.year}'
+        : null;
+
+    return InkWell(
+      onTap: _pickDate,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Срок действия (опционально)',
+          hintText: 'Не ограничен',
+          filled: true,
+          fillColor: pc.surfaceC,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: pc.borderC),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: pc.borderC.withValues(alpha: 0.5)),
+          ),
+          suffixIcon: PhosphorIcon(
+            _expiryDate != null ? PhosphorIconsFill.xCircle : PhosphorIconsFill.calendar,
+            size: 20, color: pc.mutedForegroundC,
+          ),
+        ),
+        child: Text(
+          dateStr ?? 'Выберите дату',
+          style: TextStyle(color: dateStr != null ? pc.foregroundC : pc.mutedForegroundC),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? now.add(const Duration(days: 90)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 730)), // max 2 years
+      helpText: 'Срок действия ключа',
+      cancelText: 'Отмена',
+      confirmText: 'Выбрать',
+    );
+    if (picked != null) {
+      setState(() => _expiryDate = picked);
+    }
+  }
+
+  // ── Expiry helpers ──
+
+  Color _expiryColor(ExchangeKey key, PfColors pc) {
+    final days = key.daysUntilExpiry;
+    if (days == null) return pc.mutedForegroundC;
+    if (days < 0) return Colors.red.shade400;
+    if (days <= 5) return Colors.orange.shade400;
+    return pc.mutedForegroundC;
+  }
+
+  String _expiryText(ExchangeKey key) {
+    final label = key.expiryLabel;
+    if (label != null) return 'Срок: $label';
+    return '';
   }
 }
