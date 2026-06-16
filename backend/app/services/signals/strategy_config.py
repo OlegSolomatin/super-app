@@ -56,7 +56,9 @@ CHANNEL_STRATEGIES: dict[str, dict[str, Any]] = {
                     "stoploss": {"min": 1.0, "max": 5.0, "default": 2.0},
                     "takeprofit": {"min": 3.0, "max": 10.0, "default": 5.0},
                     "balance": {"min": 5, "max": 100, "default": 10},
-                    "duration": {"options": [1, 2, 6, 12, 24], "default": 1},
+                    "duration": {"options": [0.5, 1, 2, 4, 6], "default": 1},
+                    "trend_filter": {"options": ["on", "off"], "default": "on"},
+                    "min_confidence": {"min": 0.1, "max": 0.5, "default": 0.3},
                 },
             },
             {

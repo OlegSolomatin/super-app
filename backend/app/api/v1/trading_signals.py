@@ -502,6 +502,11 @@ async def start_signal_run(
         session.add(db_run)
         await session.flush()
 
+        # Convert LLM params
+        _tf = params.get("trend_filter", "on")
+        trend_filter_enabled = _tf if isinstance(_tf, bool) else (_tf == "on")
+        min_confidence_val = float(params.get("min_confidence", 0.3))
+
         db_config = DBTradingConfig(
             run_id=db_run.id,
             pair=signal.pair,
@@ -510,11 +515,11 @@ async def start_signal_run(
             virtual_balance=params.get("balance", 10.0),
             max_trade_amount=params.get("max_trade", 5.0),
             timeframe=params.get("timeframe", "3m"),
-            duration_days=params.get("duration", 1),
+            duration_days=max(1, int(params.get("duration", 1) / 24)),
             exchange=selected_exchange,
             stop_loss_percent=params.get("stoploss", 2.0),
             take_profit_percent=params.get("takeprofit", 5.0),
-            trend_filter_enabled=False,
+            trend_filter_enabled=trend_filter_enabled,
         )
         session.add(db_config)
         await session.commit()
@@ -529,11 +534,12 @@ async def start_signal_run(
             virtual_balance=params.get("balance", 10.0),
             max_trade_amount=params.get("max_trade", 5.0),
             timeframe=params.get("timeframe", "3m"),
-            duration_days=params.get("duration", 1),
+            duration_days=max(1, int(params.get("duration", 1) / 24)),
             exchange=selected_exchange,
             stop_loss_percent=params.get("stoploss", 2.0),
             take_profit_percent=params.get("takeprofit", 5.0),
-            trend_filter_enabled=False,
+            trend_filter_enabled=trend_filter_enabled,
+            min_confidence=min_confidence_val,
         )
 
         try:
