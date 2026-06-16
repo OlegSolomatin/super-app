@@ -482,7 +482,7 @@ async def start_signal_run(
             "pair": signal.pair,
             "strategy": signal.mapped_strategy,
             "mode": "virtual",
-            "exchange": selected_exchange,
+            "exchange": ob_source_exchange,
             "direction": direction,
         }
 

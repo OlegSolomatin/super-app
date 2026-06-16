@@ -19,11 +19,15 @@ from app.services.trading.orderbook.data.binance_provider import (
 from app.services.trading.orderbook.data.bybit_provider import (
     BybitDataProvider,
 )
+from app.services.trading.orderbook.data.ccxt_ws_provider import (
+    CCXTWSProvider,
+)
 
 __all__ = [
     "DataProvider",
     "DataProviderFactory",
     "BinanceDataProvider",
     "BybitDataProvider",
+    "CCXTWSProvider",
     "list_providers",
 ]
