@@ -228,13 +228,9 @@ class _ExchangeKeySectionState extends State<ExchangeKeySection> {
               _buildTextField(
                 controller: _exchangeCtrl,
                 label: 'Биржа',
-                hint: 'binance',
+                hint: 'bingx, gate, kucoin, okx...',
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Укажите биржу';
-                  final e = v.trim().toLowerCase();
-                  if (!['binance', 'mexc', 'bybit'].contains(e)) {
-                    return 'Поддерживаются: binance, mexc, bybit';
-                  }
                   return null;
                 },
                 pc: pc,

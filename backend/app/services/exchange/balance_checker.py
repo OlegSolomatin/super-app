@@ -1,11 +1,8 @@
 """Service for checking exchange API key validity and fetching balances.
 
-Supports:
-  - Binance (ccxt or REST)
-  - Mexc
-  - Bybit
-
-Falls back to ccxt if available, otherwise uses direct REST calls.
+Supports any exchange available in ccxt (100+ exchanges).
+Balance checking via ccxt.fetch_balance().
+Bybit uses direct REST due to unified account issues.
 """
 
 from __future__ import annotations
@@ -16,9 +13,17 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Supported exchanges
-SUPPORTED_EXCHANGES = {"binance", "mexc", "bybit"}
-FUTURES_EXCHANGES = {"binance", "bybit"}  # Support futures
+
+def get_supported_exchanges() -> set[str]:
+    """Get all exchanges supported by ccxt for key checking.
+
+    Returns set of exchange names that can be used for API key management.
+    """
+    try:
+        import ccxt.async_support as ccxt
+        return set(ccxt.exchanges)
+    except ImportError:
+        return {"binance", "mexc", "bybit"}  # fallback
 
 
 async def check_key_validity(
@@ -42,9 +47,11 @@ async def check_key_validity(
     """
     exchange = exchange.lower().strip()
 
-    if exchange not in SUPPORTED_EXCHANGES:
+    supported = get_supported_exchanges()
+
+    if exchange not in supported:
         logger.warning("Unsupported exchange: %s", exchange)
-        return False, None, f"Биржа {exchange} не поддерживается"
+        return False, None, f"Биржа {exchange} не поддерживается. ccxt поддерживает: {', '.join(sorted(supported)[:10])}..."
 
     # Bybit: сразу прямой REST (ccxt неправильно подписывает для классических ключей)
     if exchange == "bybit":

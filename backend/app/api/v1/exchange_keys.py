@@ -28,13 +28,20 @@ from app.schemas.exchange_key import (
     ExchangeKeyUpdate,
 )
 from app.services.exchange.balance_checker import (
-    SUPPORTED_EXCHANGES,
     check_key_validity,
+    get_supported_exchanges,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/exchange-keys", tags=["exchange"])
+
+
+@router.get("/supported-exchanges")
+async def list_supported_exchanges() -> dict:
+    """List all exchanges that can be used for API key management."""
+    supported = sorted(get_supported_exchanges())
+    return {"exchanges": supported, "total": len(supported)}
 
 
 @router.get("", response_model=ExchangeKeyListResponse)
@@ -71,10 +78,12 @@ async def create_exchange_key(
     """
     exchange = body.exchange.lower().strip()
 
-    if exchange not in SUPPORTED_EXCHANGES:
+    supported = get_supported_exchanges()
+
+    if exchange not in supported:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Неподдерживаемая биржа: {exchange}. Поддерживаются: {', '.join(sorted(SUPPORTED_EXCHANGES))}.",
+            detail=f"Неподдерживаемая биржа: {exchange}. Поддерживаются: {', '.join(sorted(supported))}.",
         )
 
     # Check for duplicate (same exchange)
