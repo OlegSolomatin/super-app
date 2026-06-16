@@ -53,3 +53,22 @@ class AbstractExchange(ABC):
     async def get_balance(self, currency: str = "") -> Dict[str, float]:
         """Fetch account balance for one or all currencies."""
         ...
+
+    @abstractmethod
+    async def get_orderbook(
+        self,
+        pair: str,
+        limit: int = 20,
+    ) -> Dict:
+        """Fetch current order book (bids/asks) from the exchange.
+
+        Returns dict with:
+          - bids: list of [price, quantity] sorted DESC (best first)
+          - asks: list of [price, quantity] sorted ASC (best first)
+          - timestamp: int (ms)
+        """
+        ...
+
+    async def close(self) -> None:
+        """Close any open connections. Override in subclass if needed."""
+        ...

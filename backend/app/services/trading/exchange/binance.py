@@ -315,6 +315,29 @@ class BinanceExchange(AbstractExchange):
             logger.error("Binance get_balance exception: %s", e)
             return {}
 
+    async def get_orderbook(
+        self,
+        pair: str,
+        limit: int = 20,
+    ) -> Dict:
+        """Fetch current order book from Binance public API."""
+        session = await self._get_session()
+        try:
+            async with session.get(
+                f"{BINANCE_BASE_URL}/api/v3/depth",
+                params={"symbol": pair.upper(), "limit": limit},
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {
+                        "bids": data.get("bids", []),
+                        "asks": data.get("asks", []),
+                        "timestamp": data.get("lastUpdateId", 0),
+                    }
+        except Exception as e:
+            logger.error("Binance orderbook error: %s", e)
+        return {"bids": [], "asks": [], "timestamp": 0}
+
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session and not self._session.closed:

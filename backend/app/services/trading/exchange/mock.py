@@ -84,3 +84,15 @@ class MockExchange(AbstractExchange):
     async def get_balance(self, currency: str = "") -> Dict[str, float]:
         """Return a simulated balance."""
         return {"USDT": 10000.0, "BTC": 0.5, "ETH": 2.0}
+
+    async def get_orderbook(
+        self,
+        pair: str,
+        limit: int = 20,
+    ) -> Dict:
+        """Return a simulated order book."""
+        import random
+        base = 50000.0
+        bids = [[base - i * 10, random.uniform(0.1, 5.0)] for i in range(limit)]
+        asks = [[base + i * 10, random.uniform(0.1, 5.0)] for i in range(limit)]
+        return {"bids": bids, "asks": asks, "timestamp": 0}

@@ -374,6 +374,31 @@ class BybitExchange(AbstractExchange):
             logger.error("Bybit balance exception: %s", e)
         return {}
 
+    async def get_orderbook(
+        self,
+        pair: str,
+        limit: int = 20,
+    ) -> Dict:
+        """Fetch current order book from Bybit public API v5."""
+        session = await self._get_session()
+        try:
+            async with session.get(
+                f"{BYBIT_BASE_URL}/v5/market/orderbook",
+                params={"category": "spot", "symbol": pair.upper(), "limit": limit},
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("retCode") == 0:
+                        result = data.get("result", {})
+                        return {
+                            "bids": result.get("b", []),
+                            "asks": result.get("a", []),
+                            "timestamp": int(result.get("ts", 0)),
+                        }
+        except Exception as e:
+            logger.error("Bybit orderbook error: %s", e)
+        return {"bids": [], "asks": [], "timestamp": 0}
+
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session and not self._session.closed:
