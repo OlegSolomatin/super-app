@@ -1,3 +1,4 @@
+||||||- `feat` passphrase field added to Flutter form for OKX/KuCoin/etc. Build v43 | Hermes
 ||||||- `Dynamic exchange support: all ccxt exchanges for key management + API endpoint` feat | Hermes
 ||||||- `Exchange key expiration: DB field, date picker, timer in card, daily TG notification` feat | Hermes
 ||||||- `Fix balance checker: only count USDT/stablecoins, skip non-USD assets` fix | Hermes

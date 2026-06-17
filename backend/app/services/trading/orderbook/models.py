@@ -167,7 +167,7 @@ class OrderBookConfig:
     # Strategy 1: Imbalance Scalping
     imbalance_threshold: float = 0.65
     surge_pct: float = 20.0
-    confirmation_ticks: int = 3
+    confirmation_ticks: int = 1
     max_spread_pct: float = 0.05
 
     # Exit
