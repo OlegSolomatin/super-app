@@ -1,3 +1,4 @@
+||||||- `fix` confirmation_ticks default 3→1 for ERS (all 4 fallback levels). Build v43 | Hermes
 ||||||- `feat` passphrase field added to Flutter form for OKX/KuCoin/etc. Build v43 | Hermes
 ||||||- `Dynamic exchange support: all ccxt exchanges for key management + API endpoint` feat | Hermes
 ||||||- `Exchange key expiration: DB field, date picker, timer in card, daily TG notification` feat | Hermes

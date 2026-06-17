@@ -181,7 +181,7 @@ class OrderBookConfig:
     trailing_stop_positive_offset: float = 0.5
 
     # Protections
-    cooldown_seconds: int = 120
+    cooldown_seconds: int = 10
     min_trade_interval: int = 10
     max_runtime_hours: int = 0  # 0 = unlimited
 

@@ -228,7 +228,7 @@ async def classify_signal(
             signal_label="Всплеск объёма",
             mapped_engine="ob",
             mapped_strategy="order_flow_momentum",
-            params={"balance": 10.0, "max_open": 1, "stoploss": -2.0, "max_hold": 120, "conf_ticks": 3},
+            params={"balance": 10.0, "max_open": 1, "stoploss": -2.0, "max_hold": 120},
             confidence=0.5,
             reasoning="LLM не ответил, определён по всплеску объёма vol10m/vol60m",
         )

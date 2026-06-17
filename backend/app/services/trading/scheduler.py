@@ -720,7 +720,7 @@ class TradingScheduler:
             trailing_stop=True,
             trailing_stop_positive=config.get("trailing_stop", 0.3),
             trailing_stop_positive_offset=config.get("trailing_offset", 0.5),
-            cooldown_seconds=config.get("cooldown_seconds", 120),
+            cooldown_seconds=config.get("cooldown_seconds", 10),
             max_runtime_hours=config.get("auto_stop_hours", 0),
             # Spread Capture params
             min_spread_pct=clean_config.get("min_spread_pct", 0.02),
