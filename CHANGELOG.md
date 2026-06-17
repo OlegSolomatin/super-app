@@ -1,3 +1,4 @@
+||||||- `feat` confirmation_ticks=1 (hardcode, not in LLM), cooldown=10 for all signal OB runs. Build v43b | Hermes
 ||||||- `fix` confirmation_ticks default 3→1 for ERS (all 4 fallback levels). Build v43 | Hermes
 ||||||- `feat` passphrase field added to Flutter form for OKX/KuCoin/etc. Build v43 | Hermes
 ||||||- `Dynamic exchange support: all ccxt exchanges for key management + API endpoint` feat | Hermes

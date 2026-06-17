@@ -318,8 +318,8 @@ async def check_available_exchanges(
                 from app.services.trading.exchange.bybit import BybitExchange
                 ex = BybitExchange()
             else:
-                logger.warning("No ticker check implemented for %s", exchange_name)
-                return exchange_name, False
+                from app.services.trading.exchange.ccxt_exchange import CCXTExchange
+                ex = CCXTExchange(exchange_name)
 
             ticker = await ex.get_ticker(pair)
             available = bool(ticker and ticker.get("volume", 0) > 0)
