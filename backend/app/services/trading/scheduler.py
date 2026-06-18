@@ -713,7 +713,7 @@ class TradingScheduler:
             imbalance_threshold=clean_config.get("imbalance_threshold", 0.65),
             surge_pct=clean_config.get("surge_pct", 20.0),
             confirmation_ticks=config.get("confirmation_ticks", 1),
-            max_spread_pct=config.get("max_spread", 0.05),
+            max_spread_pct=config.get("max_spread", 5.0),
             exit_after_seconds=config.get("exit_after_seconds", 60),
             max_hold_seconds=config.get("max_hold_seconds", 120),
             stoploss=config.get("stoploss", -1.0),

@@ -3159,7 +3159,7 @@ class _OrderBookWizardPageState extends State<OrderBookWizardPage>
         'trailing_offset': _trailingOffset,
         'max_hold_seconds': _maxHoldSeconds,
         'confirmation_ticks': _confirmationTicks,
-        'max_spread': _maxSpread,
+        'max_spread': _maxSpread * 100,  // конвертация: десятичные → проценты
         'cooldown_seconds': _cooldownSeconds,
         'auto_stop_hours': _autoStopHours,
         'source_exchange': _sourceExchange,

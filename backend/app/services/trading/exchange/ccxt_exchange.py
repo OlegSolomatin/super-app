@@ -203,15 +203,25 @@ class CCXTExchange(AbstractExchange):
         """Fetch current ticker from the exchange."""
         ex = await self._get_exchange()
         try:
-            ticker = await ex.fetch_ticker(self._convert_symbol(pair))
-            return {
-                "last": float(ticker.get("last", 0)),
-                "volume": float(ticker.get("baseVolume", 0)),
-                "high": float(ticker.get("high", 0)),
-                "low": float(ticker.get("low", 0)),
-                "bid": float(ticker.get("bid", 0)),
-                "ask": float(ticker.get("ask", 0)),
-            }
+            formats = self._gen_symbol_formats(pair)
+            last_err = None
+            for fmt in formats:
+                try:
+                    ticker = await ex.fetch_ticker(fmt)
+                    return {
+                        "last": float(ticker.get("last", 0)),
+                        "volume": float(ticker.get("baseVolume", 0)),
+                        "high": float(ticker.get("high", 0)),
+                        "low": float(ticker.get("low", 0)),
+                        "bid": float(ticker.get("bid", 0)),
+                        "ask": float(ticker.get("ask", 0)),
+                    }
+                except Exception as e:
+                    last_err = e
+                    continue
+            logger.error("[CCXT:%s] ticker error for %s (tried %s formats): %s",
+                         self._exchange_name, pair, len(formats), last_err)
+            return {}
         except Exception as e:
             logger.error("[CCXT:%s] ticker error for %s: %s",
                          self._exchange_name, pair, e)

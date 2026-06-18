@@ -428,8 +428,8 @@ async def start_signal_run(
             trailing_stop=params.get("trailing_stop", 0.3),
             max_hold_seconds=params.get("max_hold", 120),
             confirmation_ticks=1,
-            max_spread=params.get("max_spread", 0.1),
-            cooldown_seconds=params.get("cooldown", 10),
+            max_spread=params.get("max_spread", 0.1) * 100,  # decimal -> percent conversion
+            cooldown_seconds=10,
             auto_stop_hours=params.get("auto_stop", 1),
         )
         # Pass through strategy-specific params if present in mapped_params

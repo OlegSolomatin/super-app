@@ -168,7 +168,7 @@ class OrderBookConfig:
     imbalance_threshold: float = 0.65
     surge_pct: float = 20.0
     confirmation_ticks: int = 1
-    max_spread_pct: float = 0.05
+    max_spread_pct: float = 5.0
 
     # Exit
     exit_after_seconds: int = 60
