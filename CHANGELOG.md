@@ -1,6 +1,7 @@
-1|||||||- `fix` backup crons: переведены в no_agent script mode (broken pipe fix после перезагрузки). Build v44 | Hermes
-2|||||||- `fix` signal notifier: перезапущен с лог-файлом /tmp/signal_notifier_v2.log. Build v44 | Hermes
-3|||||||- `fix` max_spread decimal/percent conversion bug (wizard+signals+FLutter). Build v44 | Hermes
+1|||||||- `fix` app version was hardcoded in Dart source (app_version.dart), not reading from pubspec.yaml. Build v44 | Hermes
+2|||||||- `fix` backup crons: переведены в no_agent script mode (broken pipe fix после перезагрузки). Build v44 | Hermes
+3|||||||- `fix` signal notifier: перезапущен с лог-файлом /tmp/signal_notifier_v2.log. Build v44 | Hermes
+4|||||||- `fix` max_spread decimal/percent conversion bug (wizard+signals+FLutter). Build v44 | Hermes
 ||||||- `fix` check pair availability via CCXT for all exchanges (not just Binance/Bybit) | Hermes
 ||||||- `feat` confirmation_ticks=1 (hardcode, not in LLM), cooldown=10 for all signal OB runs. Build v43b | Hermes
 ||||||- `fix` confirmation_ticks default 3→1 for ERS (all 4 fallback levels). Build v43 | Hermes
