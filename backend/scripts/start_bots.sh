@@ -81,10 +81,14 @@ else
     echo "    Стартую Signal Notifier..."
     nohup /home/oleg/.hermes/hermes-agent/venv/bin/python -c "
 import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[logging.FileHandler('/tmp/signal_notifier_v2.log'), logging.StreamHandler()]
+)
 from app.services.signals.notification_bot import run
 run()
-" >> /tmp/signal_notifier.log 2>&1 &
+" >> /tmp/signal_notifier_v2.log 2>&1 &
     NOTIFIER_PID=$!
     sleep 3
     if pgrep -f "SignalNotifier" >/dev/null 2>&1; then
