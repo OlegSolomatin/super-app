@@ -1,3 +1,4 @@
+||||||- `fix` max_spread decimal/percent conversion bug (wizard+signals+FLutter). Build v44 | Hermes
 ||||||- `fix` check pair availability via CCXT for all exchanges (not just Binance/Bybit) | Hermes
 ||||||- `feat` confirmation_ticks=1 (hardcode, not in LLM), cooldown=10 for all signal OB runs. Build v43b | Hermes
 ||||||- `fix` confirmation_ticks default 3→1 for ERS (all 4 fallback levels). Build v43 | Hermes
