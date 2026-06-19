@@ -322,10 +322,10 @@ class OrderBookStartRequest(BaseModel):
     stoploss: float = Field(default=-1.0, ge=-5.0, le=0.0, description="Stop loss %")
     trailing_stop: float = Field(default=0.3, ge=0, le=2.0, description="Trailing stop %")
     trailing_offset: float = Field(default=0.5, ge=0, le=2.0, description="Trailing offset %")
-    max_hold_seconds: int = Field(default=120, ge=10, le=600, description="Max hold time")
+    max_hold_seconds: int = Field(default=120, ge=5, le=600, description="Max hold time")
     confirmation_ticks: int = Field(default=1, ge=1, le=10)
     max_spread: float = Field(default=5.0, ge=0.01, le=200.0, description="Max spread in percent")
-    cooldown_seconds: int = Field(default=10, ge=10, le=600)
+    cooldown_seconds: int = Field(default=10, ge=3, le=600)
     auto_stop_hours: int = Field(
         default=0, ge=0, le=72, description="Auto-stop after N hours (0 = unlimited)"
     )

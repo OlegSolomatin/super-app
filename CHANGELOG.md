@@ -1,3 +1,6 @@
+||||||- `infra` uvicorn перезапущен с лог-файлом /tmp/super-app-backend.log | Hermes
+||||||- `fix` scheduler: сохранение текста исключения в error_msg (было hardcoded 'Engine crashed') | Hermes
+||||||- `fix` cooldown_seconds ge=10→3, max_hold_seconds ge=10→5 (для ERS совместимости) | Hermes
 1|||||||- `fix` app version was hardcoded in Dart source (app_version.dart), not reading from pubspec.yaml. Build v44 | Hermes
 2|||||||- `fix` backup crons: переведены в no_agent script mode (broken pipe fix после перезагрузки). Build v44 | Hermes
 3|||||||- `fix` signal notifier: перезапущен с лог-файлом /tmp/signal_notifier_v2.log. Build v44 | Hermes

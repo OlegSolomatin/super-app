@@ -812,9 +812,9 @@ class TradingScheduler:
             error_msg = "Stopped by user"
             logger.info(f"[OBScheduler] Run {run_id} cancelled, stopping engine...")
             await engine.stop()
-        except Exception:
-            error_msg = "Engine crashed"
-            logger.exception(f"[OBScheduler] Run {run_id} failed")
+        except Exception as e:
+            error_msg = f"Engine crashed: {e}"
+            logger.exception(f"[OBScheduler] Run {run_id} failed: {e}")
         finally:
             # ── Guarded cleanup: stop live loop, stop engine, clean scheduler state ──
             if live_task is not None:
