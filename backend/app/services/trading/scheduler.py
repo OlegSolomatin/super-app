@@ -786,8 +786,8 @@ class TradingScheduler:
                     await asyncio.sleep(3)
                     try:
                         await self._save_ob_live_status(run_id, engine)
-                    except Exception:
-                        pass
+                    except Exception as e_live:
+                        logger.warning(f"[OBScheduler] Live status write failed for run {run_id}: {e_live}")
 
             live_task = asyncio.create_task(_live_status_loop())
             # ── Auto-stop timer ──────────────────────────────────

@@ -1,3 +1,4 @@
+||||||- `fix` live status loop: silent except→log warning (чтобы видеть почему heartbeat не пишется) | Hermes
 ||||||- `infra` uvicorn перезапущен с лог-файлом /tmp/super-app-backend.log | Hermes
 ||||||- `fix` scheduler: сохранение текста исключения в error_msg (было hardcoded 'Engine crashed') | Hermes
 ||||||- `fix` cooldown_seconds ge=10→3, max_hold_seconds ge=10→5 (для ERS совместимости) | Hermes
