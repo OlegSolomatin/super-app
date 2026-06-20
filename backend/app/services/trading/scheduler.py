@@ -226,9 +226,12 @@ class TradingScheduler:
                         )
 
                     run_start = datetime.now(timezone.utc)
-                    # duration_days — это часы/24 (конвертировано из mapped_params)
-                    # Для virtual режима: не дольше 6 часов
-                    dur_hours = min(6, (config.duration_days or 1) * 24)
+                    # duration_hours — точное время в часах (из сигнала, напр. 0.5 = 30 мин)
+                    # duration_days — старое поле, часы*24 (запасной вариант)
+                    if config.duration_hours is not None:
+                        dur_hours = min(6, config.duration_hours)
+                    else:
+                        dur_hours = min(6, (config.duration_days or 1) * 24)
                     dur_sec = dur_hours * 3600.0
                     trades, metrics = await engine.run_virtual_live(
                         exchange,

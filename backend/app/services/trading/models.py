@@ -98,6 +98,7 @@ class TradingConfig:
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
     duration_days: Optional[int] = None
+    duration_hours: Optional[float] = None  # точное время в часах (переопределяет duration_days для virtual)
     exchange: Optional[str] = None
     stop_loss_percent: float = 1.0
     take_profit_percent: float = 5.0

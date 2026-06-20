@@ -72,6 +72,16 @@ class SignalMapperDaemon:
         """Main loop: subscribe to Redis and process signals forever."""
         logger.info("SignalMapperDaemon starting...")
 
+        # ── Catch up: auto-execute previously classified signals ──
+        try:
+            from app.services.signals.auto_execute_signals import catch_up_pending_signals
+
+            caught = await catch_up_pending_signals()
+            if caught:
+                logger.info("Caught up %d previously classified signals", caught)
+        except Exception as e:
+            logger.warning("Catch-up error (non-fatal): %s", e)
+
         while self._running:
             from redis.asyncio import Redis as AsyncRedis
 

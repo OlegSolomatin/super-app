@@ -183,7 +183,7 @@ class OrderBookConfig:
     # Protections
     cooldown_seconds: int = 10
     min_trade_interval: int = 10
-    max_runtime_hours: int = 0  # 0 = unlimited
+    max_runtime_hours: float = 0  # 0 = unlimited (0.5 = 30 min)
 
     # Strategy 2: Spread Capture
     min_spread_pct: float = 0.02

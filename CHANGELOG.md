@@ -2,6 +2,12 @@
 ||||||- `infra` uvicorn перезапущен с лог-файлом /tmp/super-app-backend.log | Hermes
 ||||||- `fix` scheduler: сохранение текста исключения в error_msg (было hardcoded 'Engine crashed') | Hermes
 ||||||- `fix` cooldown_seconds ge=10→3, max_hold_seconds ge=10→5 (для ERS совместимости) | Hermes
+|||||||- `fix` auto_execute_signals: теперь все авто-запуски используют balance=50$ (мин) и время жизни 30 мин
+|||||||- `fix` strategy_config.py: дефолт balance 10→50, auto_stop +0.5h, duration 0.5h
+|||||||- `fix` OB: OrderBookStartRequest.auto_stop_hours int→float, OrderBookConfig.max_runtime_hours int→float (поддержка 0.5h = 30 мин)
+|||||||- `fix` Trading: добавлен duration_hours в TradingConfig + scheduler поддерживает 0.5h (было min 1 day→6h)
+|||||||- `fix` backup scripts: +sleep 15 для защиты race condition после перезагрузки
+|||||||- `infra` uvicorn + map_signals_daemon перезапущены (2 дублирующих демона убиты: -old PID 1148576)
 1|||||||- `fix` app version was hardcoded in Dart source (app_version.dart), not reading from pubspec.yaml. Build v44 | Hermes
 2|||||||- `fix` backup crons: переведены в no_agent script mode (broken pipe fix после перезагрузки). Build v44 | Hermes
 3|||||||- `fix` signal notifier: перезапущен с лог-файлом /tmp/signal_notifier_v2.log. Build v44 | Hermes
