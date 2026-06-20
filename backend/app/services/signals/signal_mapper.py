@@ -529,12 +529,12 @@ async def map_and_save_signal(
         classification.confidence,
     )
 
-    # ── Auto-execute: try to start a run from the classified signal ──
-    try:
-        from app.services.signals.auto_execute_signals import try_auto_execute
-
-        asyncio.create_task(try_auto_execute(signal_id))
-    except Exception as e:
-        logger.warning("Failed to schedule auto-execute for signal #%d: %s", signal_id, e)
+    # ── Auto-execute: ОТКЛЮЧЕНО (все сделки в минус, нужен новый подход) ──
+    # try:
+    #     from app.services.signals.auto_execute_signals import try_auto_execute
+    #
+    #     asyncio.create_task(try_auto_execute(signal_id))
+    # except Exception as e:
+    #     logger.warning("Failed to schedule auto-execute for signal #%d: %s", signal_id, e)
 
     return classification

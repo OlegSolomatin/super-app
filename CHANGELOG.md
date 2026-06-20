@@ -8,6 +8,7 @@
 |||||||- `fix` Trading: добавлен duration_hours в TradingConfig + scheduler поддерживает 0.5h (было min 1 day→6h)
 |||||||- `fix` backup scripts: +sleep 15 для защиты race condition после перезагрузки
 |||||||- `infra` uvicorn + map_signals_daemon перезапущены (2 дублирующих демона убиты: -old PID 1148576)
+|||||||- `stop` сигнальная цепочка полностью остановлена: parse_telegram_signals daemon убит, map_signals_daemon убит, auto_execute отключён в signal_mapper.py. Все сделки по сигналам были в минус — нужен новый подход.
 1|||||||- `fix` app version was hardcoded in Dart source (app_version.dart), not reading from pubspec.yaml. Build v44 | Hermes
 2|||||||- `fix` backup crons: переведены в no_agent script mode (broken pipe fix после перезагрузки). Build v44 | Hermes
 3|||||||- `fix` signal notifier: перезапущен с лог-файлом /tmp/signal_notifier_v2.log. Build v44 | Hermes
